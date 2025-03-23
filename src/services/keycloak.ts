@@ -1,3 +1,4 @@
+//@ts-ignore
 import Keycloak from 'keycloak-js';
 
 let keycloak = new Keycloak({
@@ -11,7 +12,7 @@ let hasInit = false;
 export function initKeycloak() {
     if (!hasInit) {
         hasInit = true;
-        return keycloak.init({ onLoad: 'login-required', pkceMethod: 'S256' }).then((authenticated) => {
+        return keycloak.init({ onLoad: 'login-required', pkceMethod: 'S256' }).success((authenticated: boolean) => {
             return { authenticated, keycloak };
         });
     } else {

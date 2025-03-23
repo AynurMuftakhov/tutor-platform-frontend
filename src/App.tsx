@@ -1,10 +1,10 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import Dashboard from './pages/Dashboard.tsx';
-import Users from './pages/Users.tsx';
-import PrivateRoute from './components/PrivateRoute.tsx';
-import Header from './components/Header.tsx';
-import Profile from "./pages/Profile.tsx";
+import Dashboard from './pages/Dashboard';
+import Users from './pages/Users';
+import PrivateRoute from './components/PrivateRoute';
+import Header from './components/Header';
+import Profile from "./pages/Profile";
 
 const App: React.FC = () => {
     return (

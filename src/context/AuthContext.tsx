@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
-import {initKeycloak, keycloak} from "../services/keycloak.ts";
+import {initKeycloak, keycloak} from "../services/keycloak";
 
 interface User {
     id: string;

@@ -20,8 +20,8 @@ import {
 import EditIcon from '@mui/icons-material/Edit';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
-import api, {getHistoryLessons, getUpcomingLessons} from '../services/api.ts';
-import { useAuth } from '../context/AuthContext.tsx';
+import api, {getHistoryLessons, getUpcomingLessons} from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 const Profile: React.FC = () => {
     const {user, updateUser} = useAuth();
@@ -52,7 +52,7 @@ const Profile: React.FC = () => {
 
             // Track the new avatar file
             setNewAvatar(file);
-            e.target.value = null
+            e.target.value = ''
         }
     };
 
@@ -86,7 +86,9 @@ const Profile: React.FC = () => {
 
     const handleCancelAvatar = () => {
         // Revert to the original avatar
-        setAvatarPreview(`${api.defaults.baseURL.replace('/api', '')}${formData.avatar}`);
+        if (api.defaults.baseURL) {
+            setAvatarPreview(`${api.defaults.baseURL.replace('/api', '')}${formData.avatar}`);
+        }
         setNewAvatar(null);
     };
 
@@ -96,9 +98,7 @@ const Profile: React.FC = () => {
             const profileData = new FormData();
             profileData.append('name', formData.name);
             profileData.append('email', formData.email);
-            if (formData.avatar instanceof File) {
-                profileData.append('avatar', formData.avatar);
-            }
+            profileData.append('avatar', formData.avatar);
 
             await api.put('/users/profile', profileData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
@@ -180,7 +180,7 @@ const Profile: React.FC = () => {
                 {/* Avatar with Edit Icon */}
                 <Box sx={{ position: 'relative', marginBottom: 2 }}>
                     <Avatar
-                        src={avatarPreview || `${api.defaults.baseURL.replace('/api', '')}${user?.avatar}`}
+                        src={avatarPreview || `${(api.defaults.baseURL as string).replace('/api', '')}${user?.avatar}`}
                         alt={formData.name}
                         sx={{ width: 200, height: 200 }}
                     />

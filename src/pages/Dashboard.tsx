@@ -1,7 +1,7 @@
 import React, {useEffect, useState} from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Card, CardContent, Typography, Grid, AppBar, Toolbar, Button } from '@mui/material';
-import api from "../services/api.ts";
+import api from "../services/api";
 
 const Dashboard: React.FC = () => {
     const [totalUsers, setTotalUsers] = useState(0);

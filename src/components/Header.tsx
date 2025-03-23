@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { AppBar, Toolbar, Typography, Button, Dialog, DialogActions, DialogContent, DialogTitle } from '@mui/material';
-import { useAuth } from '../context/AuthContext.tsx';
+import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import {keycloak} from "../services/keycloak.ts";
+import {keycloak} from "../services/keycloak";
 
 const Header: React.FC = () => {
     const { user, logout } = useAuth();

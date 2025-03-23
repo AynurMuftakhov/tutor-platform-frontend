@@ -1,0 +1,43 @@
+{
+  "compilerOptions": {
+    // Target modern JavaScript features
+    "target": "ESNext",
+    // Specify which libraries (like DOM) to include in the compilation
+    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+
+    // Allow .js files to be compiled (if needed)
+    "allowJs": true,
+    // Skip type checking of .d.ts files in node_modules
+    "skipLibCheck": true,
+
+    // Enable all strict type-checking options
+    "strict": true,
+    // Ensure that file casing (uppercase/lowercase) is treated consistently
+    "forceConsistentCasingInFileNames": true,
+
+    // Don't emit compiled output (useful if your build tool handles bundling)
+    "noEmit": true,
+
+    // Make import/export behavior align with ES modules
+    "esModuleInterop": true,
+    // Module system to use in transpiled output
+    "module": "ESNext",
+    // How modules are resolved (Node is typical for React)
+    "moduleResolution": "Node",
+
+    // Allow importing JSON files
+    "resolveJsonModule": true,
+    // Ensure each file is treated as a separate module
+    "isolatedModules": true,
+
+    // Enable default imports from modules with no default export
+    "allowSyntheticDefaultImports": true,
+
+    // How TypeScript should handle JSX
+    // "react-jsx" is recommended for React 17+;
+    // "react" for older React versions
+    "jsx": "react-jsx"
+  },
+  // Include all source files in the "src" folder
+  "include": ["src"]
+}
