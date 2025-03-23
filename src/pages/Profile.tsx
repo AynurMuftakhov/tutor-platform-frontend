@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useRef} from 'react';
+import React, {useState, useEffect} from 'react';
 import {
     Avatar,
     Box,
@@ -135,7 +135,7 @@ const Profile: React.FC = () => {
         // Fetch data based on the selected tab
         if (newValue === 0) {
             fetchLessons('upcoming');
-        } else if (newValue === 1) {
+        } else if (newValue === 2) {
             fetchLessons('history');
         }
     };
@@ -160,10 +160,10 @@ const Profile: React.FC = () => {
     };
 
     useEffect(() => {
-        // Fetch upcoming lessons initially
-        fetchLessons('upcoming');
-    }, [fetchLessons, user]);
-
+        if (user?.id) {
+            fetchLessons('upcoming');
+        }
+    }, []);
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'row', gap: 2, padding: 3 }}>

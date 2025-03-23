@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { AppBar, Toolbar, Typography, Button, Dialog, DialogActions, DialogContent, DialogTitle } from '@mui/material';
 import { useAuth } from '../context/AuthContext.tsx';
 import { useNavigate } from 'react-router-dom';
+import {keycloak} from "../services/keycloak.ts";
 
 const Header: React.FC = () => {
     const { user, logout } = useAuth();
@@ -10,7 +11,6 @@ const Header: React.FC = () => {
 
     const handleLogout = () => {
         logout();
-        navigate('/login');
         setIsDialogOpen(false); // Close the dialog
     };
 
@@ -30,7 +30,7 @@ const Header: React.FC = () => {
         if (user) {
             navigate('/'); // Redirect to the main page if logged in
         } else {
-            navigate('/login'); // Redirect to the login page if not logged in
+           keycloak.login();
         }
     };
 

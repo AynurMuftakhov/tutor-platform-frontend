@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
-import api from "../services/api.ts";
+import {initKeycloak, keycloak} from "../services/keycloak.ts";
 
 interface User {
     id: string;
@@ -14,7 +14,8 @@ interface AuthContextType {
     user: User | null;
     setToken: (token: string | null) => void;
     logout: () => void;
-    updateUser: (updatedUser: Partial<User>) => void; // New function to update user
+    updateUser: (updatedUser: Partial<User>) => void;
+    authenticated: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -24,39 +25,69 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [user, setUser] = useState<User | null>(
         localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user') || '{}') : null
     );
+    const [authenticated, setAuthenticated] = useState<boolean>(!!token);
 
     const saveToken = async (newToken: string | null) => {
         if (newToken) {
             localStorage.setItem('token', newToken);
             setToken(newToken);
+            setAuthenticated(true);
 
-            try {
-                const response = await api.get('/auth/me', {
-                    headers: { Authorization: `Bearer ${newToken}` },
-                });
-                setUser(response.data);
-                localStorage.setItem('user', JSON.stringify(response.data));
-            } catch (error) {
-                console.error('Error fetching user details:', error);
-                logout();
-            }
+            // Use Keycloak tokenParsed to set user:
+            const parsed = keycloak.tokenParsed;
+            console.log('Parsed token:', keycloak.tokenParsed);
+            const user: User = {
+                id: parsed?.sub,
+                name: parsed?.name || '',
+                email: parsed?.email || '',
+                role: parsed?.realm_access?.roles?.[0] || '',
+            };
+            setUser(user);
+            localStorage.setItem('user', JSON.stringify(user));
         } else {
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
+            localStorage.clear();
             setToken(null);
             setUser(null);
+            setAuthenticated(false);
         }
     };
 
     const logout = useCallback(() => {
+        if (keycloak.authenticated) {
+            keycloak.logout({ redirectUri: window.location.origin +'/profile' });
+        }
         saveToken(null);
+        window.location.reload()
     }, []);
 
     const updateUser = (updatedUser: Partial<User>) => {
+        if (!user) return;
         const newUser = { ...user, ...updatedUser } as User;
         setUser(newUser);
         localStorage.setItem('user', JSON.stringify(newUser));
     };
+
+    useEffect(() => {
+        const initializeAuth = async () => {
+            try {
+                const { authenticated, keycloak } = await initKeycloak();
+                if (authenticated && keycloak.token) {
+                    await saveToken(keycloak.token);
+                }
+
+                keycloak.onAuthSuccess = () => {
+                    console.log('onAuthSuccess fired, token:', keycloak.token);
+                    saveToken(keycloak.token);
+                };
+
+                console.log('Keycloak authenticated:', authenticated);
+                console.log('Keycloak token:', keycloak.token);
+            } catch (error) {
+                console.error('Keycloak initialization failed', error);
+            }
+        };
+        initializeAuth();
+    }, []);
 
     useEffect(() => {
         if (token) {
@@ -81,7 +112,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, [token, logout]);
 
     return (
-        <AuthContext.Provider value={{ token, user, setToken: saveToken, logout, updateUser }}>
+        <AuthContext.Provider value={{ token, user, authenticated, setToken: saveToken, logout, updateUser }}>
             {children}
         </AuthContext.Provider>
     );

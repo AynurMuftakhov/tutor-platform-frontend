@@ -6,17 +6,16 @@ let keycloak = new Keycloak({
     clientId: 'tutor-platform-frontend'
 });
 
-// Optional boolean to track whether we've already run init
 let hasInit = false;
 
 export function initKeycloak() {
     if (!hasInit) {
         hasInit = true;
-        return keycloak.init({ onLoad: 'check-sso', pkceMethod: 'S256' });
+        return keycloak.init({ onLoad: 'login-required', pkceMethod: 'S256' }).then((authenticated) => {
+            return { authenticated, keycloak };
+        });
     } else {
-        // Already initted (or in progress).
-        // Return a resolved promise with the existing `authenticated` status
-        return Promise.resolve(keycloak.authenticated || false);
+        return Promise.resolve({ authenticated: keycloak.authenticated || false, keycloak });
     }
 }
 
