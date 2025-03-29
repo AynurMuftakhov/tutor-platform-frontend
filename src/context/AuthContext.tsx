@@ -19,6 +19,7 @@ interface AuthContextType {
     logout: () => void;
     updateUser: (updatedUser: Partial<User>) => void;
     authenticated: boolean;
+    isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -29,6 +30,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user') || '{}') : null
     );
     const [authenticated, setAuthenticated] = useState<boolean>(!!token);
+    const [isLoading, setIsLoading] = useState<boolean>(true);
 
     const saveToken = async (newToken: string | null) => {
         if (newToken) {
@@ -83,6 +85,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 console.log('Keycloak authenticated:', authenticated);
             } catch (error) {
                 console.error('Keycloak initialization failed', error);
+            } finally {
+                setIsLoading(false);
             }
         };
         initializeAuth();
@@ -111,7 +115,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, [token, logout]);
 
     return (
-        <AuthContext.Provider value={{ token, user, authenticated, setToken: saveToken, logout, updateUser }}>
+        <AuthContext.Provider value={{ token, user, authenticated, setToken: saveToken, logout, updateUser, isLoading }}>
             {children}
         </AuthContext.Provider>
     );

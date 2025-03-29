@@ -7,8 +7,15 @@ import Header from './components/Header';
 import Profile from "./pages/Profile";
 import AppWrapper from "./layout/AppWrapper";
 import Onboarding from './pages/Onboarding';
+import {useAuth} from "./context/AuthContext";
 
 const App: React.FC = () => {
+    const { isLoading } = useAuth();
+
+    if (isLoading) {
+        return <div>Loading...</div>; // you can make this a nice spinner too
+    }
+
     return (
         <Router>
             <Header />

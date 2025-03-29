@@ -27,6 +27,26 @@ export const updateCurrentUser = async (userId: string, data: Partial<any>) => {
     return response.data;
 };
 
+export const updateUserProfile = async (
+    username: string,
+    name: string,
+    email: string,
+    avatarFile?: File | null
+) => {
+    const formData = new FormData();
+    formData.append('name', name);
+    formData.append('email', email);
+    if (avatarFile) {
+        formData.append('avatar', avatarFile);
+    }
+
+    const response = await api.patch(`/users-service/api/users/profile?username=${username}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+    });
+
+    return response.data;
+};
+
 api.interceptors.request.use((config) => {
     const token = localStorage.getItem("token");
     if(token){

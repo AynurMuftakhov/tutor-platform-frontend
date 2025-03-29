@@ -20,7 +20,7 @@ import {
 import EditIcon from '@mui/icons-material/Edit';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
-import api, {getHistoryLessons, getUpcomingLessons} from '../services/api';
+import api, {getHistoryLessons, getUpcomingLessons, updateUserProfile} from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
 const Profile: React.FC = () => {
@@ -41,6 +41,12 @@ const Profile: React.FC = () => {
     const [upcomingLessons, setUpcomingLessons] = useState<any[]>([]);
     const [historyLessons, setHistoryLessons] = useState<any[]>([]);
 
+    const resolvedAvatar = avatarPreview && avatarPreview !== ''
+        ? avatarPreview
+        : user?.avatar
+            ? `${api.defaults.baseURL}/users-service${user.avatar}`
+            : undefined;
+
     const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
@@ -57,21 +63,15 @@ const Profile: React.FC = () => {
     };
 
     const handleSaveAvatar = async () => {
-        if (!newAvatar) return;
+        if (!newAvatar || !user) return;
 
         setLoading(true);
         try {
-            const profileData = new FormData();
-            profileData.append('avatar', newAvatar);
-            profileData.append('name', formData.name);
-            profileData.append('email', formData.email);
-            const response = await api.put('/users/profile', profileData, {
-                headers: { 'Content-Type': 'multipart/form-data' },
-            });
+            const response = await updateUserProfile(user.email, formData.name, formData.email, newAvatar);
 
             // Update user context and reset new avatar state
-            updateUser({ avatar: response.data.avatar });
-            setFormData((prev) => ({ ...prev, avatar: response.data.avatar }));
+            updateUser({ avatar: response.avatar });
+            setFormData((prev) => ({ ...prev, avatar: response.avatar }));
             setNewAvatar(null);
             setSnackbarMessage('Avatar updated successfully!');
             setSnackbarSeverity('success');
@@ -93,19 +93,12 @@ const Profile: React.FC = () => {
     };
 
     const handleUpdateProfile = async () => {
+        if (!user) return;
+
         setLoading(true);
         try {
-            const profileData = new FormData();
-            profileData.append('name', formData.name);
-            profileData.append('email', formData.email);
-            profileData.append('avatar', formData.avatar);
-
-            await api.put('/users/profile', profileData, {
-                headers: { 'Content-Type': 'multipart/form-data' },
-            });
-
-            // Update the user context with the new data
-            updateUser({ name: formData.name });
+            const updatedUser = await updateUserProfile(user.email, formData.name, formData.email);
+            updateUser({ name: updatedUser.name });
 
             setSnackbarMessage('Profile updated successfully!');
             setSnackbarSeverity('success');
@@ -180,8 +173,8 @@ const Profile: React.FC = () => {
                 {/* Avatar with Edit Icon */}
                 <Box sx={{ position: 'relative', marginBottom: 2 }}>
                     <Avatar
-                        src={avatarPreview || `${(api.defaults.baseURL as string).replace('/api', '')}${user?.avatar}`}
-                        alt={formData.name}
+                        src={resolvedAvatar}
+                        alt={user?.name || 'User'}
                         sx={{ width: 200, height: 200 }}
                     />
                     <IconButton
