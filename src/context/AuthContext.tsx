@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
-import {initKeycloak, keycloak} from "../services/keycloak";
+import { initKeycloak, keycloak } from "../services/keycloak";
+import { fetchCurrentUser } from "../services/api";
 
 interface User {
     id: string;
@@ -7,6 +8,8 @@ interface User {
     email: string;
     role: string;
     avatar?: string;
+    keycloakId: string;
+    isOnboarded?: boolean;
 }
 
 interface AuthContextType {
@@ -33,17 +36,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setToken(newToken);
             setAuthenticated(true);
 
-            // Use Keycloak tokenParsed to set user:
-            const parsed = keycloak.tokenParsed;
-            console.log('Parsed token:', keycloak.tokenParsed);
-            const user: User = {
-                id: parsed?.sub,
-                name: parsed?.name || '',
-                email: parsed?.email || '',
-                role: parsed?.realm_access?.roles?.[0] || '',
-            };
-            setUser(user);
-            localStorage.setItem('user', JSON.stringify(user));
+            try {
+                const me = await fetchCurrentUser();
+                setUser(me);
+                localStorage.setItem('user', JSON.stringify(me));
+            } catch (error) {
+                console.error("Failed to fetch current user:", error);
+            }
         } else {
             localStorage.clear();
             setToken(null);
@@ -53,11 +52,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const logout = useCallback(() => {
-        if (keycloak.authenticated) {
-            keycloak.logout({ redirectUri: window.location.origin +'/profile' });
-        }
-        saveToken(null);
-        window.location.reload()
+        saveToken(null).finally(() => {
+            if (keycloak.authenticated) {
+                keycloak.logout({ redirectUri: window.location.origin + '/profile' });
+            } else {
+                window.location.href = '/profile';
+            }
+        });
     }, []);
 
     const updateUser = (updatedUser: Partial<User>) => {
@@ -76,12 +77,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }
 
                 keycloak.onAuthSuccess = () => {
-                    console.log('onAuthSuccess fired, token:', keycloak.token);
                     saveToken(keycloak.token);
                 };
 
                 console.log('Keycloak authenticated:', authenticated);
-                console.log('Keycloak token:', keycloak.token);
             } catch (error) {
                 console.error('Keycloak initialization failed', error);
             }

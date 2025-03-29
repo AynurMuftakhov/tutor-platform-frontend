@@ -1,7 +1,7 @@
 //@ts-ignore
 import Keycloak from 'keycloak-js';
 
-let keycloak = new Keycloak({
+const keycloak = new Keycloak({
     url: 'http://localhost:7080/',
     realm: 'tutor-platform',
     clientId: 'tutor-platform-frontend'
@@ -9,14 +9,18 @@ let keycloak = new Keycloak({
 
 let hasInit = false;
 
-export function initKeycloak() {
+export async function initKeycloak() {
     if (!hasInit) {
         hasInit = true;
-        return keycloak.init({ onLoad: 'login-required', pkceMethod: 'S256' }).success((authenticated: boolean) => {
-            return { authenticated, keycloak };
+
+        const authenticated = await keycloak.init({
+            onLoad: 'login-required',
+            pkceMethod: 'S256'
         });
+
+        return { authenticated, keycloak };
     } else {
-        return Promise.resolve({ authenticated: keycloak.authenticated || false, keycloak });
+        return { authenticated: keycloak.authenticated || false, keycloak };
     }
 }
 

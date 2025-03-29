@@ -5,48 +5,53 @@ import Users from './pages/Users';
 import PrivateRoute from './components/PrivateRoute';
 import Header from './components/Header';
 import Profile from "./pages/Profile";
+import AppWrapper from "./layout/AppWrapper";
+import Onboarding from './pages/Onboarding';
 
 const App: React.FC = () => {
     return (
         <Router>
             <Header />
-            <Routes>
-                <Route
-                    path="/profile"
-                    element={
-                        <PrivateRoute>
-                            <Profile />
-                        </PrivateRoute>
-                    }
-                />
+            <AppWrapper>
+                <Routes>
+                    <Route
+                        path="/profile"
+                        element={
+                            <PrivateRoute>
+                                <Profile />
+                            </PrivateRoute>
+                        }
+                    />
 
-                <Route
-                    path="/users"
-                    element={
-                        <PrivateRoute>
-                            <Users />
-                        </PrivateRoute>
-                    }
-                />
+                    <Route
+                        path="/users"
+                        element={
+                            <PrivateRoute>
+                                <Users />
+                            </PrivateRoute>
+                        }
+                    />
 
-                <Route
-                    path="/dashboard"
-                    element={
-                        <PrivateRoute>
-                            <Dashboard />
-                        </PrivateRoute>
-                    }
-                />
+                    <Route
+                        path="/dashboard"
+                        element={
+                            <PrivateRoute>
+                                <Dashboard />
+                            </PrivateRoute>
+                        }
+                    />
 
-                <Route
-                    path="/"
-                    element={
-                        <PrivateRoute>
-                            <Profile />
-                        </PrivateRoute>
-                    }
-                />
-            </Routes>
+                    <Route
+                        path="/"
+                        element={
+                            <PrivateRoute>
+                                <Profile />
+                            </PrivateRoute>
+                        }
+                    />
+                    <Route path="/onboarding" element={<Onboarding />} />
+                </Routes>
+            </AppWrapper>
         </Router>
     );
 };

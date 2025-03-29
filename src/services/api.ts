@@ -17,6 +17,16 @@ export const getHistoryLessons = async (userId: string) => {
     return response.data;
 };
 
+export const fetchCurrentUser = async () => {
+    const response = await api.get(`/users-service/api/users/me`);
+    return response.data;
+}
+
+export const updateCurrentUser = async (userId: string, data: Partial<any>) => {
+    const response = await api.patch(`/users-service/api/users/${userId}`, data);
+    return response.data;
+};
+
 api.interceptors.request.use((config) => {
     const token = localStorage.getItem("token");
     if(token){
