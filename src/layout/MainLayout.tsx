@@ -38,7 +38,6 @@ const SLOGAN = "Your personalized English journey";
 
 const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [mobileOpen, setMobileOpen] = useState(false);
-    const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [notifAnchorEl, setNotifAnchorEl] = useState<null | HTMLElement>(null);
     const hasNotifications = true; // Mock this, connect real logic later
@@ -50,22 +49,13 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
     const menuItems = [
         { text: "Dashboard", icon: <HomeIcon />, path: "/dashboard" },
-        { text: "Students", icon: <PeopleIcon />, path: "/users" },
+        { text: "Students", icon: <PeopleIcon />, path: "/my-students" },
         { text: "Schedule", icon: <EventNoteIcon />, path: "/schedule" },
     ];
 
     const handleDrawerToggle = () => {
         setMobileOpen(!mobileOpen);
     };
-
-    const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
-        setAnchorEl(event.currentTarget);
-    };
-
-    const handleMenuClose = () => {
-        setAnchorEl(null);
-    };
-
     const handleProfileMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
         setProfileAnchorEl(event.currentTarget);
     };

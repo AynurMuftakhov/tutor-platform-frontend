@@ -8,6 +8,7 @@ import AppWrapper from "./layout/AppWrapper";
 import Onboarding from './pages/Onboarding';
 import {useAuth} from "./context/AuthContext";
 import Dashboard from "./pages/Dashboard";
+import MyStudentsPage from "./pages/MyStudentsPage";
 
 const App: React.FC = () => {
     const { isLoading } = useAuth();
@@ -25,6 +26,15 @@ const App: React.FC = () => {
                         element={
                             <PrivateRoute>
                                 <Profile />
+                            </PrivateRoute>
+                        }
+                    />
+
+                    <Route
+                        path="/my-students"
+                        element={
+                            <PrivateRoute>
+                                <MyStudentsPage />
                             </PrivateRoute>
                         }
                     />

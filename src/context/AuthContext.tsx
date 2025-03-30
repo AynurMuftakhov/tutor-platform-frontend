@@ -93,25 +93,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, []);
 
     useEffect(() => {
-        if (token) {
-            try {
-                const { exp } = JSON.parse(atob(token.split('.')[1]));
-                const expirationTime = exp * 1000 - Date.now();
+        if (!keycloak || !keycloak.tokenParsed?.exp) return;
 
-                if (expirationTime > 0) {
-                    const timeout = setTimeout(() => {
-                        logout();
-                    }, expirationTime);
+        const refreshBuffer = 60; // seconds before expiry to refresh
+        const expiresIn = keycloak.tokenParsed.exp * 1000 - Date.now();
+        const refreshTime = expiresIn - refreshBuffer * 1000;
 
-                    return () => clearTimeout(timeout);
-                } else {
-                    logout();
+        if (refreshTime <= 0) {
+            // Token already expired or about to — try refreshing immediately
+            keycloak.updateToken(0).then((refreshed:boolean) => {
+                if (refreshed) {
+                    saveToken(keycloak.token);
                 }
-            } catch (error) {
-                console.error('Invalid token:', error);
+            }).catch(() => {
                 logout();
-            }
+            });
+            return;
         }
+
+        const timeout = setTimeout(() => {
+            keycloak.updateToken(refreshBuffer).then((refreshed: boolean) => {
+                if (refreshed) {
+                    saveToken(keycloak.token);
+                }
+            }).catch(() => {
+                logout();
+            });
+        }, refreshTime);
+
+        return () => clearTimeout(timeout);
     }, [token, logout]);
 
     return (

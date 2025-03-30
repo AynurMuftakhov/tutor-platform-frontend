@@ -1,4 +1,5 @@
 import axios from 'axios';
+import {Student} from "../pages/MyStudentsPage";
 
 const api = axios.create({
     baseURL: 'http://localhost',
@@ -6,6 +7,14 @@ const api = axios.create({
         'Content-Type': 'application/json',
     },
 });
+
+export interface GetUsersResponse {
+    content: Student[];
+    totalPages: number;
+    totalElements: number;
+    size: number;
+    number: number; // current page
+}
 
 export const getUpcomingLessons = async (userId: string) => {
     const response = await api.get(`/lessons-service/api/lessons?userId=${userId}&status=SCHEDULED`);
@@ -42,6 +51,23 @@ export const updateUserProfile = async (
 
     const response = await api.patch(`/users-service/api/users/profile?username=${username}`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
+    });
+
+    return response.data;
+};
+
+export const fetchStudents = async (
+    userId: string,
+    search: string,
+    page: number,
+    size: number
+): Promise<GetUsersResponse> => {
+    const response = await api.get(`/users-service/api/users/teacher/${userId}/students`, {
+        params: {
+            search,
+            page,
+            size,
+        },
     });
 
     return response.data;
