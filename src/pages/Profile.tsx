@@ -22,6 +22,7 @@ import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
 import api, {getHistoryLessons, getUpcomingLessons, updateUserProfile} from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import MainLayout from "../layout/MainLayout";
 
 const Profile: React.FC = () => {
     const {user, updateUser} = useAuth();
@@ -159,228 +160,230 @@ const Profile: React.FC = () => {
     }, []);
 
     return (
-        <Box sx={{ display: 'flex', flexDirection: 'row', gap: 2, padding: 3 }}>
-            {/* Left Sidebar */}
-            <Box sx={{
-                    width: '25%',
-                    backgroundColor: '#f8f9fa',
-                    borderRadius: 2,
-                    padding: 3,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                }}>
-                {/* Avatar with Edit Icon */}
-                <Box sx={{ position: 'relative', marginBottom: 2 }}>
-                    <Avatar
-                        src={resolvedAvatar}
-                        alt={user?.name || 'User'}
-                        sx={{ width: 200, height: 200 }}
-                    />
-                    <IconButton
-                        component="label"
-                        sx={{
-                            position: 'absolute',
-                            bottom: 0,
-                            right: 0,
-                            backgroundColor: 'white',
-                            boxShadow: 1,
-                        }}
-                    >
-                        <EditIcon fontSize="small" />
-                        <input
-                            type="file"
-                            hidden
-                            accept="image/*"
-                            onChange={handleAvatarChange}
+        <MainLayout>
+            <Box sx={{ display: 'flex', flexDirection: 'row', gap: 2, padding: 3 }}>
+                {/* Left Sidebar */}
+                <Box sx={{
+                        width: '25%',
+                        backgroundColor: '#f8f9fa',
+                        borderRadius: 2,
+                        padding: 3,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                    }}>
+                    {/* Avatar with Edit Icon */}
+                    <Box sx={{ position: 'relative', marginBottom: 2 }}>
+                        <Avatar
+                            src={resolvedAvatar}
+                            alt={user?.name || 'User'}
+                            sx={{ width: 200, height: 200 }}
                         />
-                    </IconButton>
-                </Box>
-
-                {/* Show Save/Cancel Buttons if New Avatar is Selected */}
-                {newAvatar && (
-                    <Box sx={{ display: 'flex', gap: 1, marginBottom: 2 }}>
-                        <Button
-                            variant="contained"
-                            color="primary"
-                            onClick={handleSaveAvatar}
-                            disabled={loading}
+                        <IconButton
+                            component="label"
+                            sx={{
+                                position: 'absolute',
+                                bottom: 0,
+                                right: 0,
+                                backgroundColor: 'white',
+                                boxShadow: 1,
+                            }}
                         >
-                            {loading ? <CircularProgress size={20} /> : <CheckIcon />}
-                            Save
-                        </Button>
-                        <Button variant="outlined" color="error" onClick={handleCancelAvatar}>
-                            <CloseIcon />
-                            Cancel
-                        </Button>
-                    </Box>
-                )}
-
-                <Typography variant="subtitle2" color="text.primary">
-                    email: {user?.email}
-                </Typography>
-
-                {/* Editable Name Field */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, marginBottom: 2 }}>
-                    {isEditingName ? (
-                        <TextField
-                            value={formData.name}
-                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                            size="small"
-                        />
-                    ) : (
-                        <Typography variant="h6">{user?.name}</Typography>
-                    )}
-                    <IconButton
-                        component="label"
-                        onClick={handleNameEditToggle}
-                        sx={{
-                            position: 'relative',
-                            bottom: 0,
-                            right: 0,
-                            backgroundColor: 'white',
-                            boxShadow: 1,
-                            width:35,
-                            height: 35
-                        }}
-                    >
-                        {isEditingName ? <CheckIcon color="success" /> : <EditIcon fontSize="small"/>}
-                    </IconButton>
-                    {isEditingName && (
-                        <IconButton onClick={() => setIsEditingName(false)}>
-                            <CloseIcon color="error" />
+                            <EditIcon fontSize="small" />
+                            <input
+                                type="file"
+                                hidden
+                                accept="image/*"
+                                onChange={handleAvatarChange}
+                            />
                         </IconButton>
+                    </Box>
+
+                    {/* Show Save/Cancel Buttons if New Avatar is Selected */}
+                    {newAvatar && (
+                        <Box sx={{ display: 'flex', gap: 1, marginBottom: 2 }}>
+                            <Button
+                                variant="contained"
+                                color="primary"
+                                onClick={handleSaveAvatar}
+                                disabled={loading}
+                            >
+                                {loading ? <CircularProgress size={20} /> : <CheckIcon />}
+                                Save
+                            </Button>
+                            <Button variant="outlined" color="error" onClick={handleCancelAvatar}>
+                                <CloseIcon />
+                                Cancel
+                            </Button>
+                        </Box>
                     )}
+
+                    <Typography variant="subtitle2" color="text.primary">
+                        email: {user?.email}
+                    </Typography>
+
+                    {/* Editable Name Field */}
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, marginBottom: 2 }}>
+                        {isEditingName ? (
+                            <TextField
+                                value={formData.name}
+                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                size="small"
+                            />
+                        ) : (
+                            <Typography variant="h6">{user?.name}</Typography>
+                        )}
+                        <IconButton
+                            component="label"
+                            onClick={handleNameEditToggle}
+                            sx={{
+                                position: 'relative',
+                                bottom: 0,
+                                right: 0,
+                                backgroundColor: 'white',
+                                boxShadow: 1,
+                                width:35,
+                                height: 35
+                            }}
+                        >
+                            {isEditingName ? <CheckIcon color="success" /> : <EditIcon fontSize="small"/>}
+                        </IconButton>
+                        {isEditingName && (
+                            <IconButton onClick={() => setIsEditingName(false)}>
+                                <CloseIcon color="error" />
+                            </IconButton>
+                        )}
+                    </Box>
+
+                    <Typography variant="subtitle2" color="text.secondary">
+                        {user?.role || 'N/A'}
+                    </Typography>
                 </Box>
 
-                <Typography variant="subtitle2" color="text.secondary">
-                    {user?.role || 'N/A'}
-                </Typography>
-            </Box>
-
-            {/* Right Content */}
-            <Box sx={{ flex: 1 }}>
-                {/* Lessons Statistics */}
-                <Grid container spacing={2} sx={{ marginBottom: 3 }}>
-                    <Grid item xs={4}>
-                        <Card sx={{ textAlign: 'center', padding: 2 }}>
-                            <Typography variant="h5" color="primary">
-                                5
-                            </Typography>
-                            <Typography variant="body2">All Lessons</Typography>
-                        </Card>
-                    </Grid>
-                    <Grid item xs={4}>
-                        <Card sx={{ textAlign: 'center', padding: 2 }}>
-                            <Typography variant="h5" color="success.main">
-                                2
-                            </Typography>
-                            <Typography variant="body2">Completed</Typography>
-                        </Card>
-                    </Grid>
-                    <Grid item xs={4}>
-                        <Card sx={{ textAlign: 'center', padding: 2 }}>
-                            <Typography variant="h5" color="error.main">
-                                1
-                            </Typography>
-                            <Typography variant="body2">Cancelled</Typography>
-                        </Card>
-                    </Grid>
-                </Grid>
-
-                {/* Lessons and Invoices Tabs */}
-                <Tabs
-                    value={activeTab}
-                    onChange={handleTabChange}
-                    indicatorColor="primary"
-                    textColor="primary"
-                    sx={{ marginBottom: 2 }}
-                >
-                    <Tab label="Upcoming Lessons" />
-                    <Tab label="HomeWork" />
-                    <Tab label="History" />
-                </Tabs>
-
-                {loading ? (
-                    <CircularProgress sx={{ marginTop: 3 }} />)
-                    : (
-                    <Box sx={{ marginTop: 3 }}>
-                        {activeTab === 0 && (
-                            <Box>
-                                <Typography variant="h5" gutterBottom>
-                                    Upcoming Lessons
+                {/* Right Content */}
+                <Box sx={{ flex: 1 }}>
+                    {/* Lessons Statistics */}
+                    <Grid container spacing={2} sx={{ marginBottom: 3 }}>
+                        <Grid item xs={4}>
+                            <Card sx={{ textAlign: 'center', padding: 2 }}>
+                                <Typography variant="h5" color="primary">
+                                    5
                                 </Typography>
-                                <List>
-                                    {upcomingLessons.length > 0 ? (
-                                        upcomingLessons.map((lesson) => (
-                                            <React.Fragment key={lesson.id}>
-                                                <ListItem>
-                                                    <ListItemText
-                                                        primary={`${lesson.title} - ${lesson.dateTime}`}
-                                                        secondary={`Price: $${lesson.price}`}
-                                                    />
-                                                </ListItem>
-                                                <Divider />
-                                            </React.Fragment>
-                                        ))
-                                    ) : (
-                                        <Typography variant="body2" color="text.secondary">
-                                            No upcoming lessons.
-                                        </Typography>
-                                    )}
-                                </List>
-                            </Box>
+                                <Typography variant="body2">All Lessons</Typography>
+                            </Card>
+                        </Grid>
+                        <Grid item xs={4}>
+                            <Card sx={{ textAlign: 'center', padding: 2 }}>
+                                <Typography variant="h5" color="success.main">
+                                    2
+                                </Typography>
+                                <Typography variant="body2">Completed</Typography>
+                            </Card>
+                        </Grid>
+                        <Grid item xs={4}>
+                            <Card sx={{ textAlign: 'center', padding: 2 }}>
+                                <Typography variant="h5" color="error.main">
+                                    1
+                                </Typography>
+                                <Typography variant="body2">Cancelled</Typography>
+                            </Card>
+                        </Grid>
+                    </Grid>
+
+                    {/* Lessons and Invoices Tabs */}
+                    <Tabs
+                        value={activeTab}
+                        onChange={handleTabChange}
+                        indicatorColor="primary"
+                        textColor="primary"
+                        sx={{ marginBottom: 2 }}
+                    >
+                        <Tab label="Upcoming Lessons" />
+                        <Tab label="HomeWork" />
+                        <Tab label="History" />
+                    </Tabs>
+
+                    {loading ? (
+                        <CircularProgress sx={{ marginTop: 3 }} />)
+                        : (
+                        <Box sx={{ marginTop: 3 }}>
+                            {activeTab === 0 && (
+                                <Box>
+                                    <Typography variant="h5" gutterBottom>
+                                        Upcoming Lessons
+                                    </Typography>
+                                    <List>
+                                        {upcomingLessons.length > 0 ? (
+                                            upcomingLessons.map((lesson) => (
+                                                <React.Fragment key={lesson.id}>
+                                                    <ListItem>
+                                                        <ListItemText
+                                                            primary={`${lesson.title} - ${lesson.dateTime}`}
+                                                            secondary={`Price: $${lesson.price}`}
+                                                        />
+                                                    </ListItem>
+                                                    <Divider />
+                                                </React.Fragment>
+                                            ))
+                                        ) : (
+                                            <Typography variant="body2" color="text.secondary">
+                                                No upcoming lessons.
+                                            </Typography>
+                                        )}
+                                    </List>
+                                </Box>
+                            )}
+
+                    {activeTab === 1 && (
+                        <Typography variant="body2" color="text.secondary">
+                            All is done. Great work!
+                        </Typography>
+                    )}
+
+                    {activeTab === 2 && (
+                        <Box>
+                            <Typography variant="h5" gutterBottom>
+                                History of Lessons
+                            </Typography>
+                            <List>
+                                {historyLessons.length > 0 ? (
+                                    historyLessons.map((lesson) => (
+                                        <React.Fragment key={lesson.id}>
+                                            <ListItem>
+                                                <ListItemText
+                                                    primary={`${lesson.title} - ${lesson.dateTime}`}
+                                                    secondary={`Price: $${lesson.price}`}
+                                                />
+                                            </ListItem>
+                                            <Divider />
+                                        </React.Fragment>
+                                    ))
+                                ) : (
+                                    <Typography variant="body2" color="text.secondary">
+                                        No completed lessons.
+                                    </Typography>
+                                )}
+                            </List>
+                        </Box>
+                    )}
+
+                </Box>
                         )}
 
-                {activeTab === 1 && (
-                    <Typography variant="body2" color="text.secondary">
-                        All is done. Great work!
-                    </Typography>
-                )}
-
-                {activeTab === 2 && (
-                    <Box>
-                        <Typography variant="h5" gutterBottom>
-                            History of Lessons
-                        </Typography>
-                        <List>
-                            {historyLessons.length > 0 ? (
-                                historyLessons.map((lesson) => (
-                                    <React.Fragment key={lesson.id}>
-                                        <ListItem>
-                                            <ListItemText
-                                                primary={`${lesson.title} - ${lesson.dateTime}`}
-                                                secondary={`Price: $${lesson.price}`}
-                                            />
-                                        </ListItem>
-                                        <Divider />
-                                    </React.Fragment>
-                                ))
-                            ) : (
-                                <Typography variant="body2" color="text.secondary">
-                                    No completed lessons.
-                                </Typography>
-                            )}
-                        </List>
-                    </Box>
-                )}
-
+                {/* Snackbar */}
+                <Snackbar
+                    open={snackbarOpen}
+                    autoHideDuration={3000}
+                    onClose={handleSnackbarClose}
+                    anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+                >
+                    <Alert onClose={handleSnackbarClose} severity={snackbarSeverity} sx={{ width: '100%' }}>
+                        {snackbarMessage}
+                    </Alert>
+                </Snackbar>
             </Box>
-                    )}
-
-            {/* Snackbar */}
-            <Snackbar
-                open={snackbarOpen}
-                autoHideDuration={3000}
-                onClose={handleSnackbarClose}
-                anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-            >
-                <Alert onClose={handleSnackbarClose} severity={snackbarSeverity} sx={{ width: '100%' }}>
-                    {snackbarMessage}
-                </Alert>
-            </Snackbar>
-        </Box>
-        </Box>
+            </Box>
+        </MainLayout>
     );
 };
 

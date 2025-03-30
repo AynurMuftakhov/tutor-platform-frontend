@@ -1,13 +1,13 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import Dashboard from './pages/Dashboard';
+import AdminDashboard from './pages/AdminDashboard';
 import Users from './pages/Users';
 import PrivateRoute from './components/PrivateRoute';
-import Header from './components/Header';
 import Profile from "./pages/Profile";
 import AppWrapper from "./layout/AppWrapper";
 import Onboarding from './pages/Onboarding';
 import {useAuth} from "./context/AuthContext";
+import Dashboard from "./pages/Dashboard";
 
 const App: React.FC = () => {
     const { isLoading } = useAuth();
@@ -18,7 +18,6 @@ const App: React.FC = () => {
 
     return (
         <Router>
-            <Header />
             <AppWrapper>
                 <Routes>
                     <Route
@@ -47,12 +46,20 @@ const App: React.FC = () => {
                             </PrivateRoute>
                         }
                     />
+                    <Route
+                        path="/admin"
+                        element={
+                            <PrivateRoute>
+                                <AdminDashboard />
+                            </PrivateRoute>
+                        }
+                    />
 
                     <Route
                         path="/"
                         element={
                             <PrivateRoute>
-                                <Profile />
+                                <Dashboard />
                             </PrivateRoute>
                         }
                     />

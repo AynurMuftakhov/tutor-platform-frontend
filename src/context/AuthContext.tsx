@@ -56,9 +56,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const logout = useCallback(() => {
         saveToken(null).finally(() => {
             if (keycloak.authenticated) {
-                keycloak.logout({ redirectUri: window.location.origin + '/profile' });
+                keycloak.logout({ redirectUri: window.location.origin + '/' });
             } else {
-                window.location.href = '/profile';
+                window.location.href = '/';
             }
         });
     }, []);
