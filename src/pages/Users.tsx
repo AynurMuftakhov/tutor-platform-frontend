@@ -30,7 +30,7 @@ const Users: React.FC = () => {
     const [totalPages, setTotalPages] = useState(1);
     const [totalUsers, setTotalUsers] = useState(0);
     const [loading, setLoading] = useState(false);
-    const [itemsPerPage, setItemsPerPage] = useState(10);
+    const [itemsPerPage] = useState(10);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedRole, setSelectedRole] = useState('');
     const [isDialogOpen, setIsDialogOpen] = useState(false);
