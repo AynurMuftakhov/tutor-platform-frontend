@@ -19,8 +19,10 @@ import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import MainLayout from "../layout/MainLayout";
-import {fetchStudents} from "../services/api";
+import {createStudent, fetchStudents} from "../services/api";
 import { useAuth } from '../context/AuthContext';
+import Snackbar from '@mui/material/Snackbar';
+import Alert from '@mui/material/Alert';
 
 // Extended Student type
 export interface Student {
@@ -39,6 +41,11 @@ const MyStudentsPage: React.FC = () => {
     const [searchText, setSearchText] = useState("");
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [studentToDelete, setStudentToDelete] = useState<Student | null>(null);
+    const [addDialogOpen, setAddDialogOpen] = useState(false);
+    const [newStudent, setNewStudent] = useState({ name: "", email: "", level: "Beginner" });
+    const [addLoading, setAddLoading] = useState(false);
+    const [snackbarOpen, setSnackbarOpen] = useState(false);
+    const [snackbarMessage, setSnackbarMessage] = useState('');
 
     const [totalStudents, setTotalStudents] = useState(0);
     const [page, setPage] = useState(0);
@@ -50,7 +57,7 @@ const MyStudentsPage: React.FC = () => {
     };
 
     const handleAddStudent = () => {
-        alert("Open a dialog to add a new student here!");
+        setAddDialogOpen(true);
     };
 
     const handleEditStudent = (student: Student) => {
@@ -74,6 +81,29 @@ const MyStudentsPage: React.FC = () => {
         setDeleteDialogOpen(false);
         setStudentToDelete(null);
     };
+
+    const handleCreateStudent = async () => {
+        try {
+            setAddLoading(true);
+            await createStudent(user!.email, newStudent);
+            setAddDialogOpen(false);
+            setNewStudent({ name: "", email: "", level: "Beginner" });
+            // Reload students after adding
+            const data = await fetchStudents(user!.id, searchText, page, pageSize);
+            setStudents(data.content);
+            setTotalStudents(data.totalElements);
+
+            setSnackbarMessage("Student successfully added. Please remind him to check the email to set the password.");
+            setSnackbarOpen(true);
+        } catch (err) {
+            console.error("Failed to add student", err);
+            setSnackbarMessage("Something went wrong. Please try again.");
+            setSnackbarOpen(true);
+        } finally {
+            setAddLoading(false);
+        }
+    };
+
     useMemo(() => {
         if (!searchText) return students;
         const lower = searchText.toLowerCase();
@@ -293,6 +323,63 @@ const MyStudentsPage: React.FC = () => {
                     </DialogActions>
                 </Dialog>
             </Box>
+            <Dialog open={addDialogOpen} onClose={() => setAddDialogOpen(false)}>
+                <DialogTitle>Add New Student</DialogTitle>
+                <DialogContent>
+                    <TextField
+                        label="Name"
+                        fullWidth
+                        margin="dense"
+                        value={newStudent.name}
+                        onChange={(e) => setNewStudent({ ...newStudent, name: e.target.value })}
+                    />
+                    <TextField
+                        label="Email"
+                        fullWidth
+                        margin="dense"
+                        value={newStudent.email}
+                        onChange={(e) => setNewStudent({ ...newStudent, email: e.target.value })}
+                    />
+                    <TextField
+                        label="Level"
+                        select
+                        fullWidth
+                        margin="dense"
+                        value={newStudent.level}
+                        onChange={(e) => setNewStudent({ ...newStudent, level: e.target.value })}
+                        SelectProps={{ native: true }}
+                    >
+                        <option value="Beginner">Beginner</option>
+                        <option value="Intermediate">Intermediate</option>
+                        <option value="Advanced">Advanced</option>
+                    </TextField>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setAddDialogOpen(false)}>Cancel</Button>
+                    <Button
+                        onClick={handleCreateStudent}
+                        variant="contained"
+                        disabled={addLoading}
+                    >
+                        {addLoading ? "Adding..." : "Add"}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            <Snackbar
+                open={snackbarOpen}
+                autoHideDuration={5000}
+                onClose={() => setSnackbarOpen(false)}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+            >
+                <Alert
+                    onClose={() => setSnackbarOpen(false)}
+                    severity="success"
+                    sx={{ width: '100%' }}
+                >
+                    {snackbarMessage}
+                </Alert>
+            </Snackbar>
         </MainLayout>
     );
 };

@@ -73,6 +73,14 @@ export const fetchStudents = async (
     return response.data;
 };
 
+export const createStudent = async (teacherMail: string, studentData: { name: string; email: string; level: string }) => {
+    const response = await api.post(`/users-service/api/students?teacherEmail=${teacherMail}`, {
+        ...studentData,
+        teacherMail,
+    });
+    return response.data;
+};
+
 api.interceptors.request.use((config) => {
     const token = localStorage.getItem("token");
     if(token){
