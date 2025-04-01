@@ -50,7 +50,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const menuItems = [
         { text: "Dashboard", icon: <HomeIcon />, path: "/dashboard" },
         { text: "Students", icon: <PeopleIcon />, path: "/my-students" },
-        { text: "Schedule", icon: <EventNoteIcon />, path: "/schedule" },
+        { text: "Lessons", icon: <EventNoteIcon />, path: "/lessons" },
     ];
 
     const handleDrawerToggle = () => {

@@ -80,7 +80,6 @@ const Users: React.FC = () => {
     };
 
     return (
-        <MainLayout>
             <Box sx={{ padding: 3 }}>
                 {/* Header */}
                 <Typography variant="h4" gutterBottom>
@@ -214,8 +213,6 @@ const Users: React.FC = () => {
                     </DialogActions>
                 </Dialog>
             </Box>
-
-        </MainLayout>
     );
 };
 

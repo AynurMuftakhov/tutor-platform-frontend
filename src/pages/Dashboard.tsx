@@ -49,8 +49,7 @@ const Dashboard: React.FC = () => {
     const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
     return (
-        <MainLayout>
-            <Box sx={{ py: 2 }}>
+        <Box sx={{ py: 2 }}>
                 <Typography variant="h4" fontWeight={600} gutterBottom>
                     Hello, {user?.name || "Tutor"}!
                 </Typography>
@@ -78,7 +77,6 @@ const Dashboard: React.FC = () => {
                     </Grid>
                 </Grid>
             </Box>
-        </MainLayout>
     );
 };
 

@@ -160,8 +160,7 @@ const Profile: React.FC = () => {
     }, []);
 
     return (
-        <MainLayout>
-            <Box sx={{ display: 'flex', flexDirection: 'row', gap: 2, padding: 3 }}>
+        <Box sx={{ display: 'flex', flexDirection: 'row', gap: 2, padding: 3 }}>
                 {/* Left Sidebar */}
                 <Box sx={{
                         width: '25%',
@@ -383,7 +382,6 @@ const Profile: React.FC = () => {
                 </Snackbar>
             </Box>
             </Box>
-        </MainLayout>
     );
 };
 

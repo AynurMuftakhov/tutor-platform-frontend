@@ -251,7 +251,7 @@ const MyStudentsPage: React.FC = () => {
     ];
 
     return (
-        <MainLayout>
+        <Box>
             <Box sx={{ p: 2 }}>
                 {/* Title & Add Button */}
                 <Box
@@ -380,7 +380,7 @@ const MyStudentsPage: React.FC = () => {
                     {snackbarMessage}
                 </Alert>
             </Snackbar>
-        </MainLayout>
+        </Box>
     );
 };
 

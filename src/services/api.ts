@@ -81,6 +81,11 @@ export const createStudent = async (teacherMail: string, studentData: { name: st
     return response.data;
 };
 
+export const createLesson = async (lessonData: any) => {
+    const response = await api.post("/lessons-service/api/lessons", lessonData);
+    return response.data;
+}
+
 api.interceptors.request.use((config) => {
     const token = localStorage.getItem("token");
     if(token){

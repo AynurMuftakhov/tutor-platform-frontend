@@ -9,6 +9,7 @@ import Onboarding from './pages/Onboarding';
 import {useAuth} from "./context/AuthContext";
 import Dashboard from "./pages/Dashboard";
 import MyStudentsPage from "./pages/MyStudentsPage";
+import LessonsPage from "./pages/LessonsPage";
 
 const App: React.FC = () => {
     const { isLoading } = useAuth();
@@ -61,6 +62,15 @@ const App: React.FC = () => {
                         element={
                             <PrivateRoute>
                                 <AdminDashboard />
+                            </PrivateRoute>
+                        }
+                    />
+
+                    <Route
+                        path="/lessons"
+                        element={
+                            <PrivateRoute>
+                                <LessonsPage />
                             </PrivateRoute>
                         }
                     />
