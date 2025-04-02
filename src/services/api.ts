@@ -86,6 +86,16 @@ export const createLesson = async (lessonData: any) => {
     return response.data;
 }
 
+export const getLessonById = async (lessonId: string) => {
+    const response = await api.get(`/lessons-service/api/lessons/${lessonId}`);
+    return response.data;
+}
+
+export const updateLesson = async (lessonId: string, lessonData: any) => {
+    const response = await api.patch(`/lessons-service/api/lessons/${lessonId}`, lessonData);
+    return response.data;
+}
+
 api.interceptors.request.use((config) => {
     const token = localStorage.getItem("token");
     if(token){

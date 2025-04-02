@@ -14,15 +14,20 @@ import {
     MenuItem,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
-import {getUpcomingLessons, getHistoryLessons} from '../services/api';
+import {getUpcomingLessons, getHistoryLessons, fetchStudents} from '../services/api';
 import AddLessonModal from "../components/AddLessonModal";
 import { useAuth } from "../context/AuthContext";
+import {Student} from "./MyStudentsPage";
+import { useNavigate } from "react-router-dom";
 
 const LessonsPage = () => {
     const [lessons, setLessons] = useState([]);
     const { user } = useAuth();
+    const navigate = useNavigate();
     const [status, setStatus] = useState("SCHEDULED");
     const [isModalOpen, setIsModalOpen] = useState(false);
+
+    const [students, setStudents] = useState<Student[]>([]);
 
     const refreshLessons = async (userId: string, status: string) => {
         const lessonsData =
@@ -32,11 +37,24 @@ const LessonsPage = () => {
         setLessons(lessonsData);
     };
 
+    const getStudentName = (id: string) => {
+        return students.find((s) => s.id === id)?.name || "Unknown";
+    };
+
     useEffect(() => {
         if (user) {
             refreshLessons(user.id, status);
         }
     }, [user, status]);
+
+    useEffect(() => {
+        const loadStudents = async () => {
+            const result = await fetchStudents(user!.id, "", 0, 100);
+            setStudents(result.content || []);
+        };
+
+        loadStudents();
+    }, [user]);
 
     return (
         <Box>
@@ -80,19 +98,31 @@ const LessonsPage = () => {
                                 </TableRow>
                             </TableHead>
                             <TableBody>
-                                {lessons.map((lesson: any) => (
-                                    <TableRow key={lesson.id}>
-                                        <TableCell>{lesson.title}</TableCell>
-                                        <TableCell>{lesson.studentName}</TableCell>
-                                        <TableCell>{new Date(lesson.dateTime).toLocaleString()}</TableCell>
-                                        <TableCell>{lesson.status}</TableCell>
-                                        <TableCell>{lesson.homework ? "Yes" : "No"}</TableCell>
-                                        <TableCell>
-                                            {/* Future: edit/delete buttons here */}
-                                            <Button size="small">Edit</Button>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
+                                {lessons.map((lesson: any) => {
+                                    const student = students.find((s) => s.id === lesson.studentId);
+
+                                    return (
+                                        <TableRow
+                                            key={lesson.id}
+                                            hover
+                                            sx={{ cursor: "pointer" }}
+                                            onClick={() => {
+                                                navigate(`/lessons/${lesson.id}`, {
+                                                    state: { student },
+                                                });
+                                            }}
+                                        >
+                                            <TableCell>{lesson.title}</TableCell>
+                                            <TableCell>{student?.name || "Unknown"}</TableCell>
+                                            <TableCell>{new Date(lesson.dateTime).toLocaleString()}</TableCell>
+                                            <TableCell>{lesson.status}</TableCell>
+                                            <TableCell>{lesson.homework ? "Yes" : "No"}</TableCell>
+                                            <TableCell>
+                                                <Button size="small">Edit</Button>
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })}
                                 {lessons.length === 0 && (
                                     <TableRow>
                                         <TableCell colSpan={6} align="center">
@@ -110,6 +140,7 @@ const LessonsPage = () => {
                 open={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 onCreated={() => user?.id && refreshLessons(user?.id, status)}
+                students={students}
             />
         </Box>
     );

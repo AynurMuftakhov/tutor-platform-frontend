@@ -10,12 +10,13 @@ import {useAuth} from "./context/AuthContext";
 import Dashboard from "./pages/Dashboard";
 import MyStudentsPage from "./pages/MyStudentsPage";
 import LessonsPage from "./pages/LessonsPage";
+import LessonDetailPage from "./pages/LessonDetailsPage";
 
 const App: React.FC = () => {
     const { isLoading } = useAuth();
 
     if (isLoading) {
-        return <div>Loading...</div>; // you can make this a nice spinner too
+        return <div>Loading...</div>;
     }
 
     return (
@@ -71,6 +72,15 @@ const App: React.FC = () => {
                         element={
                             <PrivateRoute>
                                 <LessonsPage />
+                            </PrivateRoute>
+                        }
+                    />
+
+                    <Route
+                        path="/lessons/:id"
+                        element={
+                            <PrivateRoute>
+                                <LessonDetailPage />
                             </PrivateRoute>
                         }
                     />

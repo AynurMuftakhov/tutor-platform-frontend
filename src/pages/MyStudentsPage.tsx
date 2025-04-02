@@ -26,7 +26,7 @@ import Alert from '@mui/material/Alert';
 
 // Extended Student type
 export interface Student {
-    id: number;
+    id: string;
     avatar?: string;
     name: string;
     email: string;

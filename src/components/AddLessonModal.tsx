@@ -9,22 +9,24 @@ import {
     MenuItem,
     Stack,
 } from "@mui/material";
-import { fetchStudents, fetchCurrentUser, createLesson } from "../services/api";
+import { createLesson } from "../services/api";
 import DateTimeInput from "./DateTimeInput";
 import dayjs from "dayjs";
+import {Student} from "../pages/MyStudentsPage";
+import {useAuth} from "../context/AuthContext";
 
 interface AddLessonModalProps {
     open: boolean;
     onClose: () => void;
     onCreated: () => void;
+    students: Student[];
 }
 
-const AddLessonModal: React.FC<AddLessonModalProps> = ({ open, onClose, onCreated }) => {
-    const [students, setStudents] = useState<any[]>([]);
+const AddLessonModal: React.FC<AddLessonModalProps> = ({ open, onClose, onCreated, students }) => {
     const [errors, setErrors] = useState<{ [key: string]: string }>({});
     const [submitting] = useState(false);
     const [hasCustomTitle, setHasCustomTitle] = useState(false);
-
+    const { user } = useAuth();
     const [formData, setFormData] = useState({
         title: "",
         studentId: "",
@@ -68,11 +70,9 @@ const AddLessonModal: React.FC<AddLessonModalProps> = ({ open, onClose, onCreate
     const handleSubmit = async () => {
         if (!validate()) return;
 
-        const user = await fetchCurrentUser();
-
         await createLesson({
             ...formData,
-            tutorId: user.id,
+            tutorId: user!.id,
             duration: parseInt(formData.duration.toString()),
         });
 
@@ -97,18 +97,6 @@ const AddLessonModal: React.FC<AddLessonModalProps> = ({ open, onClose, onCreate
             setFormData((prev) => ({ ...prev, title: newTitle }));
         }
     }, [formData.studentId, formData.dateTime, formData.duration, hasCustomTitle, students]);
-
-    useEffect(() => {
-        const loadStudents = async () => {
-            const user = await fetchCurrentUser();
-            const result = await fetchStudents(user.id, "", 0, 100);
-            setStudents(result.content || []);
-        };
-
-        if (open) {
-            loadStudents();
-        }
-    }, [open]);
 
     useEffect(() => {
         if (open) {
