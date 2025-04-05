@@ -1,7 +1,6 @@
 import React from "react";
 import {
     Typography,
-    Button,
     Grid,
     Stack,
     Box,
@@ -11,13 +10,11 @@ import {
     Tooltip,
 } from "@mui/material";
 import dayjs from "dayjs";
-import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
 import { Lesson } from "../../types/Lesson";
 import { Student } from "../../pages/MyStudentsPage";
 import { ENGLISH_LEVELS } from "../../types/ENGLISH_LEVELS";
-import StatusManager from "./StatusManager";
 
 interface Props {
     lesson: Lesson;
@@ -25,7 +22,7 @@ interface Props {
     onUpdated?: (updated: Partial<Lesson>) => void;
 }
 
-const LessonHero: React.FC<Props> = ({ lesson, student, onUpdated }) => {
+const LessonHero: React.FC<Props> = ({ lesson, student }) => {
     const theme = useTheme();
     const levelInfo = student?.level ? ENGLISH_LEVELS[student.level] : null;
 
@@ -118,7 +115,6 @@ const LessonHero: React.FC<Props> = ({ lesson, student, onUpdated }) => {
                                 px: 1.2,
                             }}
                         />
-                        <StatusManager lesson={lesson} onUpdated={onUpdated} />
                     </Stack>
 
                     <Stack direction="row" spacing={1} alignItems="center">

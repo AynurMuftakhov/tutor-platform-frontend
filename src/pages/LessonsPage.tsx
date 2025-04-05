@@ -11,14 +11,15 @@ import {
     TableRow,
     TableContainer,
     TextField,
-    MenuItem,
+    MenuItem, Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Menu,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
-import {getUpcomingLessons, getHistoryLessons, fetchStudents} from '../services/api';
+import {getUpcomingLessons, getHistoryLessons, fetchStudents, deleteLesson, getLessons} from '../services/api';
 import AddLessonModal from "../components/AddLessonModal";
 import { useAuth } from "../context/AuthContext";
 import {Student} from "./MyStudentsPage";
 import { useNavigate } from "react-router-dom";
+import {FilterList} from "@mui/icons-material";
 
 const LessonsPage = () => {
     const [lessons, setLessons] = useState([]);
@@ -29,17 +30,47 @@ const LessonsPage = () => {
 
     const [students, setStudents] = useState<Student[]>([]);
 
+    const [lessonToDelete, setLessonToDelete] = useState<any | null>(null);
+    const [deleting, setDeleting] = useState(false);
+
+    const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+    const statusFilterOpen = Boolean(anchorEl);
+
+    const handleStatusFilterClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+        setAnchorEl(event.currentTarget);
+    };
+
+    const handleStatusFilterClose = () => {
+        setAnchorEl(null);
+    };
+
+    const handleStatusSelect = (value: string) => {
+        setStatus(value);
+        handleStatusFilterClose();
+    };
+
     const refreshLessons = async (userId: string, status: string) => {
-        const lessonsData =
-            status === "SCHEDULED"
-                ? await getUpcomingLessons(userId)
-                : await getHistoryLessons(userId);
+        const lessonsData = await getLessons(userId, status)
         setLessons(lessonsData);
+    };
+
+    const handleDeleteLesson = async () => {
+        if (!lessonToDelete || !user) return;
+        try {
+            setDeleting(true);
+            await deleteLesson(lessonToDelete.id);
+            await refreshLessons(user.id, status);
+            setLessonToDelete(null);
+        } catch (e) {
+            console.error("Failed to delete lesson", e);
+        } finally {
+            setDeleting(false);
+        }
     };
 
     const getStudentName = (id: string) => {
         return students.find((s) => s.id === id)?.name || "Unknown";
-    };
+    }
 
     useEffect(() => {
         if (user) {
@@ -69,21 +100,6 @@ const LessonsPage = () => {
                     </Button>
                 </Box>
 
-                <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
-                    <TextField
-                        label="Filter by Status"
-                        select
-                        value={status}
-                        onChange={(e) => setStatus(e.target.value)}
-                        size="small"
-                        sx={{ width: 200 }}
-                    >
-                        <MenuItem value="SCHEDULED">Scheduled</MenuItem>
-                        <MenuItem value="COMPLETED">Completed</MenuItem>
-                        <MenuItem value="CANCELED">Canceled</MenuItem>
-                    </TextField>
-                </Box>
-
                 <Paper>
                     <TableContainer>
                         <Table>
@@ -92,7 +108,22 @@ const LessonsPage = () => {
                                     <TableCell>Lesson</TableCell>
                                     <TableCell>Student</TableCell>
                                     <TableCell>Date</TableCell>
-                                    <TableCell>Status</TableCell>
+                                    <TableCell>
+                                        Status{" "}
+                                        <IconButton size="small" onClick={handleStatusFilterClick}>
+                                            <FilterList fontSize="small" />
+                                        </IconButton>
+                                        <Menu
+                                            anchorEl={anchorEl}
+                                            open={statusFilterOpen}
+                                            onClose={handleStatusFilterClose}
+                                        >
+                                            <MenuItem onClick={() => handleStatusSelect("SCHEDULED")}>Scheduled</MenuItem>
+                                            <MenuItem onClick={() => handleStatusSelect("COMPLETED")}>Completed</MenuItem>
+                                            <MenuItem onClick={() => handleStatusSelect("CANCELED")}>Canceled</MenuItem>
+                                            <MenuItem onClick={() => handleStatusSelect("")}>All</MenuItem>
+                                        </Menu>
+                                    </TableCell>
                                     <TableCell>Homework</TableCell>
                                     <TableCell>Actions</TableCell>
                                 </TableRow>
@@ -119,6 +150,16 @@ const LessonsPage = () => {
                                             <TableCell>{lesson.homework ? "Yes" : "No"}</TableCell>
                                             <TableCell>
                                                 <Button size="small">Edit</Button>
+                                                <Button
+                                                    size="small"
+                                                    color="error"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation(); // prevent row click navigation
+                                                        setLessonToDelete(lesson);
+                                                    }}
+                                                >
+                                                    Delete
+                                                </Button>
                                             </TableCell>
                                         </TableRow>
                                     );
@@ -142,6 +183,28 @@ const LessonsPage = () => {
                 onCreated={() => user?.id && refreshLessons(user?.id, status)}
                 students={students}
             />
+
+            {lessonToDelete && (
+                <Box>
+                    <Dialog open onClose={() => setLessonToDelete(null)}>
+                        <DialogTitle>Delete Lesson</DialogTitle>
+                        <DialogContent>
+                            Are you sure you want to delete the lesson with <b>{getStudentName(lessonToDelete.studentId)}</b>?
+                        </DialogContent>
+                        <DialogActions>
+                            <Button onClick={() => setLessonToDelete(null)}>Cancel</Button>
+                            <Button
+                                onClick={handleDeleteLesson}
+                                color="error"
+                                variant="contained"
+                                disabled={deleting}
+                            >
+                                {deleting ? "Deleting..." : "Delete"}
+                            </Button>
+                        </DialogActions>
+                    </Dialog>
+                </Box>
+            )}
         </Box>
     );
 };

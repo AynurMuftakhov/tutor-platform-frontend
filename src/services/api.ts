@@ -26,6 +26,11 @@ export const getHistoryLessons = async (userId: string) => {
     return response.data;
 };
 
+export const getLessons = async (userId: string, status: string) => {
+    const response = await api.get(`/lessons-service/api/lessons?userId=${userId}&status=${status}`);
+    return response.data;
+};
+
 export const fetchCurrentUser = async () => {
     const response = await api.get(`/users-service/api/users/me`);
     return response.data;
@@ -95,6 +100,11 @@ export const updateLesson = async (lessonId: string, lessonData: any) => {
     const response = await api.patch(`/lessons-service/api/lessons/${lessonId}`, lessonData);
     return response.data;
 }
+
+export const deleteLesson = async (lessonId: string) => {
+    const res = await api.delete(`lessons-service/api/lessons/${lessonId}`);
+    return res.data;
+};
 
 export const fetchStudentById = async (studentId: string) => {
     const response = await api.get(`users-service/api/users/${studentId}`);

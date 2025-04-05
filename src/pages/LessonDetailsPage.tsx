@@ -6,7 +6,7 @@ import {
     Typography,
     Grid
 } from "@mui/material";
-import { fetchStudentById, getLessonById } from "../services/api";
+import {fetchStudentById, getLessonById, updateLesson} from "../services/api";
 
 import LessonHero from "../components/lessonDetail/LessonHero";
 import LessonPlanSection from "../components/lessonDetail/LessonPlanSection";
@@ -14,6 +14,7 @@ import HomeworkSection from "../components/lessonDetail/HomeworkSection";
 import PostLessonNotes from "../components/lessonDetail/PostLessonNotes";
 import LessonTracking from "../components/lessonDetail/LessonTracking";
 import {Lesson} from "../types/Lesson";
+import LessonActions from "../components/lessonDetail/LessonActions";
 
 const LessonDetailPage = () => {
     const { id } = useParams();
@@ -54,6 +55,29 @@ const LessonDetailPage = () => {
 
     return (
         <Container maxWidth="lg" sx={{ mt: 4, mb: 6 }}>
+            <Grid item xs={12}>
+                <LessonActions
+                    currentStatus={lesson.status}
+                    currentDatetime={lesson.dateTime}
+                    onChangeStatus={async (newStatus, extraData) => {
+                        const updatedFields: Partial<Lesson> = {
+                            status: newStatus,
+                        };
+
+                        if (extraData?.newDate) {
+                            updatedFields.dateTime = extraData.newDate;
+                        }
+
+                        try {
+                            await updateLesson(lesson.id, updatedFields);
+                            setLesson((prev) => prev ? { ...prev, ...updatedFields } : prev);
+                        } catch (error) {
+                            console.error("Failed to update lesson", error);
+                            // Optional: Show toast/snackbar
+                        }
+                    }}
+                />
+            </Grid>
             <Grid container spacing={3}>
                 {/* Header */}
                 <Grid item xs={12}>

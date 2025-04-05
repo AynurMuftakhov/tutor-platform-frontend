@@ -56,7 +56,7 @@ const DateTimeInput: React.FC<DateTimeInputProps> = ({
             hours < 0 || hours > 23 ||
             minutes < 0 || minutes > 59
         ) {
-            return; // silently ignore or show error
+            return;
         }
 
         const date = localDate ?? dayjs();
@@ -69,6 +69,7 @@ const DateTimeInput: React.FC<DateTimeInputProps> = ({
             direction={{ xs: "column", sm: "row" }}
             spacing={2}
             alignItems="stretch"
+            sx={{ mt: 1 }}
         >
             <Box flex={{ sm: 2, xs: undefined }}>
                 <DatePicker
