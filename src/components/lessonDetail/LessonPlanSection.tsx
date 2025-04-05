@@ -1,37 +1,50 @@
-import React, { useState } from "react";
+import React from "react";
 import {
-    Box,
-    Typography,
     TextField,
     Button,
     Stack,
-    IconButton
+    Typography,
+    IconButton,
+    Fade,
+    Box,
 } from "@mui/material";
 import { Edit as EditIcon, Save as SaveIcon, Close as CancelIcon } from "@mui/icons-material";
-import { Lesson } from "../../types/Lesson";
+import MenuBookIcon from "@mui/icons-material/MenuBook";
 import { updateLesson } from "../../services/api";
+import { Lesson } from "../../types/Lesson";
+import CardWrapper from "./CardWrapper";
+import SectionHeader from "./SectionHeader";
+import { useEditableCard } from "../../hooks/useEditableCard";
 
 interface Props {
     lesson: Lesson;
-    onUpdated?: (updated: Partial<Lesson>) => void; // Optional callback
+    onUpdated?: (updated: Partial<Lesson>) => void;
 }
 
 const LessonPlanSection: React.FC<Props> = ({ lesson, onUpdated }) => {
-    const [editing, setEditing] = useState(false);
-    const [plan, setPlan] = useState(lesson.lessonPlan || "");
-    const [objectives, setObjectives] = useState(lesson.learningObjectives || "");
-    const [saving, setSaving] = useState(false);
+    const {
+        editing,
+        saving,
+        values,
+        setSaving,
+        startEditing,
+        cancelEditing,
+        handleChange,
+    } = useEditableCard({
+        lessonPlan: lesson.lessonPlan || "",
+        learningObjectives: lesson.learningObjectives || "",
+    });
 
     const handleSave = async () => {
         try {
             setSaving(true);
             const updated = {
-                lessonPlan: plan,
-                learningObjectives: objectives,
+                lessonPlan: values.lessonPlan,
+                learningObjectives: values.learningObjectives,
             };
             await updateLesson(lesson.id, updated);
-            onUpdated?.(updated); // optionally notify parent
-            setEditing(false);
+            onUpdated?.(updated);
+            cancelEditing();
         } catch (e) {
             console.error("Failed to update lesson plan", e);
         } finally {
@@ -39,77 +52,75 @@ const LessonPlanSection: React.FC<Props> = ({ lesson, onUpdated }) => {
         }
     };
 
-    const handleCancel = () => {
-        setEditing(false);
-        setPlan(lesson.lessonPlan || "");
-        setObjectives(lesson.learningObjectives || "");
-    };
-
     return (
-        <Box>
-            <Box display="flex" justifyContent="space-between" alignItems="center">
-                <Typography variant="h6">Lesson Plan</Typography>
-                {!editing && (
-                    <IconButton onClick={() => setEditing(true)} size="small">
-                        <EditIcon fontSize="small" />
-                    </IconButton>
-                )}
-            </Box>
+        <CardWrapper>
+            <SectionHeader
+                title="Lesson Plan"
+                icon={<MenuBookIcon color="primary" />}
+                action={
+                    !editing && (
+                        <IconButton onClick={startEditing} size="small">
+                            <EditIcon fontSize="small" />
+                        </IconButton>
+                    )
+                }
+            />
 
-            {editing ? (
-                <Stack spacing={2} sx={{ mt: 2 }}>
-                    <TextField
-                        label="Lesson Outline"
-                        multiline
-                        minRows={3}
-                        value={plan}
-                        onChange={(e) => setPlan(e.target.value)}
-                        fullWidth
-                    />
-                    <TextField
-                        label="Objectives"
-                        multiline
-                        minRows={3}
-                        value={objectives}
-                        onChange={(e) => setObjectives(e.target.value)}
-                        fullWidth
-                    />
-                    <Stack direction="row" spacing={2}>
-                        <Button
-                            variant="contained"
-                            color="primary"
-                            onClick={handleSave}
-                            disabled={saving}
-                            startIcon={<SaveIcon />}
-                        >
-                            Save
-                        </Button>
-                        <Button
-                            variant="outlined"
-                            onClick={handleCancel}
-                            startIcon={<CancelIcon />}
-                        >
-                            Cancel
-                        </Button>
-                    </Stack>
-                </Stack>
-            ) : (
-                <>
-                    <Box sx={{ mt: 2 }}>
-                        <Typography variant="subtitle2" color="text.secondary">
-                            Outline
-                        </Typography>
-                        <Typography>{plan || "No lesson plan provided."}</Typography>
-                    </Box>
-                    <Box sx={{ mt: 2 }}>
-                        <Typography variant="subtitle2" color="text.secondary">
-                            Objectives
-                        </Typography>
-                        <Typography>{objectives || "No objectives defined."}</Typography>
-                    </Box>
-                </>
-            )}
-        </Box>
+            <Fade in>
+                <Box sx={{ minHeight: "260px" }}>
+                    {editing ? (
+                        <Stack spacing={2}>
+                            <TextField
+                                label="Lesson Outline"
+                                multiline
+                                minRows={3}
+                                value={values.lessonPlan}
+                                onChange={(e) => handleChange("lessonPlan", e.target.value)}
+                                fullWidth
+                            />
+                            <TextField
+                                label="Objectives"
+                                multiline
+                                minRows={3}
+                                value={values.learningObjectives}
+                                onChange={(e) => handleChange("learningObjectives", e.target.value)}
+                                fullWidth
+                            />
+                            <Stack direction="row" spacing={2}>
+                                <Button
+                                    variant="contained"
+                                    color="primary"
+                                    onClick={handleSave}
+                                    disabled={saving}
+                                    startIcon={<SaveIcon />}
+                                >
+                                    Save
+                                </Button>
+                                <Button
+                                    variant="outlined"
+                                    onClick={cancelEditing}
+                                    startIcon={<CancelIcon />}
+                                >
+                                    Cancel
+                                </Button>
+                            </Stack>
+                        </Stack>
+                    ) : (
+                        <>
+                            <Typography variant="subtitle2" color="text.secondary">
+                                Outline
+                            </Typography>
+                            <Typography>{values.lessonPlan || "No lesson plan provided."}</Typography>
+
+                            <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 2 }}>
+                                Objectives
+                            </Typography>
+                            <Typography>{values.learningObjectives || "No objectives defined."}</Typography>
+                        </>
+                    )}
+                </Box>
+            </Fade>
+        </CardWrapper>
     );
 };
 

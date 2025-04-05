@@ -1,21 +1,26 @@
-import React, { useState } from "react";
+import React from "react";
 import {
-    Box,
+    Grid,
     Typography,
     Paper,
     TextField,
     Button,
     Stack,
-    Grid,
     IconButton,
-    MenuItem,
-    Select,
     FormControl,
     InputLabel,
+    Select,
+    MenuItem,
+    Fade,
+    Box,
 } from "@mui/material";
 import { Edit as EditIcon, Save as SaveIcon, Close as CancelIcon } from "@mui/icons-material";
-import { Lesson, LessonSatisfaction } from "../../types/Lesson";
+import RateReviewIcon from "@mui/icons-material/RateReview";
 import { updateLesson } from "../../services/api";
+import { Lesson, LessonSatisfaction } from "../../types/Lesson";
+import CardWrapper from "./CardWrapper";
+import SectionHeader from "./SectionHeader";
+import { useEditableCard } from "../../hooks/useEditableCard";
 
 interface Props {
     lesson: Lesson;
@@ -23,19 +28,33 @@ interface Props {
 }
 
 const PostLessonNotes: React.FC<Props> = ({ lesson, onUpdated }) => {
-    const [editing, setEditing] = useState(false);
-    const [notes, setNotes] = useState(lesson.notes || "");
-    const [performance, setPerformance] = useState(lesson.studentPerformance || "");
-    const [satisfaction, setSatisfaction] = useState<LessonSatisfaction | "">(lesson.lessonSatisfaction || "");
-    const [saving, setSaving] = useState(false);
+    const {
+        editing,
+        saving,
+        values,
+        setSaving,
+        startEditing,
+        cancelEditing,
+        handleChange,
+    } = useEditableCard({
+        notes: lesson.notes || "",
+        studentPerformance: lesson.studentPerformance || "",
+        lessonSatisfaction: lesson.lessonSatisfaction || "",
+    });
 
     const handleSave = async () => {
         try {
             setSaving(true);
-            const updated = { notes, studentPerformance: performance, lessonSatisfaction: satisfaction || undefined  };
+            const updated: Partial<Lesson> = {
+                notes: values.notes,
+                studentPerformance: values.studentPerformance,
+                lessonSatisfaction: values.lessonSatisfaction
+                    ? (values.lessonSatisfaction as LessonSatisfaction)
+                    : undefined,
+            };
             await updateLesson(lesson.id, updated);
             onUpdated?.(updated);
-            setEditing(false);
+            cancelEditing();
         } catch (e) {
             console.error("Failed to save notes", e);
         } finally {
@@ -43,103 +62,111 @@ const PostLessonNotes: React.FC<Props> = ({ lesson, onUpdated }) => {
         }
     };
 
-    const handleCancel = () => {
-        setEditing(false);
-        setNotes(lesson.notes || "");
-        setPerformance(lesson.studentPerformance || "");
-        setSatisfaction(lesson.lessonSatisfaction || "");
-    };
-
     return (
-        <Box>
-            <Box display="flex" justifyContent="space-between" alignItems="center">
-                <Typography variant="h6">Post-Lesson Notes</Typography>
-                {!editing && (
-                    <IconButton onClick={() => setEditing(true)} size="small">
-                        <EditIcon fontSize="small" />
-                    </IconButton>
-                )}
-            </Box>
+        <CardWrapper>
+            <SectionHeader
+                title="Post-Lesson Notes"
+                icon={<RateReviewIcon color="primary" />}
+                action={
+                    !editing && (
+                        <IconButton onClick={startEditing} size="small">
+                            <EditIcon fontSize="small" />
+                        </IconButton>
+                    )
+                }
+            />
 
-            {editing ? (
-                <Grid container spacing={2} sx={{ mt: 2 }}>
-                    <Grid item xs={12} sm={6}>
-                        <TextField
-                            label="Tutor's Notes"
-                            multiline
-                            minRows={3}
-                            fullWidth
-                            value={notes}
-                            onChange={(e) => setNotes(e.target.value)}
-                        />
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                        <TextField
-                            label="Student Performance"
-                            multiline
-                            minRows={3}
-                            fullWidth
-                            value={performance}
-                            onChange={(e) => setPerformance(e.target.value)}
-                        />
-                    </Grid>
-                    <Grid item xs={12}>
-                        <FormControl fullWidth>
-                            <InputLabel>Lesson Satisfaction</InputLabel>
-                            <Select
-                                value={satisfaction}
-                                label="Lesson Satisfaction"
-                                onChange={(e) => setSatisfaction(e.target.value as LessonSatisfaction)}
-                            >
-                                <MenuItem value="VERY_SATISFIED">Very satisfied</MenuItem>
-                                <MenuItem value="SATISFIED">Satisfied</MenuItem>
-                                <MenuItem value="NEUTRAL">Neutral</MenuItem>
-                                <MenuItem value="DISSATISFIED">Dissatisfied</MenuItem>
-                                <MenuItem value="VERY_DISSATISFIED">Very dissatisfied</MenuItem>
-                            </Select>
-                        </FormControl>
-                    </Grid>
-                    <Grid item xs={12}>
-                        <Stack direction="row" spacing={2}>
-                            <Button
-                                variant="contained"
-                                onClick={handleSave}
-                                disabled={saving}
-                                startIcon={<SaveIcon />}
-                            >
-                                Save
-                            </Button>
-                            <Button
-                                variant="outlined"
-                                onClick={handleCancel}
-                                startIcon={<CancelIcon />}
-                            >
-                                Cancel
-                            </Button>
-                        </Stack>
-                    </Grid>
-                </Grid>
-            ) : (
-                <Grid container spacing={2} sx={{ mt: 2 }}>
-                    <Grid item xs={12} sm={6}>
-                        <Typography variant="subtitle2">Tutor's Notes</Typography>
-                        <Paper variant="outlined" sx={{ p: 2, mt: 1 }}>
-                            <Typography>{notes || "No notes provided."}</Typography>
-                        </Paper>
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                        <Typography variant="subtitle2">Student Performance</Typography>
-                        <Paper variant="outlined" sx={{ p: 2, mt: 1 }}>
-                            <Typography>{performance || "No performance info recorded."}</Typography>
-                        </Paper>
-                    </Grid>
-                    <Grid item xs={12}>
-                        <Typography variant="subtitle2">Lesson Satisfaction</Typography>
-                        <Typography>{satisfaction || "Not set"}</Typography>
-                    </Grid>
-                </Grid>
-            )}
-        </Box>
+            <Fade in>
+                <Box sx={{ minHeight: "280px" }}>
+                    {editing ? (
+                        <Grid container spacing={2}>
+                            <Grid item xs={12} sm={6}>
+                                <TextField
+                                    label="Tutor's Notes"
+                                    multiline
+                                    minRows={3}
+                                    fullWidth
+                                    value={values.notes}
+                                    onChange={(e) => handleChange("notes", e.target.value)}
+                                />
+                            </Grid>
+                            <Grid item xs={12} sm={6}>
+                                <TextField
+                                    label="Student Performance"
+                                    multiline
+                                    minRows={3}
+                                    fullWidth
+                                    value={values.studentPerformance}
+                                    onChange={(e) => handleChange("studentPerformance", e.target.value)}
+                                />
+                            </Grid>
+                            <Grid item xs={12}>
+                                <FormControl fullWidth>
+                                    <InputLabel>Lesson Satisfaction</InputLabel>
+                                    <Select
+                                        value={values.lessonSatisfaction}
+                                        label="Lesson Satisfaction"
+                                        onChange={(e) =>
+                                            handleChange("lessonSatisfaction", e.target.value as LessonSatisfaction)
+                                        }
+                                    >
+                                        <MenuItem value="VERY_SATISFIED">Very satisfied</MenuItem>
+                                        <MenuItem value="SATISFIED">Satisfied</MenuItem>
+                                        <MenuItem value="NEUTRAL">Neutral</MenuItem>
+                                        <MenuItem value="DISSATISFIED">Dissatisfied</MenuItem>
+                                        <MenuItem value="VERY_DISSATISFIED">Very dissatisfied</MenuItem>
+                                    </Select>
+                                </FormControl>
+                            </Grid>
+                            <Grid item xs={12}>
+                                <Stack direction="row" spacing={2}>
+                                    <Button
+                                        variant="contained"
+                                        onClick={handleSave}
+                                        disabled={saving}
+                                        startIcon={<SaveIcon />}
+                                    >
+                                        Save
+                                    </Button>
+                                    <Button
+                                        variant="outlined"
+                                        onClick={cancelEditing}
+                                        startIcon={<CancelIcon />}
+                                    >
+                                        Cancel
+                                    </Button>
+                                </Stack>
+                            </Grid>
+                        </Grid>
+                    ) : (
+                        <Grid container spacing={2}>
+                            <Grid item xs={12} sm={6}>
+                                <Typography variant="subtitle2" gutterBottom>
+                                    Tutor's Notes
+                                </Typography>
+                                <Paper variant="outlined" sx={{ p: 2 }}>
+                                    <Typography>{values.notes || "No notes provided."}</Typography>
+                                </Paper>
+                            </Grid>
+                            <Grid item xs={12} sm={6}>
+                                <Typography variant="subtitle2" gutterBottom>
+                                    Student Performance
+                                </Typography>
+                                <Paper variant="outlined" sx={{ p: 2 }}>
+                                    <Typography>{values.studentPerformance || "No performance info recorded."}</Typography>
+                                </Paper>
+                            </Grid>
+                            <Grid item xs={12}>
+                                <Typography variant="subtitle2" gutterBottom>
+                                    Lesson Satisfaction
+                                </Typography>
+                                <Typography>{values.lessonSatisfaction || "Not set"}</Typography>
+                            </Grid>
+                        </Grid>
+                    )}
+                </Box>
+            </Fade>
+        </CardWrapper>
     );
 };
 

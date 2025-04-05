@@ -96,6 +96,11 @@ export const updateLesson = async (lessonId: string, lessonData: any) => {
     return response.data;
 }
 
+export const fetchStudentById = async (studentId: string) => {
+    const response = await api.get(`users-service/api/users/${studentId}`);
+    return response.data;
+}
+
 api.interceptors.request.use((config) => {
     const token = localStorage.getItem("token");
     if(token){

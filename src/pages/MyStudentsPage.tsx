@@ -11,7 +11,7 @@ import {
     DialogContent,
     DialogContentText,
     DialogActions,
-    Chip,
+    Chip, Tooltip,
 } from "@mui/material";
 
 import { DataGrid, GridColDef, GridRenderCellParams } from "@mui/x-data-grid";
@@ -23,6 +23,7 @@ import {createStudent, fetchStudents} from "../services/api";
 import { useAuth } from '../context/AuthContext';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
+import {ENGLISH_LEVELS, EnglishLevel} from "../types/ENGLISH_LEVELS";
 
 // Extended Student type
 export interface Student {
@@ -30,11 +31,10 @@ export interface Student {
     avatar?: string;
     name: string;
     email: string;
-    level: "Beginner" | "Intermediate" | "Advanced";
+    level: EnglishLevel;
     homeworkDone: boolean;
     nextLesson?: string;
 }
-
 const MyStudentsPage: React.FC = () => {
     const { user }  = useAuth();
     const [students, setStudents] = useState<Student[]>([]);
@@ -42,7 +42,7 @@ const MyStudentsPage: React.FC = () => {
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [studentToDelete, setStudentToDelete] = useState<Student | null>(null);
     const [addDialogOpen, setAddDialogOpen] = useState(false);
-    const [newStudent, setNewStudent] = useState({ name: "", email: "", level: "Beginner" });
+    const [newStudent, setNewStudent] = useState({ name: "", email: "", level: "Beginner" as EnglishLevel });
     const [addLoading, setAddLoading] = useState(false);
     const [snackbarOpen, setSnackbarOpen] = useState(false);
     const [snackbarMessage, setSnackbarMessage] = useState('');
@@ -87,7 +87,7 @@ const MyStudentsPage: React.FC = () => {
             setAddLoading(true);
             await createStudent(user!.email, newStudent);
             setAddDialogOpen(false);
-            setNewStudent({ name: "", email: "", level: "Beginner" });
+            setNewStudent({ name: "", email: "", level: "Beginner" as EnglishLevel });
             // Reload students after adding
             const data = await fetchStudents(user!.id, searchText, page, pageSize);
             setStudents(data.content);
@@ -160,49 +160,24 @@ const MyStudentsPage: React.FC = () => {
             width: 140,
             renderCell: (params: GridRenderCellParams<Student>) => {
                 const level = params.row.level;
-
-                const levelStyles: Record<
-                    Student["level"],
-                    { label: string; color: string; textColor: string }
-                > = {
-                    Beginner: {
-                        label: "Beginner",
-                        color: "#d0b2ef",
-                        textColor: "#4c1d95",
-                    },
-                    Intermediate: {
-                        label: "Intermediate",
-                        color: "#b7d1ed",
-                        textColor: "#1e3a8a",
-                    },
-                    Advanced: {
-                        label: "Advanced",
-                        color: "#93e1a9",
-                        textColor: "#065f46",
-                    },
-                };
-
-                // Fallback if level is undefined or unexpected
-                const style = levelStyles[level] ?? {
-                    label: level ?? "Unknown",
-                    color: "#e5e7eb", // gray
-                    textColor: "#374151", // dark gray
-                };
+                const levelInfo = ENGLISH_LEVELS[level];
 
                 return (
-                    <Chip
-                        label={style.label}
-                        sx={{
-                            backgroundColor: style.color,
-                            color: style.textColor,
-                            fontWeight: 600,
-                            borderRadius: "8px",
-                            px: 1.5,
-                        }}
-                        size="small"
-                    />
+                    <Tooltip title={levelInfo?.description || ""}>
+                        <Chip
+                            label={`${level} (${levelInfo?.code})`}
+                            sx={{
+                                backgroundColor: "#f0f4ff",
+                                color: "#1e3a8a",
+                                fontWeight: 600,
+                                borderRadius: "8px",
+                                px: 1.5,
+                            }}
+                            size="small"
+                        />
+                    </Tooltip>
                 );
-            },
+            }
         },
         {
             field: "homeworkDone",
@@ -346,12 +321,16 @@ const MyStudentsPage: React.FC = () => {
                         fullWidth
                         margin="dense"
                         value={newStudent.level}
-                        onChange={(e) => setNewStudent({ ...newStudent, level: e.target.value })}
+                        onChange={(e) =>
+                            setNewStudent({ ...newStudent, level: e.target.value as EnglishLevel })
+                        }
                         SelectProps={{ native: true }}
                     >
-                        <option value="Beginner">Beginner</option>
-                        <option value="Intermediate">Intermediate</option>
-                        <option value="Advanced">Advanced</option>
+                        {Object.entries(ENGLISH_LEVELS).map(([key, val]) => (
+                            <option key={key} value={key}>
+                                {key} ({val.code})
+                            </option>
+                        ))}
                     </TextField>
                 </DialogContent>
                 <DialogActions>
