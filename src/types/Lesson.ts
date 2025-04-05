@@ -1,11 +1,17 @@
-export type LessonStatus = "SCHEDULED" | "IN_PROGRESS" | "COMPLETED" | "CANCELED";
-
 export type LessonSatisfaction =
     | "VERY_SATISFIED"
     | "SATISFIED"
     | "NEUTRAL"
     | "DISSATISFIED"
     | "VERY_DISSATISFIED";
+
+export type LessonStatus =
+    | "SCHEDULED"
+    | "IN_PROGRESS"
+    | "COMPLETED"
+    | "MISSED"
+    | "RESCHEDULED"
+    | "CANCELED";
 
 export interface LessonAttachment {
     id: string;

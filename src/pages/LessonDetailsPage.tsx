@@ -13,12 +13,13 @@ import LessonPlanSection from "../components/lessonDetail/LessonPlanSection";
 import HomeworkSection from "../components/lessonDetail/HomeworkSection";
 import PostLessonNotes from "../components/lessonDetail/PostLessonNotes";
 import LessonTracking from "../components/lessonDetail/LessonTracking";
+import {Lesson} from "../types/Lesson";
 
 const LessonDetailPage = () => {
     const { id } = useParams();
     const location = useLocation();
 
-    const [lesson, setLesson] = useState(null);
+    const [lesson, setLesson] = useState<Lesson | null>(null);
     const [loading, setLoading] = useState(true);
     const [student, setStudent] = useState(location.state?.student || null);
 
@@ -56,7 +57,18 @@ const LessonDetailPage = () => {
             <Grid container spacing={3}>
                 {/* Header */}
                 <Grid item xs={12}>
-                    <LessonHero lesson={lesson} student={student} />
+                    <LessonHero
+                        lesson={lesson}
+                        student={student}
+                        onUpdated={(updated) => {
+                            setLesson((prev): Lesson | null => {
+                                if (!prev) return prev;
+
+                                const safePrev = prev as Lesson;
+                                return { ...safePrev, ...updated };
+                            });
+                        }}
+                    />
                 </Grid>
 
                 {/* Plan + Homework */}
