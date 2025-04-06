@@ -1,24 +1,8 @@
 import React, { useState } from "react";
 import {
-    AppBar,
-    Avatar,
-    Box,
-    Button,
-    CssBaseline, Dialog, DialogActions, DialogContent, DialogTitle,
-    Divider,
-    Drawer,
-    IconButton,
-    List,
-    ListItem,
-    ListItemButton,
-    ListItemIcon,
-    ListItemText,
-    Menu,
-    MenuItem,
-    Toolbar,
-    Typography,
-    Badge,
-    MenuList
+    AppBar, Avatar, Badge, Box, Button, CssBaseline, Dialog, DialogActions, DialogContent,
+    DialogTitle, Drawer, IconButton, List, ListItem, ListItemButton,
+    ListItemIcon, ListItemText, Menu, MenuItem, MenuList, Toolbar, Typography
 } from "@mui/material";
 
 import MenuIcon from "@mui/icons-material/Menu";
@@ -30,51 +14,42 @@ import EventNoteIcon from "@mui/icons-material/EventNote";
 import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
 
 import { useAuth } from "../context/AuthContext";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 const drawerWidth = 240;
 const BRAND_NAME = "Tutoria";
-const SLOGAN = "Your personalized English journey";
 
 const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [mobileOpen, setMobileOpen] = useState(false);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [notifAnchorEl, setNotifAnchorEl] = useState<null | HTMLElement>(null);
-    const hasNotifications = true; // Mock this, connect real logic later
     const [profileAnchorEl, setProfileAnchorEl] = useState<null | HTMLElement>(null);
+
+    const hasNotifications = true;
     const isProfileMenuOpen = Boolean(profileAnchorEl);
 
     const { user, logout } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
 
     const menuItems = [
-        { text: "Dashboard", icon: <HomeIcon />, path: "/dashboard" },
-        { text: "Students", icon: <PeopleIcon />, path: "/my-students" },
-        { text: "Lessons", icon: <EventNoteIcon />, path: "/lessons" },
+        { label: "Dashboard", icon: <HomeIcon />, path: "/dashboard" },
+        { label: "Students", icon: <PeopleIcon />, path: "/my-students" },
+        { label: "Lessons", icon: <EventNoteIcon />, path: "/lessons" },
     ];
 
-    const handleDrawerToggle = () => {
-        setMobileOpen(!mobileOpen);
-    };
-    const handleProfileMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
-        setProfileAnchorEl(event.currentTarget);
-    };
-
-    const handleProfileMenuClose = () => {
-        setProfileAnchorEl(null);
-    };
-
+    const handleDrawerToggle = () => setMobileOpen(!mobileOpen);
+    const handleProfileMenuOpen = (e: React.MouseEvent<HTMLElement>) => setProfileAnchorEl(e.currentTarget);
+    const handleProfileMenuClose = () => setProfileAnchorEl(null);
     const handleProfile = () => {
         handleProfileMenuClose();
         navigate("/profile");
     };
-
     const handleLogout = () => {
         handleProfileMenuClose();
         logout();
         setIsDialogOpen(false);
     };
-
     const openDialog = () => {
         handleProfileMenuClose();
         setIsDialogOpen(true);
@@ -83,61 +58,64 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const closeDialog = () => {
         setIsDialogOpen(false);
     };
-
-    const handleNotifOpen = (event: React.MouseEvent<HTMLElement>) => {
-        setNotifAnchorEl(event.currentTarget);
-    };
-
-    const handleNotifClose = () => {
-        setNotifAnchorEl(null);
-    };
+    const handleNotifOpen = (e: React.MouseEvent<HTMLElement>) => setNotifAnchorEl(e.currentTarget);
+    const handleNotifClose = () => setNotifAnchorEl(null);
 
     const drawer = (
         <Box
             sx={{
                 height: "100%",
-                backgroundColor: "#F3F6FD",
+                backgroundColor: "#F9FAFC",
+                py: 3,
                 display: "flex",
                 flexDirection: "column",
             }}
         >
-            {/* Logo & Slogan */}
-            <Box sx={{ textAlign: "center", p: 2 }}>
+            {/* Logo and Slogan */}
+            <Box px={2} mb={2}>
                 <Typography
                     variant="h6"
-                    sx={{ fontWeight: "bold", cursor: "pointer" }}
+                    fontWeight={700}
+                    sx={{ textAlign: "left", pl: 1, cursor: "pointer" }}
                     onClick={() => navigate("/dashboard")}
                 >
                     {BRAND_NAME}
                 </Typography>
-                <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    sx={{ fontStyle: "italic" }}
-                >
-                    {SLOGAN}
+                <Typography variant="caption" color="text.secondary" sx={{ pl: 1, fontStyle: "italic" }}>
+                    Your personalized English journey
                 </Typography>
             </Box>
 
-            <Divider />
+            {/* Navigation (stick to top) */}
+            <List disablePadding>
+                {menuItems.map(({ label, icon, path }) => (
+                    <ListItem key={label} disablePadding>
+                        <ListItemButton
+                            onClick={() => navigate(path)}
+                            selected={location.pathname === path}
+                            sx={{
+                                mx: 1,
+                                my: 0.5,
+                                borderRadius: 2,
+                                px: 2,
+                                py: 1.5,
+                                "&.Mui-selected": {
+                                    backgroundColor: "#E3F2FD",
+                                    "& .MuiListItemIcon-root, & .MuiListItemText-primary": {
+                                        color: "#1976d2"
+                                    }
+                                }
+                            }}
+                        >
+                            <ListItemIcon sx={{ minWidth: 36 }}>{icon}</ListItemIcon>
+                            <ListItemText primary={label} primaryTypographyProps={{ fontWeight: 500 }} />
+                        </ListItemButton>
+                    </ListItem>
+                ))}
+            </List>
 
-            {/* Navigation */}
-            <Box sx={{ flexGrow: 1 }}>
-                <List>
-                    {menuItems.map(({ text, icon, path }) => (
-                        <ListItem key={text} disablePadding>
-                            <ListItemButton onClick={() => navigate(path)}>
-                                <ListItemIcon sx={{ minWidth: 36 }}>{icon}</ListItemIcon>
-                                <ListItemText primary={text} />
-                            </ListItemButton>
-                        </ListItem>
-                    ))}
-                </List>
-            </Box>
-
-            {/* Bottom Branding */}
-            <Divider />
-            <Box sx={{ p: 2, textAlign: "center" }}>
+            {/* Bottom footer (optional) */}
+            <Box mt="auto" px={2}>
                 <Typography variant="caption" color="text.secondary">
                     © 2025 {BRAND_NAME}
                 </Typography>
@@ -149,18 +127,18 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         <Box sx={{ display: "flex" }}>
             <CssBaseline />
 
-            {/* Top Bar */}
             <AppBar
                 position="fixed"
                 sx={{
                     width: { md: `calc(100% - ${drawerWidth}px)` },
                     ml: { md: `${drawerWidth}px` },
-                    backgroundColor: "#56adda",
+                    backgroundColor: "#ffffff",
+                    color: "#000",
+                    boxShadow: "0px 1px 4px rgba(0,0,0,0.05)",
+                    zIndex: 1201,
                 }}
-                elevation={0}
             >
                 <Toolbar sx={{ display: "flex", justifyContent: "space-between" }}>
-                    {/* Burger (mobile only) */}
                     <IconButton
                         color="inherit"
                         edge="start"
@@ -170,13 +148,11 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                         <MenuIcon />
                     </IconButton>
 
-                    {/* Title left-aligned (optional) */}
-                    <Typography variant="h6" noWrap sx={{ fontWeight: 700 }}>
+                    <Typography variant="h6" fontWeight={600}>
                         {BRAND_NAME}
                     </Typography>
 
                     <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                        {/* Notification Bell */}
                         <IconButton onClick={handleNotifOpen} size="small" color="inherit">
                             <Badge color="error" variant="dot" invisible={!hasNotifications}>
                                 <NotificationsNoneIcon />
@@ -200,8 +176,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                             </MenuList>
                         </Menu>
 
-                        {/* Profile Menu */}
-                        <Typography variant="body1" sx={{ color: "#fff" }}>
+                        <Typography variant="body1" sx={{ fontWeight: 500 }}>
                             {user?.name || "Tutor"}
                         </Typography>
                         <IconButton onClick={handleProfileMenuOpen} size="small">
@@ -225,14 +200,10 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                             </MenuItem>
                         </Menu>
                     </Box>
-
-
                 </Toolbar>
             </AppBar>
 
-            {/* Drawer */}
             <Box component="nav" sx={{ width: { md: drawerWidth }, flexShrink: { md: 0 } }}>
-                {/* Mobile */}
                 <Drawer
                     variant="temporary"
                     open={mobileOpen}
@@ -246,7 +217,6 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                     {drawer}
                 </Drawer>
 
-                {/* Desktop */}
                 <Drawer
                     variant="permanent"
                     sx={{
@@ -259,7 +229,6 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 </Drawer>
             </Box>
 
-            {/* Content */}
             <Box
                 component="main"
                 sx={{
@@ -274,9 +243,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             >
                 <Dialog open={isDialogOpen} onClose={closeDialog}>
                     <DialogTitle>Confirm Logout</DialogTitle>
-                    <DialogContent>
-                        Are you sure you want to log out?
-                    </DialogContent>
+                    <DialogContent>Are you sure you want to log out?</DialogContent>
                     <DialogActions>
                         <Button onClick={closeDialog}>Cancel</Button>
                         <Button onClick={handleLogout} color="primary">

@@ -3,38 +3,40 @@ import {
     Box,
     Typography,
     Button,
-    Paper,
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableRow,
-    TableContainer,
-    TextField,
-    MenuItem, Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Menu,
+    MenuItem,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    IconButton,
+    Menu,
+    Chip,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
-import {getUpcomingLessons, getHistoryLessons, fetchStudents, deleteLesson, getLessons} from '../services/api';
+import { fetchStudents, deleteLesson, getLessons } from "../services/api";
 import AddLessonModal from "../components/AddLessonModal";
 import { useAuth } from "../context/AuthContext";
-import {Student} from "./MyStudentsPage";
+import { Student } from "./MyStudentsPage";
 import { useNavigate } from "react-router-dom";
-import {FilterList} from "@mui/icons-material";
+import { FilterList } from "@mui/icons-material";
+import {DataGrid, GridColDef, GridRenderCellParams} from "@mui/x-data-grid";
 
 const LessonsPage = () => {
     const [lessons, setLessons] = useState([]);
     const { user } = useAuth();
     const navigate = useNavigate();
-    const [status, setStatus] = useState("SCHEDULED");
+    const [status, setStatus] = useState("");
     const [isModalOpen, setIsModalOpen] = useState(false);
-
     const [students, setStudents] = useState<Student[]>([]);
-
     const [lessonToDelete, setLessonToDelete] = useState<any | null>(null);
     const [deleting, setDeleting] = useState(false);
-
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
     const statusFilterOpen = Boolean(anchorEl);
+
+    const [page, setPage] = useState(0);
+    const [pageSize, setPageSize] = useState(10);
+    const [totalLessons, setTotalLessons] = useState(0);
+    const [loading, setLoading] = useState(false);
 
     const handleStatusFilterClick = (event: React.MouseEvent<HTMLButtonElement>) => {
         setAnchorEl(event.currentTarget);
@@ -46,12 +48,21 @@ const LessonsPage = () => {
 
     const handleStatusSelect = (value: string) => {
         setStatus(value);
+        setPage(0); // Reset page on filter change
         handleStatusFilterClose();
     };
 
     const refreshLessons = async (userId: string, status: string) => {
-        const lessonsData = await getLessons(userId, status)
-        setLessons(lessonsData);
+        setLoading(true);
+        try {
+            const result = await getLessons(userId, status, page, pageSize);
+            setLessons(result.content);
+            setTotalLessons(result.totalElements);
+        } catch (e) {
+            console.error("Failed to fetch lessons", e);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleDeleteLesson = async () => {
@@ -68,142 +79,164 @@ const LessonsPage = () => {
         }
     };
 
-    const getStudentName = (id: string) => {
-        return students.find((s) => s.id === id)?.name || "Unknown";
-    }
+    const getStudentById = (id: string) => {
+        return students.find((s) => s.id === id);
+    };
 
     useEffect(() => {
         if (user) {
             refreshLessons(user.id, status);
         }
-    }, [user, status]);
+    }, [user, status, page, pageSize]);
 
     useEffect(() => {
         const loadStudents = async () => {
             const result = await fetchStudents(user!.id, "", 0, 100);
             setStudents(result.content || []);
         };
-
-        loadStudents();
+        if (user) loadStudents();
     }, [user]);
+
+    const columns: GridColDef[] = [
+        {
+            field: "title",
+            headerName: "Lesson",
+            flex: 1,
+        },
+        {
+            field: "studentId",
+            headerName: "Student",
+            flex: 1,
+            renderCell: (params: GridRenderCellParams<any>) => {
+                const student = getStudentById(params.value);
+                return student ? student.name : "Unknown";
+            },
+        },
+        {
+            field: "dateTime",
+            headerName: "Date",
+            width: 180,
+            valueFormatter: (params: { value: any }) =>
+                new Date(params.value).toLocaleString(),
+        },
+        {
+            field: "status",
+            headerName: "Status",
+            width: 140,
+            renderHeader: () => (
+                <Box display="flex" alignItems="center">
+                    Status
+                    <IconButton size="small" onClick={handleStatusFilterClick}>
+                        <FilterList fontSize="small" />
+                    </IconButton>
+                    <Menu
+                        anchorEl={anchorEl}
+                        open={statusFilterOpen}
+                        onClose={handleStatusFilterClose}
+                    >
+                        <MenuItem onClick={() => handleStatusSelect("SCHEDULED")}>Scheduled</MenuItem>
+                        <MenuItem onClick={() => handleStatusSelect("COMPLETED")}>Completed</MenuItem>
+                        <MenuItem onClick={() => handleStatusSelect("CANCELED")}>Canceled</MenuItem>
+                        <MenuItem onClick={() => handleStatusSelect("")}>All</MenuItem>
+                    </Menu>
+                </Box>
+            ),
+        },
+        {
+            field: "homework",
+            headerName: "Homework",
+            width: 120,
+            renderCell: (params) => (
+                params.value ? <Chip label="Yes" color="success" /> : <Chip label="No" color="default" />
+            ),
+        },
+        {
+            field: "actions",
+            headerName: "Actions",
+            width: 130,
+            sortable: false,
+            renderCell: (params) => (
+                <Box>
+                    <Button
+                        size="small"
+                        onClick={() =>
+                            navigate(`/lessons/${params.row.id}`, {
+                                state: { student: getStudentById(params.row.studentId) },
+                            })
+                        }
+                    >
+                        View
+                    </Button>
+                    <Button
+                        size="small"
+                        color="error"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setLessonToDelete(params.row);
+                        }}
+                    >
+                        Delete
+                    </Button>
+                </Box>
+            ),
+        },
+    ];
 
     return (
         <Box>
-            <Box>
-                <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}>
-                    <Typography variant="h5" fontWeight={600}>
-                        Lessons
-                    </Typography>
+            <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}>
+                <Typography variant="h5" fontWeight={600}>
+                    Lessons
+                </Typography>
+                <Button variant="contained" startIcon={<AddIcon />} onClick={() => setIsModalOpen(true)}>
+                    Add Lesson
+                </Button>
+            </Box>
 
-                    <Button variant="contained" startIcon={<AddIcon />} onClick={() => setIsModalOpen(true)}>
-                        Add Lesson
-                    </Button>
-                </Box>
-
-                <Paper>
-                    <TableContainer>
-                        <Table>
-                            <TableHead>
-                                <TableRow>
-                                    <TableCell>Lesson</TableCell>
-                                    <TableCell>Student</TableCell>
-                                    <TableCell>Date</TableCell>
-                                    <TableCell>
-                                        Status{" "}
-                                        <IconButton size="small" onClick={handleStatusFilterClick}>
-                                            <FilterList fontSize="small" />
-                                        </IconButton>
-                                        <Menu
-                                            anchorEl={anchorEl}
-                                            open={statusFilterOpen}
-                                            onClose={handleStatusFilterClose}
-                                        >
-                                            <MenuItem onClick={() => handleStatusSelect("SCHEDULED")}>Scheduled</MenuItem>
-                                            <MenuItem onClick={() => handleStatusSelect("COMPLETED")}>Completed</MenuItem>
-                                            <MenuItem onClick={() => handleStatusSelect("CANCELED")}>Canceled</MenuItem>
-                                            <MenuItem onClick={() => handleStatusSelect("")}>All</MenuItem>
-                                        </Menu>
-                                    </TableCell>
-                                    <TableCell>Homework</TableCell>
-                                    <TableCell>Actions</TableCell>
-                                </TableRow>
-                            </TableHead>
-                            <TableBody>
-                                {lessons.map((lesson: any) => {
-                                    const student = students.find((s) => s.id === lesson.studentId);
-
-                                    return (
-                                        <TableRow
-                                            key={lesson.id}
-                                            hover
-                                            sx={{ cursor: "pointer" }}
-                                            onClick={() => {
-                                                navigate(`/lessons/${lesson.id}`, {
-                                                    state: { student },
-                                                });
-                                            }}
-                                        >
-                                            <TableCell>{lesson.title}</TableCell>
-                                            <TableCell>{student?.name || "Unknown"}</TableCell>
-                                            <TableCell>{new Date(lesson.dateTime).toLocaleString()}</TableCell>
-                                            <TableCell>{lesson.status}</TableCell>
-                                            <TableCell>{lesson.homework ? "Yes" : "No"}</TableCell>
-                                            <TableCell>
-                                                <Button size="small">Edit</Button>
-                                                <Button
-                                                    size="small"
-                                                    color="error"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation(); // prevent row click navigation
-                                                        setLessonToDelete(lesson);
-                                                    }}
-                                                >
-                                                    Delete
-                                                </Button>
-                                            </TableCell>
-                                        </TableRow>
-                                    );
-                                })}
-                                {lessons.length === 0 && (
-                                    <TableRow>
-                                        <TableCell colSpan={6} align="center">
-                                            No lessons found.
-                                        </TableCell>
-                                    </TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
-                    </TableContainer>
-                </Paper>
+            <Box sx={{ height: 520, backgroundColor: "#fff" }}>
+                <DataGrid
+                    rows={lessons}
+                    columns={columns}
+                    rowCount={totalLessons}
+                    loading={loading}
+                    paginationMode="server"
+                    paginationModel={{ page, pageSize }}
+                    onPaginationModelChange={({ page, pageSize }) => {
+                        setPage(page);
+                        setPageSize(pageSize);
+                    }}
+                    pageSizeOptions={[5, 10, 25]}
+                    disableRowSelectionOnClick
+                    getRowId={(row) => row.id}
+                />
             </Box>
 
             <AddLessonModal
                 open={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
-                onCreated={() => user?.id && refreshLessons(user?.id, status)}
+                onCreated={() => user?.id && refreshLessons(user.id, status)}
                 students={students}
             />
 
             {lessonToDelete && (
-                <Box>
-                    <Dialog open onClose={() => setLessonToDelete(null)}>
-                        <DialogTitle>Delete Lesson</DialogTitle>
-                        <DialogContent>
-                            Are you sure you want to delete the lesson with <b>{getStudentName(lessonToDelete.studentId)}</b>?
-                        </DialogContent>
-                        <DialogActions>
-                            <Button onClick={() => setLessonToDelete(null)}>Cancel</Button>
-                            <Button
-                                onClick={handleDeleteLesson}
-                                color="error"
-                                variant="contained"
-                                disabled={deleting}
-                            >
-                                {deleting ? "Deleting..." : "Delete"}
-                            </Button>
-                        </DialogActions>
-                    </Dialog>
-                </Box>
+                <Dialog open onClose={() => setLessonToDelete(null)}>
+                    <DialogTitle>Delete Lesson</DialogTitle>
+                    <DialogContent>
+                        Are you sure you want to delete the lesson with{" "}
+                        <strong>{getStudentById(lessonToDelete.studentId)?.name || "Unknown"}</strong>?
+                    </DialogContent>
+                    <DialogActions>
+                        <Button onClick={() => setLessonToDelete(null)}>Cancel</Button>
+                        <Button
+                            onClick={handleDeleteLesson}
+                            color="error"
+                            variant="contained"
+                            disabled={deleting}
+                        >
+                            {deleting ? "Deleting..." : "Delete"}
+                        </Button>
+                    </DialogActions>
+                </Dialog>
             )}
         </Box>
     );

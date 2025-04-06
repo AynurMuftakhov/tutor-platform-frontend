@@ -17,17 +17,23 @@ export interface GetUsersResponse {
 }
 
 export const getUpcomingLessons = async (userId: string) => {
-    const response = await api.get(`/lessons-service/api/lessons?userId=${userId}&status=SCHEDULED`);
-    return response.data;
+    const response = await api.get(`/lessons-service/api/lessons?tutorId=${userId}&status=SCHEDULED,RESCHEDULED`);
+    return response.data.content;
 };
 
 export const getHistoryLessons = async (userId: string) => {
-    const response = await api.get(`/lessons-service/api/lessons?userId=${userId}&status=COMPLETED`);
-    return response.data;
+    const response = await api.get(`/lessons-service/api/lessons?tutorId=${userId}&status=COMPLETED`);
+    return response.data.content;
 };
 
-export const getLessons = async (userId: string, status: string) => {
-    const response = await api.get(`/lessons-service/api/lessons?userId=${userId}&status=${status}`);
+export const getLessons = async (tutorId: string, status: string, page = 0, size = 10) => {
+    const params = new URLSearchParams();
+    if (tutorId) params.append("tutorId", tutorId);
+    if (status) params.append("status", status);
+    params.append("page", page.toString());
+    params.append("size", size.toString());
+
+    const response = await api.get(`/lessons-service/api/lessons?${params}`);
     return response.data;
 };
 
