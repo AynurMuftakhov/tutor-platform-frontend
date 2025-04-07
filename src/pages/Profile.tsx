@@ -123,42 +123,6 @@ const Profile: React.FC = () => {
         setSnackbarOpen(false);
     };
 
-    const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
-        setActiveTab(newValue);
-
-        // Fetch data based on the selected tab
-        if (newValue === 0) {
-            fetchLessons('upcoming');
-        } else if (newValue === 2) {
-            fetchLessons('history');
-        }
-    };
-
-    const fetchLessons = async (type: 'upcoming' | 'history') => {
-        if (!user) return;
-
-        setLoading(true);
-        try {
-            if (type === 'upcoming') {
-                const upcoming = await getUpcomingLessons(user.id);
-                setUpcomingLessons(upcoming);
-            } else if (type === 'history') {
-                const history = await getHistoryLessons(user.id);
-                setHistoryLessons(history);
-            }
-        } catch (error) {
-            console.error(`Error fetching ${type} lessons:`, error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        if (user?.id) {
-            fetchLessons('upcoming');
-        }
-    }, []);
-
     return (
         <Box sx={{ display: 'flex', flexDirection: 'row', gap: 2, padding: 3 }}>
                 {/* Left Sidebar */}
@@ -288,86 +252,6 @@ const Profile: React.FC = () => {
                             </Card>
                         </Grid>
                     </Grid>
-
-                    {/* Lessons and Invoices Tabs */}
-                    <Tabs
-                        value={activeTab}
-                        onChange={handleTabChange}
-                        indicatorColor="primary"
-                        textColor="primary"
-                        sx={{ marginBottom: 2 }}
-                    >
-                        <Tab label="Upcoming Lessons" />
-                        <Tab label="HomeWork" />
-                        <Tab label="History" />
-                    </Tabs>
-
-                    {loading ? (
-                        <CircularProgress sx={{ marginTop: 3 }} />)
-                        : (
-                        <Box sx={{ marginTop: 3 }}>
-                            {activeTab === 0 && (
-                                <Box>
-                                    <Typography variant="h5" gutterBottom>
-                                        Upcoming Lessons
-                                    </Typography>
-                                    <List>
-                                        {upcomingLessons.length > 0 ? (
-                                            upcomingLessons.map((lesson) => (
-                                                <React.Fragment key={lesson.id}>
-                                                    <ListItem>
-                                                        <ListItemText
-                                                            primary={`${lesson.title} - ${lesson.dateTime}`}
-                                                            secondary={`Price: $${lesson.price}`}
-                                                        />
-                                                    </ListItem>
-                                                    <Divider />
-                                                </React.Fragment>
-                                            ))
-                                        ) : (
-                                            <Typography variant="body2" color="text.secondary">
-                                                No upcoming lessons.
-                                            </Typography>
-                                        )}
-                                    </List>
-                                </Box>
-                            )}
-
-                    {activeTab === 1 && (
-                        <Typography variant="body2" color="text.secondary">
-                            All is done. Great work!
-                        </Typography>
-                    )}
-
-                    {activeTab === 2 && (
-                        <Box>
-                            <Typography variant="h5" gutterBottom>
-                                History of Lessons
-                            </Typography>
-                            <List>
-                                {historyLessons.length > 0 ? (
-                                    historyLessons.map((lesson) => (
-                                        <React.Fragment key={lesson.id}>
-                                            <ListItem>
-                                                <ListItemText
-                                                    primary={`${lesson.title} - ${lesson.dateTime}`}
-                                                    secondary={`Price: $${lesson.price}`}
-                                                />
-                                            </ListItem>
-                                            <Divider />
-                                        </React.Fragment>
-                                    ))
-                                ) : (
-                                    <Typography variant="body2" color="text.secondary">
-                                        No completed lessons.
-                                    </Typography>
-                                )}
-                            </List>
-                        </Box>
-                    )}
-
-                </Box>
-                        )}
 
                 {/* Snackbar */}
                 <Snackbar

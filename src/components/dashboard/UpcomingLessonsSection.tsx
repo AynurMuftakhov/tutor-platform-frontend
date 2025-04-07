@@ -12,7 +12,9 @@ const UpcomingLessonsSection: React.FC = () => {
     useEffect(() => {
         const fetchLessons = async () => {
             try {
-                const res = await getUpcomingLessons(user?.id as string);
+                const studentId = user?.role === "student" ? user?.id : undefined;
+                const tutorId = user?.role === "tutor" ? user?.id : undefined;
+                const res = await getUpcomingLessons(tutorId as string, studentId as string);
                 setLessons(res);
             } catch (error) {
                 console.error("Failed to fetch lessons:", error);

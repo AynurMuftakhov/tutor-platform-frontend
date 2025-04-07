@@ -16,8 +16,13 @@ export interface GetUsersResponse {
     number: number; // current page
 }
 
-export const getUpcomingLessons = async (userId: string) => {
-    const response = await api.get(`/lessons-service/api/lessons?tutorId=${userId}&status=SCHEDULED,RESCHEDULED`);
+export const getUpcomingLessons = async (tutorId: string, studentId: string) => {
+    const params = new URLSearchParams();
+    if (tutorId) params.append("tutorId", tutorId);
+    if (studentId) params.append("studentId", studentId);
+    params.append("status", "SCHEDULED,RESCHEDULED");
+
+    const response = await api.get(`/lessons-service/api/lessons?${params}`);
     return response.data.content;
 };
 
@@ -26,9 +31,10 @@ export const getHistoryLessons = async (userId: string) => {
     return response.data.content;
 };
 
-export const getLessons = async (tutorId: string, status: string, page = 0, size = 10) => {
+export const getLessons = async (studentId: string, tutorId: string, status: string, page = 0, size = 10) => {
     const params = new URLSearchParams();
     if (tutorId) params.append("tutorId", tutorId);
+    if (studentId) params.append("studentId", studentId);
     if (status) params.append("status", status);
     params.append("page", page.toString());
     params.append("size", size.toString());
@@ -112,8 +118,8 @@ export const deleteLesson = async (lessonId: string) => {
     return res.data;
 };
 
-export const fetchStudentById = async (studentId: string) => {
-    const response = await api.get(`users-service/api/users/${studentId}`);
+export const fetchUserById = async (userId: string) => {
+    const response = await api.get(`users-service/api/users/${userId}`);
     return response.data;
 }
 

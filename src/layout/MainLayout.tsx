@@ -34,7 +34,9 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
     const menuItems = [
         { label: "Dashboard", icon: <HomeIcon />, path: "/dashboard" },
-        { label: "Students", icon: <PeopleIcon />, path: "/my-students" },
+        ...(user?.role === "tutor"
+            ? [{ label: "Students", icon: <PeopleIcon />, path: "/my-students" }]
+            : []),
         { label: "Lessons", icon: <EventNoteIcon />, path: "/lessons" },
     ];
 

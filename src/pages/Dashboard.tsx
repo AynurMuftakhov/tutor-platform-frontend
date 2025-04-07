@@ -31,7 +31,6 @@ const StatCard = ({ title, value, icon }: any) => (
 const Dashboard = () => {
     const { user } = useAuth();
     const theme = useTheme();
-    const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
     return (
         <MainLayout>
@@ -40,21 +39,23 @@ const Dashboard = () => {
                     Hello, {user?.name || "Tutor"}!
                 </Typography>
 
-                {/* Stat Cards */}
-                <Grid container spacing={3} sx={{ mb: 4 }}>
-                    <Grid item xs={12} sm={6} md={3}>
-                        <StatCard title="Students Taught" value="4" icon={<SchoolIcon />} />
+                {user?.role === "tutor" && (
+                    <Grid container spacing={3} sx={{ mb: 4 }}>
+                        <Grid item xs={12} sm={6} md={3}>
+                            <StatCard title="Students Taught" value="4" icon={<SchoolIcon />} />
+                        </Grid>
+                        <Grid item xs={12} sm={6} md={3}>
+                            <StatCard title="Lessons Completed" value="12" icon={<EventNoteIcon />} />
+                        </Grid>
+                        <Grid item xs={12} sm={6} md={3}>
+                            <StatCard title="Pending Tasks" value="2" icon={<TaskAltIcon />} />
+                        </Grid>
+                        <Grid item xs={12} sm={6} md={3}>
+                            <StatCard title="Progress Score" value="88%" icon={<TrendingUpIcon />} />
+                        </Grid>
                     </Grid>
-                    <Grid item xs={12} sm={6} md={3}>
-                        <StatCard title="Lessons Completed" value="12" icon={<EventNoteIcon />} />
-                    </Grid>
-                    <Grid item xs={12} sm={6} md={3}>
-                        <StatCard title="Pending Tasks" value="2" icon={<TaskAltIcon />} />
-                    </Grid>
-                    <Grid item xs={12} sm={6} md={3}>
-                        <StatCard title="Progress Score" value="88%" icon={<TrendingUpIcon />} />
-                    </Grid>
-                </Grid>
+                )}
+
 
                 {/* Next Lessons Section */}
                 <Paper elevation={2} sx={{ p: 3, borderRadius: 3, mb: 3 }}>

@@ -13,7 +13,7 @@ import {
     Chip,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
-import { fetchStudents, deleteLesson, getLessons } from "../services/api";
+import {fetchStudents, deleteLesson, getLessons, fetchUserById} from "../services/api";
 import AddLessonModal from "../components/AddLessonModal";
 import { useAuth } from "../context/AuthContext";
 import { Student } from "./MyStudentsPage";
@@ -28,6 +28,7 @@ const LessonsPage = () => {
     const [status, setStatus] = useState("");
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [students, setStudents] = useState<Student[]>([]);
+    const [tutorsMap, setTutorsMap] = useState<Map<string, string>>(new Map());
     const [lessonToDelete, setLessonToDelete] = useState<any | null>(null);
     const [deleting, setDeleting] = useState(false);
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -48,16 +49,35 @@ const LessonsPage = () => {
 
     const handleStatusSelect = (value: string) => {
         setStatus(value);
-        setPage(0); // Reset page on filter change
+        setPage(0);
         handleStatusFilterClose();
     };
 
-    const refreshLessons = async (userId: string, status: string) => {
+    const refreshLessons = async () => {
         setLoading(true);
         try {
-            const result = await getLessons(userId, status, page, pageSize);
-            setLessons(result.content);
+            const studentId = user?.role === "student" ? user?.id : undefined;
+            const tutorId = user?.role === "tutor" ? user?.id : undefined;
+            const result = await getLessons(studentId as string, tutorId as string, status, page, pageSize);
+
+            const lessons = result.content;
+            setLessons(lessons);
             setTotalLessons(result.totalElements);
+
+            if (user?.role === "student") {
+                const uniqueTutorIds = Array.from(new Set(lessons.map((lesson: any) => lesson.tutorId)));
+
+                const newMap = new Map<string, string>();
+
+                await Promise.all(
+                    uniqueTutorIds.map(async (id) => {
+                        const name = await fetchTutorNameById(id as string);
+                        if (name) newMap.set(id as string, name);
+                    })
+                );
+
+                setTutorsMap(newMap);
+            }
         } catch (e) {
             console.error("Failed to fetch lessons", e);
         } finally {
@@ -70,7 +90,7 @@ const LessonsPage = () => {
         try {
             setDeleting(true);
             await deleteLesson(lessonToDelete.id);
-            await refreshLessons(user.id, status);
+            await refreshLessons();
             setLessonToDelete(null);
         } catch (e) {
             console.error("Failed to delete lesson", e);
@@ -83,9 +103,19 @@ const LessonsPage = () => {
         return students.find((s) => s.id === id);
     };
 
+    const fetchTutorNameById = async (id: string): Promise<string | null> => {
+        try {
+            const data = await fetchUserById(id);
+            return data.name;
+        } catch (e) {
+            console.error(`Failed to fetch tutor for ID ${id}`, e);
+            return null;
+        }
+    };
+
     useEffect(() => {
         if (user) {
-            refreshLessons(user.id, status);
+            refreshLessons();
         }
     }, [user, status, page, pageSize]);
 
@@ -94,7 +124,9 @@ const LessonsPage = () => {
             const result = await fetchStudents(user!.id, "", 0, 100);
             setStudents(result.content || []);
         };
-        if (user) loadStudents();
+
+        if (user && user?.role === "tutor") loadStudents();
+
     }, [user]);
 
     const columns: GridColDef[] = [
@@ -103,21 +135,31 @@ const LessonsPage = () => {
             headerName: "Lesson",
             flex: 1,
         },
-        {
-            field: "studentId",
-            headerName: "Student",
-            flex: 1,
-            renderCell: (params: GridRenderCellParams<any>) => {
-                const student = getStudentById(params.value);
-                return student ? student.name : "Unknown";
+        user?.role === "student"
+            ? {
+                field: "tutorId",
+                headerName: "Teacher",
+                flex: 1,
+                renderCell: (params: GridRenderCellParams<any>) => {
+                    return tutorsMap.get(params.value) || "Unknown";
+                },
+            }
+            : {
+                field: "studentId",
+                headerName: "Student",
+                flex: 1,
+                renderCell: (params: GridRenderCellParams<any>) => {
+                    const student = getStudentById(params.value);
+                    return student ? student.name : "Unknown";
+                },
             },
-        },
         {
             field: "dateTime",
             headerName: "Date",
             width: 180,
-            valueFormatter: (params: { value: any }) =>
-                new Date(params.value).toLocaleString(),
+            valueFormatter: (params) => {
+                return new Date(params).toLocaleString();
+            }
         },
         {
             field: "status",
@@ -167,6 +209,7 @@ const LessonsPage = () => {
                     >
                         View
                     </Button>
+                    {user?.role === "tutor" && (
                     <Button
                         size="small"
                         color="error"
@@ -176,7 +219,7 @@ const LessonsPage = () => {
                         }}
                     >
                         Delete
-                    </Button>
+                    </Button>)}
                 </Box>
             ),
         },
@@ -188,9 +231,11 @@ const LessonsPage = () => {
                 <Typography variant="h5" fontWeight={600}>
                     Lessons
                 </Typography>
+                {user?.role === "tutor" && (
                 <Button variant="contained" startIcon={<AddIcon />} onClick={() => setIsModalOpen(true)}>
                     Add Lesson
-                </Button>
+                </Button>)
+                }
             </Box>
 
             <Box sx={{ height: 520, backgroundColor: "#fff" }}>
@@ -214,7 +259,7 @@ const LessonsPage = () => {
             <AddLessonModal
                 open={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
-                onCreated={() => user?.id && refreshLessons(user.id, status)}
+                onCreated={() => user?.id && refreshLessons()}
                 students={students}
             />
 
