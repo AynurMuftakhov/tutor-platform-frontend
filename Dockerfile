@@ -1,10 +1,16 @@
-# Dockerfile for React
 FROM node:16-alpine
 
 WORKDIR /app
-COPY package.json yarn.lock ./
-RUN yarn install
+
+# Копируем package.json и lock-файл
+COPY package.json package-lock.json ./
+
+RUN npm install
+
 COPY . .
-RUN yarn build
+
 EXPOSE 3000
-CMD ["yarn", "start"]
+
+ENV CHOKIDAR_USEPOLLING=true
+
+CMD ["npm", "start"]
