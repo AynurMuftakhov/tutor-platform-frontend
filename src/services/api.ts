@@ -1,5 +1,6 @@
 import axios from 'axios';
 import {Student} from "../pages/MyStudentsPage";
+import { NotificationMessage} from "../context/NotificationsSocketContext";
 
 const api = axios.create({
     baseURL: 'http://localhost',
@@ -15,6 +16,27 @@ export interface GetUsersResponse {
     size: number;
     number: number; // current page
 }
+
+export const fetchNotifications = async (userId: string): Promise<NotificationMessage[]> => {
+    const response = await api.get(`/notifications-service/api/notifications/user/${userId}`);
+    return response.data;
+};
+
+export const markNotificationAsRead = async (id: string) => {
+    return api.patch(`/notifications-service/api/notifications/${id}/read`);
+};
+
+export const markAllNotificationsAsRead = async (userId: string) => {
+    return api.patch(`/notifications-service/api/notifications/user/${userId}/read`);
+};
+
+export const deleteNotificationById = async (id: string) => {
+    return api.delete(`/notifications-service/api/notifications/${id}`);
+};
+
+export const clearAllNotifications = async (userId: string) => {
+    return api.delete(`/notifications-service/api/notifications/user/${userId}/clear`);
+};
 
 export const getUpcomingLessons = async (tutorId: string, studentId: string) => {
     const params = new URLSearchParams();

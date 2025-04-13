@@ -5,6 +5,14 @@ import {
     ListItemIcon, ListItemText, Menu, MenuItem, MenuList, Toolbar, Typography
 } from "@mui/material";
 
+import {
+    markNotificationAsRead,
+    deleteNotificationById,
+    markAllNotificationsAsRead,
+    clearAllNotifications,
+    fetchNotifications
+} from "../services/api";
+
 import MenuIcon from "@mui/icons-material/Menu";
 import HomeIcon from "@mui/icons-material/Home";
 import PeopleIcon from "@mui/icons-material/People";
@@ -12,11 +20,14 @@ import PersonIcon from "@mui/icons-material/Person";
 import LogoutIcon from "@mui/icons-material/Logout";
 import EventNoteIcon from "@mui/icons-material/EventNote";
 import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
+import CloseIcon from "@mui/icons-material/Close";
+import CheckIcon from "@mui/icons-material/Check";
 
 import { useAuth } from "../context/AuthContext";
 import { useLocation, useNavigate } from "react-router-dom";
-import {NotificationSocketProvider, useNotificationSocket} from "../context/NotificationsSocketContext";
+import {useNotificationSocket} from "../context/NotificationsSocketContext";
 import NotificationToasterWrapper from "../components/NotificationToasterWrapper";
+import {DeleteOutline} from "@mui/icons-material";
 
 const drawerWidth = 240;
 const BRAND_NAME = "Tutoria";
@@ -24,11 +35,10 @@ const BRAND_NAME = "Tutoria";
 const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [mobileOpen, setMobileOpen] = useState(false);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
-    const [notifAnchorEl, setNotifAnchorEl] = useState<null | HTMLElement>(null);
     const [profileAnchorEl, setProfileAnchorEl] = useState<null | HTMLElement>(null);
-    const { notifications } = useNotificationSocket()
+    const { notifications, isPanelOpen, togglePanel, setNotifications } = useNotificationSocket();
+    const [hasMounted, setHasMounted] = useState(false);
 
-    const hasNotifications = notifications.length > 0;
     const isProfileMenuOpen = Boolean(profileAnchorEl);
 
     const { user, logout } = useAuth();
@@ -63,8 +73,51 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const closeDialog = () => {
         setIsDialogOpen(false);
     };
-    const handleNotifOpen = (e: React.MouseEvent<HTMLElement>) => setNotifAnchorEl(e.currentTarget);
-    const handleNotifClose = () => setNotifAnchorEl(null);
+
+    const handleMarkAllRead = async () => {
+        if (user?.id) {
+            try {
+                await markAllNotificationsAsRead(user.id);
+                const updated = await fetchNotifications(user.id);
+                setNotifications(updated);
+            } catch (error) {
+                console.error("Failed to mark all notifications as read", error);
+            }
+        }
+    };
+
+    const handleClearAll = async () => {
+        if (user?.id) {
+            try {
+                await clearAllNotifications(user.id);
+                setNotifications([]);
+            } catch (error) {
+                console.error("Failed to clear all notifications", error);
+            }
+        }
+    };
+
+    const handleMarkAsRead = async (id: string) => {
+        try {
+            await markNotificationAsRead(id);
+            setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
+        } catch (error) {
+            console.error("Failed to mark notification as read", error);
+        }
+    };
+
+    const handleDeleteNotification = async (id: string) => {
+        try {
+            await deleteNotificationById(id);
+            setNotifications(prev => prev.filter(n => n.id !== id));
+        } catch (error) {
+            console.error("Failed to delete notification", error);
+        }
+    };
+
+    useEffect(() => {
+        setHasMounted(true);
+    }, []);
 
     const drawer = (
         <Box
@@ -129,7 +182,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     );
 
     return (
-        <NotificationSocketProvider userId={user?.id as string}>
+        <>
             <NotificationToasterWrapper/>
             <Box sx={{ display: "flex" }}>
                 <CssBaseline />
@@ -160,32 +213,110 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                         </Typography>
 
                         <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                            <IconButton onClick={handleNotifOpen} size="small" color="inherit">
-                                <Badge color="error" variant="dot" invisible={!hasNotifications}>
+                            <IconButton onClick={togglePanel} size="small" color="inherit">
+                                <Badge color="error" variant="dot" invisible={notifications.every(n => n.isRead)}>
                                     <NotificationsNoneIcon />
                                 </Badge>
                             </IconButton>
+                            {hasMounted && (
+                                <Menu
+                                    anchorReference="anchorPosition"
+                                    anchorPosition={{ top: 60, left: window.innerWidth - 270 }}
+                                    open={isPanelOpen}
+                                    onClose={togglePanel}
+                                    PaperProps={{
+                                        elevation: 3,
+                                        sx: {
+                                            borderRadius: 2,
+                                            mt: 1,
+                                            bgcolor: "background.paper",
+                                        },
+                                    }}
+                                >
+                                    <MenuList sx={{ width: 360, px: 0, py: 1, overflow: 'auto', maxHeight: '80vh' }}>
+                                        <Box display="flex" justifyContent="space-between" alignItems="center" px={2} mb={1}>
+                                            <Button
+                                                size="small"
+                                                variant="text"
+                                                onClick={handleMarkAllRead}
+                                                sx={{ fontWeight: 500, color: '#1976d2', textTransform: 'none' }}
+                                                startIcon={<CheckIcon />}
+                                            >
+                                                Mark all as read
+                                            </Button>
+                                            <Button
+                                                size="small"
+                                                variant="text"
+                                                onClick={handleClearAll}
+                                                sx={{ fontWeight: 500, color: '#d32f2f', textTransform: 'none' }}
+                                                startIcon={<DeleteOutline />}
+                                            >
+                                                Clear all
+                                            </Button>
+                                        </Box>
 
-                            <Menu
-                                anchorEl={notifAnchorEl}
-                                open={Boolean(notifAnchorEl)}
-                                onClose={handleNotifClose}
-                                anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-                                transformOrigin={{ vertical: "top", horizontal: "right" }}
-                            >
-                                <MenuList sx={{ width: 250 }}>
-                                    {notifications.map((notif, index) => (
-                                        <MenuItem key={index} onClick={handleNotifClose}>
-                                            <ListItemText primary={notif.title} secondary={notif.subtitle} />
-                                        </MenuItem>
-                                    ))}
-                                    {notifications.length === 0 && (
-                                        <MenuItem disabled>
-                                            <ListItemText primary="No notifications" />
-                                        </MenuItem>
-                                    )}
-                                </MenuList>
-                            </Menu>
+                                        {notifications.length === 0 && (
+                                            <Box px={2} py={1} textAlign="center" color="text.secondary">
+                                                No notifications
+                                            </Box>
+                                        )}
+
+                                        {notifications.map((notif) => (
+                                            <Box
+                                                key={notif.id}
+                                                onClick={() => {
+                                                    togglePanel();
+                                                    handleMarkAsRead(notif.id);
+                                                    if (notif.type === 'LESSON_RESCHEDULED') {
+                                                        navigate(`/lessons/${notif.targetId}`);
+                                                    }
+                                                }}
+                                                sx={{
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    gap: 0.5,
+                                                    px: 2,
+                                                    py: 1.5,
+                                                    cursor: 'pointer',
+                                                    backgroundColor: notif.isRead ? '#fafafa' : '#fff',
+                                                    borderBottom: '1px solid #eee',
+                                                    '&:hover': {
+                                                        backgroundColor: '#f5f5f5',
+                                                    },
+                                                }}
+                                            >
+                                                <Box display="flex" alignItems="center" justifyContent="space-between">
+                                                    <Typography variant="subtitle2" fontWeight={600}>
+                                                        {notif.title}
+                                                    </Typography>
+                                                    {!notif.isRead && (
+                                                        <Box
+                                                            component="span"
+                                                            sx={{
+                                                                width: 8,
+                                                                height: 8,
+                                                                bgcolor: 'primary.main',
+                                                                borderRadius: '50%',
+                                                                ml: 1
+                                                            }}
+                                                        />
+                                                    )}
+                                                </Box>
+                                                <Typography
+                                                    variant="body2"
+                                                    sx={{
+                                                        color: 'text.secondary',
+                                                        whiteSpace: 'normal',
+                                                        wordBreak: 'break-word',
+                                                    }}
+                                                >
+                                                    {notif.body}
+                                                </Typography>
+                                            </Box>
+                                        ))}
+                                    </MenuList>
+                                </Menu>
+                                )}
 
                             <Typography variant="body1" sx={{ fontWeight: 500 }}>
                                 {user?.name || "Tutor"}
@@ -266,7 +397,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                     {children}
                 </Box>
             </Box>
-    </NotificationSocketProvider>
+    </>
     );
 };
 

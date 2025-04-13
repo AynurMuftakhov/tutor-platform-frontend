@@ -1,20 +1,31 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
-import {AlertColor} from "@mui/material";
+import { AlertColor } from "@mui/material";
+import {fetchNotifications} from "../services/api";
 
 export interface NotificationMessage {
+    id: string;
     title: string;
-    subtitle: string;
-    severity: AlertColor // 'success' | 'info' | 'warning' | 'error'
+    body: string;
+    severity: AlertColor; // 'success' | 'info' | 'warning' | 'error'
+    type: string;
+    targetId: string;
+    isRead: boolean;
 }
 
 interface NotificationSocketContextValue {
     socket: WebSocket | null;
     notifications: NotificationMessage[];
+    setNotifications: React.Dispatch<React.SetStateAction<NotificationMessage[]>>;
+    isPanelOpen: boolean;
+    togglePanel: () => void;
 }
 
 const NotificationSocketContext = createContext<NotificationSocketContextValue>({
     socket: null,
-    notifications: []
+    notifications: [],
+    setNotifications: () => {},
+    isPanelOpen: false,
+    togglePanel: () => {},
 });
 
 export const useNotificationSocket = () => useContext(NotificationSocketContext);
@@ -27,6 +38,8 @@ interface Props {
 export const NotificationSocketProvider: React.FC<Props> = ({ userId, children }) => {
     const socketRef = useRef<WebSocket | null>(null);
     const [notifications, setNotifications] = useState<NotificationMessage[]>([]);
+    const [isPanelOpen, setIsPanelOpen] = useState(false);
+    const togglePanel = () => setIsPanelOpen((prev) => !prev);
 
     useEffect(() => {
         if (socketRef.current) return;
@@ -39,21 +52,29 @@ export const NotificationSocketProvider: React.FC<Props> = ({ userId, children }
         ws.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
-                setNotifications((prev) => [
-                    {
-                        title: data.title || "Notification",
-                        subtitle: data.body || "",
-                        severity: data.severity || "info"
-                    },
-                    ...prev
-                ]);
+                const newNotif: NotificationMessage = {
+                    ...data,
+                    id: data.id
+                };
+
+                setNotifications(prev => {
+                    const exists = prev.some(n => n.id === newNotif.id);
+                    if (exists) return prev;
+                    return [newNotif, ...prev];
+                });
             } catch (err) {
                 console.error("Failed to parse message", err);
             }
         };
 
         ws.onerror = (err) => console.error("WebSocket error", err);
-        ws.onclose = () => console.log("WebSocket closed");
+
+        ws.onclose = () => {
+            console.log("WebSocket closed");
+            setTimeout(() => {
+                socketRef.current = new WebSocket(`ws://localhost/ws/notifications?userId=${userId}`);
+            }, 3000);
+        };
 
         return () => {
             if (ws.readyState === WebSocket.OPEN) {
@@ -63,8 +84,23 @@ export const NotificationSocketProvider: React.FC<Props> = ({ userId, children }
         };
     }, [userId]);
 
+    useEffect(() => {
+        const loadNotifications = async () => {
+            if (userId) {
+                try {
+                    const data = await fetchNotifications(userId);
+                    setNotifications(data);
+                } catch (e) {
+                    console.error("Failed to fetch notifications:", e);
+                }
+            }
+        };
+
+        loadNotifications();
+    }, [userId]);
+
     return (
-        <NotificationSocketContext.Provider value={{ socket: socketRef.current, notifications }}>
+        <NotificationSocketContext.Provider value={{ socket: socketRef.current, notifications, setNotifications, isPanelOpen, togglePanel }}>
             {children}
         </NotificationSocketContext.Provider>
     );

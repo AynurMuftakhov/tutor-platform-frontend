@@ -1,5 +1,5 @@
 import React from 'react';
-import { Snackbar, Alert, AlertColor } from '@mui/material';
+import { Snackbar, Alert, AlertColor, Slide, SlideProps } from '@mui/material';
 import { NotificationMessage } from "../context/NotificationsSocketContext";
 
 interface NotificationToasterProps {
@@ -7,17 +7,33 @@ interface NotificationToasterProps {
   onClose: () => void;
 }
 
+const SlideTransition = (props: SlideProps) => {
+  return <Slide {...props} direction="down" />;
+};
+
 const NotificationToaster: React.FC<NotificationToasterProps> = ({ notification, onClose }) => {
   return (
     <Snackbar
       open={!!notification}
-      autoHideDuration={4000}
+      autoHideDuration={5000}
       onClose={onClose}
-      anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+      TransitionComponent={SlideTransition}
     >
       {notification ? (
-        <Alert onClose={onClose} severity={notification.severity} sx={{ width: '100%' }}>
-          {notification.title}
+        <Alert
+          onClose={onClose}
+          severity={notification.severity}
+          sx={{
+            width: '100%',
+            borderRadius: 2,
+            boxShadow: 3,
+            px: 2,
+            py: 1,
+            fontSize: '0.9rem',
+          }}
+        >
+          {notification.body}
         </Alert>
       ) : undefined}
     </Snackbar>

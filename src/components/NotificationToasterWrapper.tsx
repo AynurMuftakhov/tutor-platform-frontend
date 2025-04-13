@@ -7,8 +7,9 @@ const NotificationToasterWrapper = () => {
     const [current, setCurrent] = useState<NotificationMessage | null>(null);
 
     useEffect(() => {
-        if (notifications.length > 0) {
-            setCurrent(notifications[0]);
+        const unread = notifications.find(n => !n.isRead);
+        if (unread) {
+            setCurrent(unread);
         }
     }, [notifications]);
 
