@@ -20,7 +20,6 @@ import PersonIcon from "@mui/icons-material/Person";
 import LogoutIcon from "@mui/icons-material/Logout";
 import EventNoteIcon from "@mui/icons-material/EventNote";
 import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
-import CloseIcon from "@mui/icons-material/Close";
 import CheckIcon from "@mui/icons-material/Check";
 
 import { useAuth } from "../context/AuthContext";
@@ -48,9 +47,10 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const menuItems = [
         { label: "Dashboard", icon: <HomeIcon />, path: "/dashboard" },
         ...(user?.role === "tutor"
-            ? [{ label: "Students", icon: <PeopleIcon />, path: "/my-students" }]
-            : []),
-        { label: "Lessons", icon: <EventNoteIcon />, path: "/lessons" },
+            ? [{ label: "Students", icon: <PeopleIcon />, path: "/my-students" },
+                { label: "Vocabulary", icon: <EventNoteIcon />, path: "/vocabulary" }]
+            : [ { label: "Vocabulary", icon: <EventNoteIcon />, path: `/students/${user?.id}/vocabulary` }]),
+        { label: "Lessons", icon: <EventNoteIcon />, path: "/lessons" }
     ];
 
     const handleDrawerToggle = () => setMobileOpen(!mobileOpen);
