@@ -2,8 +2,7 @@ import ky from 'ky';
 import {
     AssignWordsRequest,
     AssignedWordResponse,
-    VocabularyWordRequest,
-    VocabularyWordResponse
+    VocabularyWord, CreateWordRequest
 } from '../types';
 
 const api = ky.create({
@@ -22,12 +21,13 @@ const api = ky.create({
 });
 
 export const vocabApi = {
-    listWords: () => api.get('words').json<VocabularyWordResponse[]>(),
-    createWord: (dto: VocabularyWordRequest) =>
-        api.post('words', { json: dto }).json<VocabularyWordResponse>(),
-    updateWord: (id: string, dto: VocabularyWordRequest) =>
-        api.put(`words/${id}`, { json: dto }).json<VocabularyWordResponse>(),
+    listWords: () => api.get('words').json<VocabularyWord[]>(),
+    createWord: (dto: CreateWordRequest) =>
+        api.post('words/create', { json: dto }).json<VocabularyWord>(),
+    updateWord: (id: string, dto: Partial<VocabularyWord>) =>
+        api.patch(`words/${id}`, { json: dto }).json<VocabularyWord>(),
     deleteWord: (id: string) => api.delete(`words/${id}`),
+
     assign: (dto: AssignWordsRequest) =>
         api.post('assignments', { json: dto }).json<AssignedWordResponse[]>(),
     listAssignments: (studentId: string) =>

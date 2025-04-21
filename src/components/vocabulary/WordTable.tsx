@@ -7,40 +7,64 @@ import {
     TableHead,
     TableRow,
     Paper,
-    IconButton
+    IconButton,
+    Tooltip
 } from '@mui/material';
-import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
-import { VocabularyWordResponse } from '../../types';
+import VolumeUpIcon from '@mui/icons-material/VolumeUp';
+import {VocabularyWord} from '../../types';
 
 interface Props {
-    data: VocabularyWordResponse[];
-    onEdit: (word: VocabularyWordResponse) => void;
+    data: VocabularyWord[];
     onDelete: (id: string) => void;
+    onRowClick: (word: VocabularyWord) => void;
 }
 
-const WordTable: React.FC<Props> = ({ data, onEdit, onDelete }) => (
-    <TableContainer component={Paper} sx={{ mt: 2 }}>
+const WordTable: React.FC<Props> = ({data, onDelete, onRowClick}) => (
+    <TableContainer component={Paper} elevation={0} sx={{borderRadius: 1}}>
         <Table size="small">
             <TableHead>
-                <TableRow>
+                <TableRow sx={{'& th': {fontWeight: 600}}}>
                     <TableCell>Word</TableCell>
                     <TableCell>Translation</TableCell>
-                    <TableCell>Part of Speech</TableCell>
+                    <TableCell>Part&nbsp;of&nbsp;Speech</TableCell>
+                    <TableCell>Synonyms</TableCell>
+                    <TableCell>Pronunciation</TableCell>
                     <TableCell align="right">Actions</TableCell>
                 </TableRow>
             </TableHead>
             <TableBody>
-                {data.map((row) => (
-                    <TableRow key={row.id} hover>
+                {data.map(row => (
+                    <TableRow
+                        key={row.id}
+                        hover
+                        sx={{cursor: 'pointer'}}
+                        onClick={() => onRowClick(row)}
+                    >
                         <TableCell>{row.text}</TableCell>
                         <TableCell>{row.translation}</TableCell>
-                        <TableCell>{row.partOfSpeech || '-'}</TableCell>
-                        <TableCell align="right">
-                            <IconButton size="small" onClick={() => onEdit(row)}>
-                                <EditIcon fontSize="small" />
-                            </IconButton>
-                            <IconButton size="small" color="error" onClick={() => onDelete(row.id)}>
+                        <TableCell sx={{textTransform: 'capitalize'}}>{row.partOfSpeech}</TableCell>
+                        <TableCell
+                            sx={{
+                                maxWidth: 200,
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis'
+                            }}
+                        >
+                            {row.synonymsEn.join(', ')}
+                        </TableCell>
+                        <TableCell>
+                            {row.audioUrl && (
+                                <Tooltip title="Play pronunciation" onClick={e => e.stopPropagation()}>
+                                    <IconButton size="small" onClick={() => new Audio(row.audioUrl as string).play()}>
+                                        <VolumeUpIcon fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                            )}
+                        </TableCell>
+                        <TableCell align="right" onClick={e => e.stopPropagation()}>
+                            <IconButton color="error" size="small" onClick={() => onDelete(row.id)}>
                                 <DeleteIcon fontSize="small" />
                             </IconButton>
                         </TableCell>
