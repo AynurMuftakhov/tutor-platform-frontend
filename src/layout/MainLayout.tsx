@@ -48,8 +48,9 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         { label: "Dashboard", icon: <HomeIcon />, path: "/dashboard" },
         ...(user?.role === "tutor"
             ? [{ label: "Students", icon: <PeopleIcon />, path: "/my-students" },
-                { label: "Vocabulary", icon: <EventNoteIcon />, path: "/vocabulary" }]
-            : [ { label: "Vocabulary", icon: <EventNoteIcon />, path: `/students/${user?.id}/vocabulary` }]),
+               ]
+            : [ ]),
+        { label: "Vocabulary", icon: <EventNoteIcon />, path: "/vocabulary" },
         { label: "Lessons", icon: <EventNoteIcon />, path: "/lessons" }
     ];
 

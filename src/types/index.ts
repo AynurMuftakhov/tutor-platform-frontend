@@ -18,4 +18,7 @@ export interface VocabularyWord {
     phonetic: string | null;
     audioUrl: string | null;
     editedAt?: string;
+    difficulty?: number; // 1 = beginner can learn easily, 5 = advanced
+    popularity?: number; // 1 = almost unused, 5 = very frequent (daily)
+    exampleSentence?: string; // Short, realistic sentence
 }

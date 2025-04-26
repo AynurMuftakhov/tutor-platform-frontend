@@ -13,6 +13,7 @@ import {
     DialogActions,
     Chip, Tooltip,
 } from "@mui/material";
+import MenuBookIcon from "@mui/icons-material/MenuBook";
 
 import { DataGrid, GridColDef, GridRenderCellParams } from "@mui/x-data-grid";
 import EditIcon from "@mui/icons-material/Edit";
@@ -24,6 +25,7 @@ import { useAuth } from '../context/AuthContext';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
 import {ENGLISH_LEVELS, EnglishLevel} from "../types/ENGLISH_LEVELS";
+import StudentVocabularyModal from "../components/vocabulary/StudentVocabularyModal";
 
 // Extended Student type
 export interface Student {
@@ -51,6 +53,10 @@ const MyStudentsPage: React.FC = () => {
     const [page, setPage] = useState(0);
     const [pageSize, setPageSize] = useState(5);
     const [loading, setLoading] = useState(false);
+
+    // State for vocabulary modal
+    const [vocabularyModalOpen, setVocabularyModalOpen] = useState(false);
+    const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
 
     const handleSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
         setSearchText(event.target.value);
@@ -80,6 +86,12 @@ const MyStudentsPage: React.FC = () => {
         }
         setDeleteDialogOpen(false);
         setStudentToDelete(null);
+    };
+
+    // Handler for opening the vocabulary modal
+    const handleViewVocabulary = (student: Student) => {
+        setSelectedStudent(student);
+        setVocabularyModalOpen(true);
     };
 
     const handleCreateStudent = async () => {
@@ -211,6 +223,15 @@ const MyStudentsPage: React.FC = () => {
                             sx={{ mr: 1 }}
                         >
                             <EditIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton
+                            color="info"
+                            onClick={() => handleViewVocabulary(student)}
+                            size="small"
+                            sx={{ mr: 1 }}
+                            title="View vocabulary words"
+                        >
+                            <MenuBookIcon fontSize="small" />
                         </IconButton>
                         <IconButton
                             color="error"
@@ -359,6 +380,13 @@ const MyStudentsPage: React.FC = () => {
                     {snackbarMessage}
                 </Alert>
             </Snackbar>
+
+            {/* Student Vocabulary Modal */}
+            <StudentVocabularyModal
+                open={vocabularyModalOpen}
+                onClose={() => setVocabularyModalOpen(false)}
+                student={selectedStudent}
+            />
         </Box>
     );
 };
