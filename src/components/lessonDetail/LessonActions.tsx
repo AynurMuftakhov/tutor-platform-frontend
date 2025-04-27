@@ -10,21 +10,39 @@ import {
     PlayArrow as StartIcon,
     Cancel as CancelIcon,
     Schedule as RescheduleIcon,
+    Videocam as VideoIcon,
 } from "@mui/icons-material";
 import {ValidStatusTransitions} from "../../constants/ValidStatusTransitions";
 import RescheduleLessonDialog from "./RescheduleLessonDialog";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
 
 interface Props {
     currentStatus: LessonStatus;
     onChangeStatus: (newStatus: LessonStatus, extraData?: { newDate?: string }) => void;
-    currentDatetime: any
+    currentDatetime: any;
+    lessonId: string;
+    studentId: string;
 }
 
-const LessonActions: React.FC<Props> = ({ currentStatus, onChangeStatus, currentDatetime }) => {
+const LessonActions: React.FC<Props> = ({ currentStatus, onChangeStatus, currentDatetime, lessonId, studentId }) => {
     const nextStatuses = ValidStatusTransitions[currentStatus] || [];
+    const navigate = useNavigate();
+    const { user } = useAuth();
 
     // Reschedule dialog state
     const [rescheduleOpen, setRescheduleOpen] = useState(false);
+
+    // Start video call
+    const startVideoCall = () => {
+        // Navigate to video call page with lesson ID as room name
+        navigate('/video-call', {
+            state: {
+                identity: user?.id,
+                roomName: `lesson-${lessonId}`,
+            },
+        });
+    };
 
     return (
         <>
@@ -34,9 +52,23 @@ const LessonActions: React.FC<Props> = ({ currentStatus, onChangeStatus, current
                         variant="outlined"
                         color="primary"
                         startIcon={<StartIcon />}
-                        onClick={() => onChangeStatus("IN_PROGRESS")}
+                        onClick={() => {
+                            onChangeStatus("IN_PROGRESS");
+                            startVideoCall();
+                        }}
                     >
-                        Start
+                        Start Lesson & Video Call
+                    </Button>
+                )}
+
+                {currentStatus === "IN_PROGRESS" && (
+                    <Button
+                        variant="contained"
+                        color="primary"
+                        startIcon={<VideoIcon />}
+                        onClick={startVideoCall}
+                    >
+                        Join Video Call
                     </Button>
                 )}
 

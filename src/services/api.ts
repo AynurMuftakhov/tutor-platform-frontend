@@ -145,6 +145,11 @@ export const fetchUserById = async (userId: string) => {
     return response.data;
 }
 
+export const fetchLiveKitToken = async (identity: string, roomName: string) => {
+    const response = await api.get(`video-service/api/video/token?identity=${identity}&roomName=${roomName}`);
+    return response.data;
+}
+
 api.interceptors.request.use((config) => {
     const token = localStorage.getItem("token");
     if(token){

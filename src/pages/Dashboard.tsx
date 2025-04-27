@@ -15,6 +15,7 @@ import {
     Tooltip,
     LinearProgress
 } from "@mui/material";
+import VideoCallButton from "../components/VideoCallButton";
 import SchoolIcon from "@mui/icons-material/School";
 import EventNoteIcon from "@mui/icons-material/EventNote";
 import TaskAltIcon from "@mui/icons-material/TaskAlt";
@@ -182,19 +183,28 @@ const Dashboard = () => {
                     </Typography>
                 </Box>
 
-                {isTeacher && (<Button
-                    variant="contained"
-                    startIcon={<EventNoteIcon />}
-                    sx={{
-                        borderRadius: 3,
-                        px: 3,
-                        py: 1.2,
-                        boxShadow: '0 4px 14px rgba(37, 115, 255, 0.2)',
-                        background: `linear-gradient(90deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
-                    }}
-                >
-                    Schedule New Lesson
-                </Button>)}
+                {isTeacher && (
+                    <Box sx={{ display: 'flex', gap: 2 }}>
+                        <Button
+                            variant="contained"
+                            startIcon={<EventNoteIcon />}
+                            sx={{
+                                borderRadius: 3,
+                                px: 3,
+                                py: 1.2,
+                                boxShadow: '0 4px 14px rgba(37, 115, 255, 0.2)',
+                                background: `linear-gradient(90deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
+                            }}
+                        >
+                            Schedule New Lesson
+                        </Button>
+                        <VideoCallButton 
+                            variant="contained"
+                            color="secondary"
+                            size="medium"
+                        />
+                    </Box>
+                )}
             </Box>
 
             {/* Stats Cards Section */}

@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from "react";
-import { useParams, useLocation } from "react-router-dom";
+import { useParams, useLocation, useNavigate } from "react-router-dom";
 import {
     Container,
     CircularProgress,
     Typography,
-    Grid
+    Grid,
+    Button
 } from "@mui/material";
+import { Videocam as VideoIcon } from "@mui/icons-material";
 import {fetchUserById, getLessonById, updateLesson} from "../services/api";
 
 import LessonHero from "../components/lessonDetail/LessonHero";
@@ -20,6 +22,7 @@ import {useAuth} from "../context/AuthContext";
 const LessonDetailPage = () => {
     const { id } = useParams();
     const location = useLocation();
+    const navigate = useNavigate();
     const { user } = useAuth();
     const [lesson, setLesson] = useState<Lesson | null>(null);
     const [loading, setLoading] = useState(true);
@@ -61,6 +64,8 @@ const LessonDetailPage = () => {
                     <LessonActions
                         currentStatus={lesson.status}
                         currentDatetime={lesson.dateTime}
+                        lessonId={lesson.id}
+                        studentId={lesson.studentId}
                         onChangeStatus={async (newStatus, extraData) => {
                             const updatedFields: Partial<Lesson> = {
                                 status: newStatus,
@@ -79,6 +84,25 @@ const LessonDetailPage = () => {
                             }
                         }}
                     />)}
+
+                {user?.role === "student" && lesson.status === "IN_PROGRESS" && (
+                    <Button
+                        variant="contained"
+                        color="primary"
+                        startIcon={<VideoIcon />}
+                        onClick={() => {
+                            navigate('/video-call', {
+                                state: {
+                                    identity: user.id,
+                                    roomName: `lesson-${lesson.id}`,
+                                },
+                            });
+                        }}
+                        sx={{ mb: 2 }}
+                    >
+                        Join Lesson
+                    </Button>
+                )}
             </Grid>
             <Grid container spacing={3}>
                 {/* Header */}

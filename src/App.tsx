@@ -13,6 +13,7 @@ import LessonsPage from "./pages/LessonsPage";
 import LessonDetailPage from "./pages/LessonDetailsPage";
 import DictionaryPage from "./pages/DictionaryPage";
 import StudentVocabularyPage from "./pages/StudentVocabularyPage";
+import VideoCallPage from "./pages/VideoCallPage";
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const App: React.FC = () => {
@@ -105,6 +106,15 @@ const App: React.FC = () => {
                             element={
                                 <PrivateRoute>
                                     <StudentVocabularyPage />
+                                </PrivateRoute>
+                            }
+                        />
+
+                        <Route
+                            path="/video-call"
+                            element={
+                                <PrivateRoute>
+                                    <VideoCallPage />
                                 </PrivateRoute>
                             }
                         />
