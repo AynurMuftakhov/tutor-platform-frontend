@@ -15,6 +15,7 @@ import {
     Tooltip,
     LinearProgress
 } from "@mui/material";
+import { useTutorStatistics } from "../hooks/useTutorStatistics";
 import VideoCallButton from "../components/VideoCallButton";
 import SchoolIcon from "@mui/icons-material/School";
 import EventNoteIcon from "@mui/icons-material/EventNote";
@@ -27,6 +28,7 @@ import MainLayout from "../layout/MainLayout";
 import { useAuth } from "../context/AuthContext";
 import UpcomingLessonsSection from "../components/dashboard/UpcomingLessonsSection";
 import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 
 type StatCardProps = {
     title: string;
@@ -34,12 +36,13 @@ type StatCardProps = {
     icon: React.ReactNode;
     color?: 'primary' | 'secondary' | 'success' | 'error' | 'warning' | 'info';
     progress?: number;
+    progressLabel?: string;
 };
 
-const StatCard = ({ title, value, icon, color = "primary", progress }: StatCardProps) => {
+const StatCard = ({ title, value, icon, color = "primary", progress, progressLabel }: StatCardProps) => {
     const theme = useTheme();
     const mainColor = theme.palette[color].main;
-    const lightColor = alpha(mainColor, 0.1);
+    const lightColor = alpha(mainColor, 0.1)
 
     return (
         <motion.div
@@ -52,7 +55,7 @@ const StatCard = ({ title, value, icon, color = "primary", progress }: StatCardP
                 elevation={0} 
                 sx={{ 
                     p: 3, 
-                    borderRadius: 4, 
+                    borderRadius: 2,
                     display: 'flex', 
                     flexDirection: 'column',
                     height: '100%',
@@ -114,9 +117,10 @@ const StatCard = ({ title, value, icon, color = "primary", progress }: StatCardP
 
                 {progress !== undefined && (
                     <Box sx={{ mt: 'auto', position: 'relative', zIndex: 1 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
-                            <Typography variant="caption" color="text.secondary">Progress</Typography>
-                            <Typography variant="caption" fontWeight={600} color={mainColor}>{progress}%</Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 0.5 }}>
+                            <Typography variant="caption" align="center" color="text.secondary">
+                                {progressLabel ? `${progress}% ${progressLabel}` : `Progress: ${progress}%`}
+                            </Typography>
                         </Box>
                         <LinearProgress 
                             variant="determinate" 
@@ -141,6 +145,12 @@ const Dashboard = () => {
     const { user } = useAuth();
     const theme = useTheme();
     const isTeacher = user?.role === "tutor";
+    const navigate = useNavigate();
+
+    // Fetch tutor statistics if user is a tutor
+    const { data: tutorStats, isLoading: isLoadingStats } = useTutorStatistics(
+        isTeacher && user?.id ? user.id : ""
+    );
 
     return (
         <Box
@@ -213,22 +223,30 @@ const Dashboard = () => {
                     <Grid item xs={12} sm={6} md={3}>
                         <StatCard
                             title="Students Taught"
-                            value="4"
+                            value={isLoadingStats ? "..." : tutorStats?.taughtStudents.toString() || "0"}
                             icon={<SchoolIcon />}
                             color="primary"
-                            progress={80}
                         />
                     </Grid>
                     <Grid item xs={12} sm={6} md={3}>
-                        <StatCard
-                            title="Lessons Completed"
-                            value="12"
-                            icon={<EventNoteIcon />}
-                            color="secondary"
-                            progress={65}
-                        />
+                        {(() => {
+                            const completedLessons = tutorStats?.completedLessons || 0;
+                            const monthlyGoal = 20;
+                            const progressPercentage = Math.min(100, Math.round((completedLessons / monthlyGoal) * 100));
+
+                            return (
+                                <StatCard
+                                    title="Lessons Completed"
+                                    value={isLoadingStats ? "..." : completedLessons.toString()}
+                                    icon={<EventNoteIcon />}
+                                    color="secondary"
+                                    progress={progressPercentage}
+                                    progressLabel="of monthly goal"
+                                />
+                            );
+                        })()}
                     </Grid>
-                    <Grid item xs={12} sm={6} md={3}>
+                   {/* <Grid item xs={12} sm={6} md={3}>
                         <StatCard
                             title="Pending Tasks"
                             value="2"
@@ -244,7 +262,7 @@ const Dashboard = () => {
                             color="success"
                             progress={88}
                         />
-                    </Grid>
+                    </Grid>*/}
                 </Grid>
             )}
 
@@ -285,6 +303,7 @@ const Dashboard = () => {
                                     <Button
                                         size="small"
                                         variant="outlined"
+                                        onClick={() => navigate(`/lessons`)}
                                         sx={{
                                             borderRadius: 2,
                                             borderColor: theme.palette.primary.main,
@@ -307,7 +326,7 @@ const Dashboard = () => {
                 </Grid>
 
                 {/* Tasks Section */}
-                <Grid item xs={12} md={4}>
+               {/* <Grid item xs={12} md={4}>
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -353,7 +372,7 @@ const Dashboard = () => {
                             </Box>
 
                             <Box sx={{ p: 3 }}>
-                                {/* Task Item 1 */}
+                                 Task Item 1
                                 <Box
                                     sx={{
                                         p: 2,
@@ -403,7 +422,7 @@ const Dashboard = () => {
                                     </Tooltip>
                                 </Box>
 
-                                {/* Task Item 2 */}
+                                 Task Item 2
                                 <Box
                                     sx={{
                                         p: 2,
@@ -453,7 +472,7 @@ const Dashboard = () => {
                                     </Tooltip>
                                 </Box>
 
-                                {/* View All Tasks Button */}
+                                 View All Tasks Button
                                 <Button
                                     fullWidth
                                     variant="outlined"
@@ -474,7 +493,7 @@ const Dashboard = () => {
                             </Box>
                         </Paper>
                     </motion.div>
-                </Grid>
+                </Grid>*/}
             </Grid>
         </Box>
     );

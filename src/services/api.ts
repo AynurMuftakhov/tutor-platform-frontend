@@ -140,6 +140,11 @@ export const deleteLesson = async (lessonId: string) => {
     return res.data;
 };
 
+export const getTutorStatistics = async (tutorId: string) => {
+    const response = await api.get(`/lessons-service/api/lessons/tutor/${tutorId}/statistics`);
+    return response.data;
+};
+
 export const fetchUserById = async (userId: string) => {
     const response = await api.get(`users-service/api/users/${userId}`);
     return response.data;

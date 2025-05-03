@@ -31,7 +31,7 @@ const NextLessonCard = ({ lesson }: { lesson: Lesson }) => {
                 display: "flex",
                 alignItems: "center",
                 gap: 2,
-                borderRadius: 3,
+                borderRadius: 2,
                 height: "100%",
                 cursor: "pointer",
                 border: isSoon ? `1.5px solid ${theme.palette.warning.main}` : "1px solid #e0e0e0",

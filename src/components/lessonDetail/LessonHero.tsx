@@ -30,7 +30,7 @@ const LessonHero: React.FC<Props> = ({ lesson, student }) => {
         <Box
             sx={{
                 p: { xs: 3, sm: 4 },
-                borderRadius: 4,
+                borderRadius: 2,
                 background: "linear-gradient(135deg, #f8fbff, #eef4ff)",
                 border: "1px solid #dceeff",
                 boxShadow: "0 4px 16px rgba(0,0,0,0.04)",
