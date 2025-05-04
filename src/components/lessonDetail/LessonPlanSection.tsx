@@ -18,10 +18,11 @@ import { useEditableCard } from "../../hooks/useEditableCard";
 
 interface Props {
     lesson: Lesson;
+    isTeacher?: boolean;
     onUpdated?: (updated: Partial<Lesson>) => void;
 }
 
-const LessonPlanSection: React.FC<Props> = ({ lesson, onUpdated }) => {
+const LessonPlanSection: React.FC<Props> = ({ lesson, isTeacher, onUpdated }) => {
     const {
         editing,
         saving,
@@ -58,7 +59,7 @@ const LessonPlanSection: React.FC<Props> = ({ lesson, onUpdated }) => {
                 title="Lesson Plan"
                 icon={<MenuBookIcon color="primary" />}
                 action={
-                    !editing && (
+                    !editing && isTeacher &&(
                         <IconButton onClick={startEditing} size="small">
                             <EditIcon fontSize="small" />
                         </IconButton>

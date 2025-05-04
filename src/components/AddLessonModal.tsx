@@ -33,7 +33,7 @@ const AddLessonModal: React.FC<AddLessonModalProps> = ({ open, onClose, onCreate
         studentId: "",
         dateTime: "",
         duration: 60,
-        location: "",
+        location: "On The platfrom",
         lessonPlan: "",
         learningObjectives: "",
     });
@@ -62,7 +62,6 @@ const AddLessonModal: React.FC<AddLessonModalProps> = ({ open, onClose, onCreate
         if (!formData.studentId) newErrors.studentId = "Student is required";
         if (!formData.dateTime) newErrors.dateTime = "Date and time is required";
         if (!formData.duration || formData.duration <= 0) newErrors.duration = "Duration must be a positive number";
-        if (!formData.location.trim()) newErrors.location = "Location is required";
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;

@@ -27,6 +27,7 @@ const LessonDetailPage = () => {
     const [lesson, setLesson] = useState<Lesson | null>(null);
     const [loading, setLoading] = useState(true);
     const [student, setStudent] = useState(location.state?.student || null);
+    const isTeacher = user?.role === "tutor";
 
     useEffect(() => {
         const fetchLesson = async () => {
@@ -123,18 +124,18 @@ const LessonDetailPage = () => {
 
                 {/* Plan + Homework */}
                 <Grid item xs={12} md={6}>
-                    <LessonPlanSection lesson={lesson} />
+                    <LessonPlanSection lesson={lesson} isTeacher={isTeacher}/>
                 </Grid>
                 <Grid item xs={12} md={6}>
-                    <HomeworkSection lesson={lesson} />
+                    <HomeworkSection lesson={lesson} isTeacher={isTeacher}/>
                 </Grid>
 
                 {/* Notes + Metrics */}
                 <Grid item xs={12} md={6}>
-                    <PostLessonNotes lesson={lesson} />
+                    <PostLessonNotes lesson={lesson} isTeacher={isTeacher}/>
                 </Grid>
                 <Grid item xs={12} md={6}>
-                    <LessonTracking lesson={lesson} />
+                    <LessonTracking lesson={lesson}/>
                 </Grid>
             </Grid>
         </Container>
