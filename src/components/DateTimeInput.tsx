@@ -9,6 +9,8 @@ interface DateTimeInputProps {
     onChange: (iso: string) => void;
     error?: boolean;
     helperText?: string;
+    dateOnly?: boolean;
+    disabled?: boolean;
 }
 
 const DateTimeInput: React.FC<DateTimeInputProps> = ({
@@ -17,6 +19,8 @@ const DateTimeInput: React.FC<DateTimeInputProps> = ({
                                                          onChange,
                                                          error,
                                                          helperText,
+                                                         dateOnly = false,
+                                                         disabled = false,
                                                      }) => {
     const [timeInput, setTimeInput] = useState("12:00");
     const [localDate, setLocalDate] = useState<dayjs.Dayjs | null>(null);
@@ -34,13 +38,20 @@ const DateTimeInput: React.FC<DateTimeInputProps> = ({
 
         setLocalDate(newDate); // ✅ update local state
 
-        const [hours, minutes] = timeInput.split(":").map(Number);
-        const updated = newDate
-            .hour(hours || 12)
-            .minute(minutes || 0)
-            .second(0);
+        if (dateOnly) {
+            // For date-only mode, set time to midnight
+            const updated = newDate.hour(0).minute(0).second(0);
+            onChange(updated.toISOString());
+        } else {
+            // For date-time mode, preserve the time input
+            const [hours, minutes] = timeInput.split(":").map(Number);
+            const updated = newDate
+                .hour(hours || 12)
+                .minute(minutes || 0)
+                .second(0);
 
-        onChange(updated.toISOString());
+            onChange(updated.toISOString());
+        }
     };
 
     const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -71,32 +82,37 @@ const DateTimeInput: React.FC<DateTimeInputProps> = ({
             alignItems="stretch"
             sx={{ mt: 1 }}
         >
-            <Box flex={{ sm: 2, xs: undefined }}>
+            <Box flex={{ sm: dateOnly ? 1 : 2, xs: undefined }}>
                 <DatePicker
-                    label="Date"
+                    label={dateOnly ? "Date" : "Date"}
                     value={localDate}
                     onChange={handleDateChange}
+                    disabled={disabled}
                     slotProps={{
                         textField: {
                             fullWidth: true,
                             error,
                             helperText,
+                            disabled,
                         },
                     }}
                 />
             </Box>
-            <Box flex={{ sm: 1, xs: undefined }}>
-                <TextField
-                    label="Time (HH:mm)"
-                    value={timeInput}
-                    onChange={handleTimeChange}
-                    onBlur={handleTimeBlur}
-                    fullWidth
-                    error={error}
-                    helperText={helperText}
-                    placeholder="14:30"
-                />
-            </Box>
+            {!dateOnly && (
+                <Box flex={{ sm: 1, xs: undefined }}>
+                    <TextField
+                        label="Time (HH:mm)"
+                        value={timeInput}
+                        onChange={handleTimeChange}
+                        onBlur={handleTimeBlur}
+                        fullWidth
+                        error={error}
+                        helperText={helperText}
+                        placeholder="14:30"
+                        disabled={disabled}
+                    />
+                </Box>
+            )}
         </Stack>
     );
 };

@@ -116,6 +116,9 @@ const LessonsPage = () => {
             setDeleting(true);
             await deleteLesson(lessonToDelete.id);
             await refreshLessons();
+            if (viewMode === 'calendar') {
+                await fetchMonthLessonCounts();
+            }
             setLessonToDelete(null);
         } catch (e) {
             console.error("Failed to delete lesson", e);
@@ -540,7 +543,14 @@ const LessonsPage = () => {
             <AddLessonModal
                 open={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
-                onCreated={() => user?.id && refreshLessons()}
+                onCreated={() => {
+                    if (user?.id) {
+                        refreshLessons();
+                        if (viewMode === 'calendar') {
+                            fetchMonthLessonCounts();
+                        }
+                    }
+                }}
                 students={students}
                 initialDate={selectedDate.toISOString()}
             />

@@ -8,6 +8,16 @@ import {
     Button,
     MenuItem,
     Stack,
+    FormControlLabel,
+    Checkbox,
+    Box,
+    Typography,
+    Radio,
+    RadioGroup,
+    FormControl,
+    FormLabel,
+    Paper,
+    Collapse,
 } from "@mui/material";
 import { createLesson } from "../services/api";
 import DateTimeInput from "./DateTimeInput";
@@ -36,6 +46,10 @@ const AddLessonModal: React.FC<AddLessonModalProps> = ({ open, onClose, onCreate
         location: "On The platfrom",
         lessonPlan: "",
         learningObjectives: "",
+        repeatWeekly: false,
+        repeatWeeksCount: 4,
+        repeatUntil: "",
+        repeatOption: "count", // "count" or "until"
     });
 
     const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -52,7 +66,8 @@ const AddLessonModal: React.FC<AddLessonModalProps> = ({ open, onClose, onCreate
     };
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
+        const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+        setFormData({ ...formData, [e.target.name]: value });
     };
 
     const validate = () => {
@@ -63,6 +78,30 @@ const AddLessonModal: React.FC<AddLessonModalProps> = ({ open, onClose, onCreate
         if (!formData.dateTime) newErrors.dateTime = "Date and time is required";
         if (!formData.duration || formData.duration <= 0) newErrors.duration = "Duration must be a positive number";
 
+        // Validate repeat options if weekly repeat is enabled
+        if (formData.repeatWeekly) {
+            if (formData.repeatOption === "count") {
+                if (!formData.repeatWeeksCount || formData.repeatWeeksCount <= 0) {
+                    newErrors.repeatWeeksCount = "Please enter a valid number of weeks";
+                } else if (formData.repeatWeeksCount > 52) {
+                    newErrors.repeatWeeksCount = "Maximum 52 weeks allowed";
+                }
+            } else if (formData.repeatOption === "until") {
+                if (!formData.repeatUntil) {
+                    newErrors.repeatUntil = "Please select an end date";
+                } else {
+                    const endDate = dayjs(formData.repeatUntil);
+                    const startDate = dayjs(formData.dateTime);
+
+                    if (!endDate.isValid()) {
+                        newErrors.repeatUntil = "Invalid date format";
+                    } else if (endDate.isBefore(startDate)) {
+                        newErrors.repeatUntil = "End date must be after the start date";
+                    }
+                }
+            }
+        }
+
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
@@ -70,14 +109,20 @@ const AddLessonModal: React.FC<AddLessonModalProps> = ({ open, onClose, onCreate
     const handleSubmit = async () => {
         if (!validate()) return;
 
-        await createLesson({
-            ...formData,
-            tutorId: user!.id,
-            duration: parseInt(formData.duration.toString()),
-        });
+        try {
+            await createLesson({
+                ...formData,
+                tutorId: user!.id,
+                duration: parseInt(formData.duration.toString()),
+            });
 
-        onCreated();
-        onClose();
+            onCreated();
+            onClose();
+        } catch (error) {
+            // The global error handler will display the error message
+            // We don't need to do anything here
+            console.log("Error caught in component:", error);
+        }
     };
 
     useEffect(() => {
@@ -108,6 +153,10 @@ const AddLessonModal: React.FC<AddLessonModalProps> = ({ open, onClose, onCreate
                 location: "",
                 lessonPlan: "",
                 learningObjectives: "",
+                repeatWeekly: false,
+                repeatWeeksCount: 4,
+                repeatUntil: "",
+                repeatOption: "count",
             });
             setErrors({});
         }
@@ -180,6 +229,85 @@ const AddLessonModal: React.FC<AddLessonModalProps> = ({ open, onClose, onCreate
                         value={formData.learningObjectives}
                         onChange={handleChange}
                     />
+                    <FormControlLabel
+                        control={
+                            <Checkbox
+                                name="repeatWeekly"
+                                checked={formData.repeatWeekly}
+                                onChange={handleChange}
+                            />
+                        }
+                        label="Repeat this lesson weekly"
+                    />
+
+                    <Collapse in={formData.repeatWeekly} timeout="auto" unmountOnExit>
+                        <Paper 
+                            elevation={0} 
+                            sx={{ 
+                                p: 2, 
+                                mt: 1, 
+                                borderRadius: 2,
+                                bgcolor: 'background.subtle',
+                                border: '1px solid',
+                                borderColor: 'divider'
+                            }}
+                        >
+                            <Typography variant="subtitle2" fontWeight={500} gutterBottom>
+                                Repeat Options
+                            </Typography>
+
+                            <FormControl component="fieldset" sx={{ width: '100%', mt: 1 }}>
+                                <RadioGroup
+                                    name="repeatOption"
+                                    value={formData.repeatOption}
+                                    onChange={handleChange}
+                                    sx={{ width: '100%' }}
+                                >
+                                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                                        <FormControlLabel 
+                                            value="count" 
+                                            control={<Radio />} 
+                                            label="Repeat for" 
+                                            sx={{ mr: 1 }}
+                                        />
+                                        <TextField
+                                            name="repeatWeeksCount"
+                                            type="number"
+                                            value={formData.repeatWeeksCount}
+                                            onChange={handleChange}
+                                            disabled={formData.repeatOption !== 'count'}
+                                            error={!!errors.repeatWeeksCount}
+                                            helperText={errors.repeatWeeksCount}
+                                            InputProps={{ 
+                                                inputProps: { min: 1, max: 52 },
+                                                sx: { borderRadius: 2 }
+                                            }}
+                                            size="small"
+                                            sx={{ width: '80px' }}
+                                        />
+                                        <Typography sx={{ ml: 1 }}>weeks</Typography>
+                                    </Box>
+
+                                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                        <FormControlLabel 
+                                            value="until" 
+                                            control={<Radio />} 
+                                            label="Repeat until" 
+                                            sx={{ mr: 1 }}
+                                        />
+                                        <DateTimeInput
+                                            value={formData.repeatUntil}
+                                            onChange={(iso) => setFormData({ ...formData, repeatUntil: iso })}
+                                            disabled={formData.repeatOption !== 'until'}
+                                            error={!!errors.repeatUntil}
+                                            helperText={errors.repeatUntil}
+                                            dateOnly
+                                        />
+                                    </Box>
+                                </RadioGroup>
+                            </FormControl>
+                        </Paper>
+                    </Collapse>
                 </Stack>
             </DialogContent>
             <DialogActions>

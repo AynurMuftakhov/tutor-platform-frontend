@@ -1,6 +1,7 @@
 import axios from 'axios';
 import {Student} from "../pages/MyStudentsPage";
 import { NotificationMessage} from "../context/NotificationsSocketContext";
+import { ApiError } from '../context/ApiErrorContext';
 
 const api = axios.create({
     baseURL: 'http://localhost',
@@ -176,12 +177,51 @@ export const fetchLiveKitToken = async (identity: string, roomName: string) => {
     return response.data;
 }
 
+// Request interceptor to add authorization token
 api.interceptors.request.use((config) => {
     const token = localStorage.getItem("token");
     if(token){
         config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
-})
+});
+
+// Global error handler function - will be set by ApiErrorProvider
+let handleApiError: ((error: ApiError) => void) | null = null;
+
+// Function to set the error handler
+export const setApiErrorHandler = (handler: (error: ApiError) => void) => {
+    handleApiError = handler;
+};
+
+// Response interceptor to handle errors
+api.interceptors.response.use(
+    (response) => response, // Return successful responses as-is
+    (error) => {
+        // Check if the error has a response from the server
+        if (error.response && error.response.data) {
+            const { data } = error.response;
+
+            // Check if the response matches our expected error format
+            if (data.timestamp && data.status && data.error && data.message && data.path) {
+                const apiError: ApiError = {
+                    timestamp: data.timestamp,
+                    status: data.status,
+                    error: data.error,
+                    message: data.message,
+                    path: data.path
+                };
+
+                // If we have an error handler, call it
+                if (handleApiError) {
+                    handleApiError(apiError);
+                }
+            }
+        }
+
+        // Always reject the promise so the calling code can handle the error if needed
+        return Promise.reject(error);
+    }
+);
 
 export default api;
