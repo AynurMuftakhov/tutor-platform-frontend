@@ -20,7 +20,14 @@ import {
     Tooltip,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
-import {fetchStudents, deleteLesson, getLessons, fetchUserById} from "../services/api";
+import {
+    fetchStudents, 
+    deleteLesson, 
+    getLessons, 
+    fetchUserById, 
+    getLessonCountsByMonth,
+    LessonCountsByDay
+} from "../services/api";
 import AddLessonModal from "../components/AddLessonModal";
 import { useAuth } from "../context/AuthContext";
 import { Student } from "./MyStudentsPage";
@@ -47,6 +54,10 @@ const LessonsPage = () => {
     const [selectedDate, setSelectedDate] = useState<dayjs.Dayjs>(dayjs());
     const theme = useTheme();
 
+    // State for month lesson counts
+    const [monthLessonCounts, setMonthLessonCounts] = useState<LessonCountsByDay>({});
+    const [loadingMonthCounts, setLoadingMonthCounts] = useState(false);
+
     const [page, setPage] = useState(0);
     const [pageSize, setPageSize] = useState(10);
     const [totalLessons, setTotalLessons] = useState(0);
@@ -71,7 +82,8 @@ const LessonsPage = () => {
         try {
             const studentId = user?.role === "student" ? user?.id : undefined;
             const tutorId = user?.role === "tutor" ? user?.id : undefined;
-            const result = await getLessons(studentId as string, tutorId as string, status, page, pageSize);
+            const dateParam = viewMode === 'calendar' ? selectedDate.format('YYYY-MM-DD') : undefined;
+            const result = await getLessons(studentId as string, tutorId as string, status, page, pageSize, dateParam);
 
             const lessons = result.content;
             setLessons(lessons);
@@ -126,11 +138,51 @@ const LessonsPage = () => {
         }
     };
 
+    // Function to fetch lesson counts for the current month
+    const fetchMonthLessonCounts = async () => {
+        if (!user) return;
+
+        setLoadingMonthCounts(true);
+        try {
+            const year = selectedDate.year();
+            const month = selectedDate.month() + 1; // dayjs months are 0-indexed
+
+            const studentId = user?.role === "student" ? user?.id : undefined;
+            const tutorId = user?.role === "tutor" ? user?.id : undefined;
+
+            const counts = await getLessonCountsByMonth(
+                year,
+                month,
+                studentId,
+                tutorId
+            );
+
+            setMonthLessonCounts(counts);
+        } catch (error) {
+            console.error("Failed to fetch month lesson counts", error);
+            setMonthLessonCounts({});
+        } finally {
+            setLoadingMonthCounts(false);
+        }
+    };
+
     useEffect(() => {
         if (user) {
             refreshLessons();
+
+            // Fetch month lesson counts when in calendar view
+            if (viewMode === 'calendar') {
+                fetchMonthLessonCounts();
+            }
         }
-    }, [user, status, page, pageSize]);
+    }, [user, status, page, pageSize, viewMode === 'calendar' ? selectedDate : null]);
+
+    // Fetch month lesson counts when the month changes
+    useEffect(() => {
+        if (user && viewMode === 'calendar') {
+            fetchMonthLessonCounts();
+        }
+    }, [user, selectedDate.month(), selectedDate.year(), viewMode]);
 
     useEffect(() => {
         const loadStudents = async () => {
@@ -238,32 +290,33 @@ const LessonsPage = () => {
         },
     ];
 
-    // Function to get lessons for a specific date
-    const getLessonsForDate = (date: dayjs.Dayjs) => {
-        return lessons.filter(lesson => {
-            const lessonDate = dayjs(lesson.dateTime);
-            return lessonDate.format('YYYY-MM-DD') === date.format('YYYY-MM-DD');
-        });
-    };
-
     // Custom day component to show badges for days with lessons
     const ServerDay = (props: any) => {
         const { day, outsideCurrentMonth, ...other } = props;
-        const lessonsForDay = getLessonsForDate(day);
-        const hasLessons = lessonsForDay.length > 0;
+        const isSelected = day.format('YYYY-MM-DD') === selectedDate.format('YYYY-MM-DD');
+
+        // Format the date to match the API response format (YYYY-MM-DD)
+        const dateKey = day.format('YYYY-MM-DD');
+
+        // Check if there are lessons for this day from the month data
+        const lessonCount = monthLessonCounts[dateKey] || 0;
+        const hasLessons = lessonCount > 0;
+
+        // For the selected day, we can use either the API count or the loaded lessons
+        const displayCount = isSelected && lessons.length > 0 ? lessons.length : lessonCount;
 
         return (
             <Badge
                 key={day.toString()}
                 overlap="circular"
-                badgeContent={hasLessons ? lessonsForDay.length : undefined}
+                badgeContent={hasLessons ? displayCount : undefined}
                 color="primary"
             >
                 <PickersDay 
                     {...other} 
                     outsideCurrentMonth={outsideCurrentMonth} 
                     day={day}
-                    selected={day.format('YYYY-MM-DD') === selectedDate.format('YYYY-MM-DD')}
+                    selected={isSelected}
                     sx={{
                         ...(hasLessons && {
                             backgroundColor: alpha(theme.palette.primary.main, 0.1),
@@ -316,12 +369,6 @@ const LessonsPage = () => {
                             sx={{ minHeight: 40 }}
                         />
                     </Tabs>
-
-                    {user?.role === "tutor" && (
-                    <Button variant="contained" startIcon={<AddIcon />} onClick={() => setIsModalOpen(true)}>
-                        Add Lesson
-                    </Button>)
-                    }
                 </Box>
             </Box>
 
@@ -362,6 +409,14 @@ const LessonsPage = () => {
                             slots={{
                                 day: ServerDay
                             }}
+                            sx={{
+                                '& .MuiPickersCalendarHeader-root': {
+                                    marginTop: '8px',
+                                    paddingLeft: '16px',
+                                    paddingRight: '16px',
+                                    marginBottom: '8px'
+                                }
+                            }}
                         />
                     </Paper>
 
@@ -380,7 +435,7 @@ const LessonsPage = () => {
                             </Typography>
                             {user?.role === "tutor" && (
                                 <Button 
-                                    size="small" 
+                                    variant="contained"
                                     startIcon={<AddIcon />} 
                                     onClick={() => setIsModalOpen(true)}
                                 >
@@ -389,9 +444,9 @@ const LessonsPage = () => {
                             )}
                         </Box>
 
-                        {getLessonsForDate(selectedDate).length > 0 ? (
+                        {lessons.length > 0 ? (
                             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                {getLessonsForDate(selectedDate).map((lesson) => (
+                                {lessons.map((lesson) => (
                                     <Paper
                                         key={lesson.id}
                                         elevation={0}
@@ -487,6 +542,7 @@ const LessonsPage = () => {
                 onClose={() => setIsModalOpen(false)}
                 onCreated={() => user?.id && refreshLessons()}
                 students={students}
+                initialDate={selectedDate.toISOString()}
             />
 
             {lessonToDelete && (

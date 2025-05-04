@@ -53,15 +53,36 @@ export const getHistoryLessons = async (userId: string) => {
     return response.data.content;
 };
 
-export const getLessons = async (studentId: string, tutorId: string, status: string, page = 0, size = 10) => {
+export const getLessons = async (studentId: string, tutorId: string, status: string, page = 0, size = 10, date?: string) => {
     const params = new URLSearchParams();
     if (tutorId) params.append("tutorId", tutorId);
     if (studentId) params.append("studentId", studentId);
     if (status) params.append("status", status);
+    if (date) params.append("date", date);
     params.append("page", page.toString());
     params.append("size", size.toString());
 
     const response = await api.get(`/lessons-service/api/lessons?${params}`);
+    return response.data;
+};
+
+export interface LessonCountsByDay {
+    [date: string]: number; // Format: "YYYY-MM-DD" -> count
+}
+
+export const getLessonCountsByMonth = async (
+    year: number,
+    month: number, // 1-12
+    studentId?: string,
+    tutorId?: string
+): Promise<LessonCountsByDay> => {
+    const params = new URLSearchParams();
+    if (tutorId) params.append("tutorId", tutorId);
+    if (studentId) params.append("studentId", studentId);
+    params.append("year", year.toString());
+    params.append("month", month.toString());
+
+    const response = await api.get(`/lessons-service/api/lessons/month-counts?${params}`);
     return response.data;
 };
 

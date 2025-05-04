@@ -20,9 +20,10 @@ interface AddLessonModalProps {
     onClose: () => void;
     onCreated: () => void;
     students: Student[];
+    initialDate?: string; // ISO string for initial date
 }
 
-const AddLessonModal: React.FC<AddLessonModalProps> = ({ open, onClose, onCreated, students }) => {
+const AddLessonModal: React.FC<AddLessonModalProps> = ({ open, onClose, onCreated, students, initialDate }) => {
     const [errors, setErrors] = useState<{ [key: string]: string }>({});
     const [submitting] = useState(false);
     const [hasCustomTitle, setHasCustomTitle] = useState(false);
@@ -103,7 +104,7 @@ const AddLessonModal: React.FC<AddLessonModalProps> = ({ open, onClose, onCreate
             setFormData({
                 title: "",
                 studentId: "",
-                dateTime: "",
+                dateTime: initialDate || "",
                 duration: 60,
                 location: "",
                 lessonPlan: "",
@@ -111,7 +112,7 @@ const AddLessonModal: React.FC<AddLessonModalProps> = ({ open, onClose, onCreate
             });
             setErrors({});
         }
-    }, [open]);
+    }, [open, initialDate]);
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>

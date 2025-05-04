@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField } from '@mui/material';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 interface VideoCallButtonProps {
@@ -17,6 +17,7 @@ const VideoCallButton: React.FC<VideoCallButtonProps> = ({
   fullWidth = false,
 }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [roomName, setRoomName] = useState('');
@@ -48,6 +49,7 @@ const VideoCallButton: React.FC<VideoCallButtonProps> = ({
       state: {
         identity: user.id,
         roomName: roomName.trim(),
+        from: location.pathname, // Store current path to return after call
       },
     });
 
