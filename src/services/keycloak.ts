@@ -2,9 +2,9 @@
 import Keycloak from 'keycloak-js';
 
 const keycloak = new Keycloak({
-    url: 'http://localhost:7080/',
-    realm: 'tutor-platform',
-    clientId: 'tutor-platform-frontend'
+    url: process.env.REACT_APP_KEYCLOAK_URL,
+    realm: process.env.REACT_APP_KEYCLOAK_REALM,
+    clientId: process.env.REACT_APP_KEYCLOAK_CLIENT_ID,
 });
 
 let hasInit = false;

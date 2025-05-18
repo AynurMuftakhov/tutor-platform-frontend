@@ -6,7 +6,7 @@ import {
 } from '../types';
 
 const api = ky.create({
-    prefixUrl: 'http://localhost/vocabulary-service/api/v1/vocabulary/',
+    prefixUrl: `${process.env.REACT_APP_API_URL}/vocabulary-service/api/v1/vocabulary/`,
     hooks: {
         beforeRequest: [
             request => {

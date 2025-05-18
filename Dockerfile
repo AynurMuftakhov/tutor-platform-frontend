@@ -1,16 +1,20 @@
-FROM node:16-alpine
-
+# Build stage
+FROM node:20-alpine as builder
 WORKDIR /app
 
-# Копируем package.json и lock-файл
 COPY package.json package-lock.json ./
-
-RUN npm install
+RUN npm install --legacy-peer-deps
 
 COPY . .
+ENV NODE_ENV=production
+RUN npm run build
+
+# Serve stage
+FROM node:20-alpine
+RUN npm install -g serve
+
+WORKDIR /app
+COPY --from=builder /app/build .
 
 EXPOSE 3000
-
-ENV CHOKIDAR_USEPOLLING=true
-
-CMD ["npm", "start"]
+CMD ["serve", "-s", ".", "-l", "3000"]

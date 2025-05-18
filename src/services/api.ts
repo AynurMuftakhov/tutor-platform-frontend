@@ -4,7 +4,7 @@ import { NotificationMessage} from "../context/NotificationsSocketContext";
 import { ApiError } from '../context/ApiErrorContext';
 
 const api = axios.create({
-    baseURL: 'http://localhost',
+    baseURL: process.env.REACT_APP_API_URL,
     headers: {
         'Content-Type': 'application/json',
     },
