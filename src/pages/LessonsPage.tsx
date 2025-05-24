@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
     Box,
     Typography,
@@ -12,31 +12,49 @@ import {
     Menu,
     Chip,
     Paper,
-    Tab,
-    Tabs,
     useTheme,
     alpha,
-    Badge,
     Tooltip,
+    Fab,
+    Avatar,
+    Zoom,
+    useMediaQuery,
+    ToggleButtonGroup,
+    ToggleButton,
 } from "@mui/material";
+import { motion } from "framer-motion";
 import AddIcon from "@mui/icons-material/Add";
 import {
-    fetchStudents, 
-    deleteLesson, 
-    getLessons, 
-    fetchUserById, 
-    getLessonCountsByMonth,
-    LessonCountsByDay
+    fetchStudents,
+    deleteLesson,
+    getLessons,
+    fetchUserById, updateLesson,
 } from "../services/api";
-import AddLessonModal from "../components/AddLessonModal";
 import { useAuth } from "../context/AuthContext";
 import { Student } from "./MyStudentsPage";
 import { useNavigate } from "react-router-dom";
-import { FilterList, ViewList, CalendarMonth, Event } from "@mui/icons-material";
-import {DataGrid, GridColDef, GridRenderCellParams} from "@mui/x-data-grid";
-import { DateCalendar } from "@mui/x-date-pickers/DateCalendar";
-import { PickersDay } from "@mui/x-date-pickers/PickersDay";
+import { 
+    FilterList, 
+    ViewDay, 
+    ViewWeek, 
+    CalendarMonth, 
+    Event, 
+    ArrowBackIos, 
+    ArrowForwardIos,
+} from "@mui/icons-material";
 import dayjs from "dayjs";
+import LessonSidePanel from "../components/LessonSidePanel";
+import LessonDetailPanel from "../components/LessonDetailPanel";
+
+// Import custom calendar styles
+import "../styles/calendar.css";
+
+// FullCalendar imports
+import FullCalendar from '@fullcalendar/react';
+import dayGridPlugin from '@fullcalendar/daygrid';
+import timeGridPlugin from '@fullcalendar/timegrid';
+import interactionPlugin, {DateClickArg} from '@fullcalendar/interaction';
+import { EventInput, DateSelectArg, EventClickArg } from '@fullcalendar/core';
 
 const LessonsPage = () => {
     const [lessons, setLessons] = useState<any[]>([]);
@@ -50,18 +68,11 @@ const LessonsPage = () => {
     const [deleting, setDeleting] = useState(false);
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
     const statusFilterOpen = Boolean(anchorEl);
-    const [viewMode, setViewMode] = useState<'list' | 'calendar'>('calendar');
+    const [calendarView, setCalendarView] = useState<'timeGridDay' | 'timeGridWeek' | 'dayGridMonth'>('timeGridWeek');
     const [selectedDate, setSelectedDate] = useState<dayjs.Dayjs>(dayjs());
     const theme = useTheme();
-
-    // State for month lesson counts
-    const [monthLessonCounts, setMonthLessonCounts] = useState<LessonCountsByDay>({});
-    const [loadingMonthCounts, setLoadingMonthCounts] = useState(false);
-
-    const [page, setPage] = useState(0);
-    const [pageSize, setPageSize] = useState(10);
-    const [totalLessons, setTotalLessons] = useState(0);
-    const [loading, setLoading] = useState(false);
+    const calendarRef = useRef<any>(null);
+    const suppressNextAutoSelect = useRef(false);
 
     const handleStatusFilterClick = (event: React.MouseEvent<HTMLButtonElement>) => {
         setAnchorEl(event.currentTarget);
@@ -73,21 +84,19 @@ const LessonsPage = () => {
 
     const handleStatusSelect = (value: string) => {
         setStatus(value);
-        setPage(0);
         handleStatusFilterClose();
     };
 
     const refreshLessons = async () => {
-        setLoading(true);
         try {
             const studentId = user?.role === "student" ? user?.id : undefined;
             const tutorId = user?.role === "tutor" ? user?.id : undefined;
-            const dateParam = viewMode === 'calendar' ? selectedDate.format('YYYY-MM-DD') : undefined;
-            const result = await getLessons(studentId as string, tutorId as string, status, page, pageSize, dateParam);
+
+            // For calendar view, we don't need to filter by date as FullCalendar will handle the date range
+            const result = await getLessons(studentId as string, tutorId as string, status);
 
             const lessons = result.content;
             setLessons(lessons);
-            setTotalLessons(result.totalElements);
 
             if (user?.role === "student") {
                 const uniqueTutorIds = Array.from(new Set(lessons.map((lesson: any) => lesson.tutorId)));
@@ -105,8 +114,6 @@ const LessonsPage = () => {
             }
         } catch (e) {
             console.error("Failed to fetch lessons", e);
-        } finally {
-            setLoading(false);
         }
     };
 
@@ -116,9 +123,6 @@ const LessonsPage = () => {
             setDeleting(true);
             await deleteLesson(lessonToDelete.id);
             await refreshLessons();
-            if (viewMode === 'calendar') {
-                await fetchMonthLessonCounts();
-            }
             setLessonToDelete(null);
         } catch (e) {
             console.error("Failed to delete lesson", e);
@@ -141,51 +145,142 @@ const LessonsPage = () => {
         }
     };
 
-    // Function to fetch lesson counts for the current month
-    const fetchMonthLessonCounts = async () => {
-        if (!user) return;
+    // Convert lessons to FullCalendar events
+    const lessonsToEvents = (): EventInput[] => {
+        return lessons.map(lesson => {
+            const student = getStudentById(lesson.studentId);
+            const tutorName = tutorsMap.get(lesson.tutorId) || "Unknown";
+            const displayName = user?.role === "tutor" ? student?.name || "Unknown" : tutorName;
 
-        setLoadingMonthCounts(true);
-        try {
-            const year = selectedDate.year();
-            const month = selectedDate.month() + 1; // dayjs months are 0-indexed
+            // Calculate end time based on start time and duration
+            const startTime = dayjs(lesson.dateTime);
+            const endTime = startTime.add(lesson.duration, 'minute');
 
-            const studentId = user?.role === "student" ? user?.id : undefined;
-            const tutorId = user?.role === "tutor" ? user?.id : undefined;
+            // Determine color based on status
+            let backgroundColor;
+            let borderColor;
 
-            const counts = await getLessonCountsByMonth(
-                year,
-                month,
-                studentId,
-                tutorId
-            );
+            switch(lesson.status) {
+                case 'COMPLETED':
+                    backgroundColor = alpha(theme.palette.success.main, 0.7);
+                    borderColor = theme.palette.success.main;
+                    break;
+                case 'CANCELED':
+                    backgroundColor = alpha(theme.palette.error.main, 0.7);
+                    borderColor = theme.palette.error.main;
+                    break;
+                default:
+                    backgroundColor = alpha(theme.palette.primary.main, 0.7);
+                    borderColor = theme.palette.primary.main;
+            }
 
-            setMonthLessonCounts(counts);
-        } catch (error) {
-            console.error("Failed to fetch month lesson counts", error);
-            setMonthLessonCounts({});
-        } finally {
-            setLoadingMonthCounts(false);
+            return {
+                id: lesson.id,
+                title: `${lesson.title} - ${displayName}`,
+                start: lesson.dateTime,
+                end: endTime.toISOString(),
+                backgroundColor,
+                borderColor,
+                extendedProps: {
+                    lesson: lesson,
+                    student: student,
+                    status: lesson.status
+                }
+            };
+        });
+    };
+
+    // Handle date selection in calendar
+    const handleDateSelect = (selectInfo: DateSelectArg) => {
+        suppressNextAutoSelect.current = false;
+        // Only open the side‑panel when the user actually clicks or drags on the calendar.
+        // Programmatic navigation (e.g., hitting “Today”) can trigger a synthetic selection
+        // that doesn’t include a MouseEvent, which used to open the panel unintentionally.
+        if (user?.role === "tutor" && selectInfo.jsEvent && !suppressNextAutoSelect.current) {
+            setSelectedDate(dayjs(selectInfo.start));
+            setIsModalOpen(true);
+        }
+    };
+
+    // Handle event click in calendar
+    const handleEventClick = (clickInfo: EventClickArg) => {
+        const lesson = clickInfo.event.extendedProps.lesson;
+        const student = getStudentById(lesson.studentId);
+
+        // Navigate to the lesson detail page
+        navigate(`/lessons/${lesson.id}`, {
+            state: { student: student }
+        });
+    };
+
+    // Handle event click in calendar
+    const handleDayClick = (info: DateClickArg) => {
+        // When a day is clicked in month view, navigate to day view for that date
+        if (calendarRef.current && calendarView === 'dayGridMonth') {
+            const calendarApi = calendarRef.current.getApi();
+            calendarApi.unselect(); // clear any selection to prevent auto-opening
+            suppressNextAutoSelect.current = true;
+            calendarApi.changeView('timeGridDay', info.dateStr);
+            setCalendarView('timeGridDay');
+            setSelectedDate(dayjs(info.date));
+        }
+    };
+
+    // Handle calendar view change
+    const handleViewChange = (
+        event: React.MouseEvent<HTMLElement>,
+        newView: 'timeGridDay' | 'timeGridWeek' | 'dayGridMonth' | null
+    ) => {
+        if (newView) {
+            setCalendarView(newView);
+            if (calendarRef.current) {
+                const calendarApi = calendarRef.current.getApi();
+                calendarApi.changeView(newView);
+            }
+        }
+    };
+
+    // Handle today button click
+    const handleTodayClick = () => {
+        if (calendarRef.current) {
+            const calendarApi = calendarRef.current.getApi();
+            calendarApi.today();
+            calendarApi.unselect(); // clear synthetic selection to avoid opening sidebar
+            setSelectedDate(dayjs());
+        }
+    };
+
+    // Handle previous button click
+    const handlePrevClick = () => {
+        if (calendarRef.current) {
+            const calendarApi = calendarRef.current.getApi();
+            calendarApi.prev();
+            calendarApi.unselect(); // ensure no stale selection persists
+
+            // Update selected date based on the current view
+            const currentDate = dayjs(calendarApi.getDate());
+            setSelectedDate(currentDate);
+        }
+    };
+
+    // Handle next button click
+    const handleNextClick = () => {
+        if (calendarRef.current) {
+            const calendarApi = calendarRef.current.getApi();
+            calendarApi.next();
+            calendarApi.unselect(); // ensure no stale selection persists
+
+            // Update selected date based on the current view
+            const currentDate = dayjs(calendarApi.getDate());
+            setSelectedDate(currentDate);
         }
     };
 
     useEffect(() => {
         if (user) {
             refreshLessons();
-
-            // Fetch month lesson counts when in calendar view
-            if (viewMode === 'calendar') {
-                fetchMonthLessonCounts();
-            }
         }
-    }, [user, status, page, pageSize, viewMode === 'calendar' ? selectedDate : null]);
-
-    // Fetch month lesson counts when the month changes
-    useEffect(() => {
-        if (user && viewMode === 'calendar') {
-            fetchMonthLessonCounts();
-        }
-    }, [user, selectedDate.month(), selectedDate.year(), viewMode]);
+    }, [user, status]);
 
     useEffect(() => {
         const loadStudents = async () => {
@@ -197,140 +292,13 @@ const LessonsPage = () => {
 
     }, [user]);
 
-    const columns: GridColDef[] = [
-        {
-            field: "title",
-            headerName: "Lesson",
-            flex: 1,
-        },
-        user?.role === "student"
-            ? {
-                field: "tutorId",
-                headerName: "Teacher",
-                flex: 1,
-                renderCell: (params: GridRenderCellParams<any>) => {
-                    return tutorsMap.get(params.value) || "Unknown";
-                },
-            }
-            : {
-                field: "studentId",
-                headerName: "Student",
-                flex: 1,
-                renderCell: (params: GridRenderCellParams<any>) => {
-                    const student = getStudentById(params.value);
-                    return student ? student.name : "Unknown";
-                },
-            },
-        {
-            field: "dateTime",
-            headerName: "Date",
-            width: 180,
-            valueFormatter: (params) => {
-                return new Date(params).toLocaleString();
-            }
-        },
-        {
-            field: "status",
-            headerName: "Status",
-            width: 140,
-            renderHeader: () => (
-                <Box display="flex" alignItems="center">
-                    Status
-                    <IconButton size="small" onClick={handleStatusFilterClick}>
-                        <FilterList fontSize="small" />
-                    </IconButton>
-                    <Menu
-                        anchorEl={anchorEl}
-                        open={statusFilterOpen}
-                        onClose={handleStatusFilterClose}
-                    >
-                        <MenuItem onClick={() => handleStatusSelect("SCHEDULED")}>Scheduled</MenuItem>
-                        <MenuItem onClick={() => handleStatusSelect("COMPLETED")}>Completed</MenuItem>
-                        <MenuItem onClick={() => handleStatusSelect("CANCELED")}>Canceled</MenuItem>
-                        <MenuItem onClick={() => handleStatusSelect("")}>All</MenuItem>
-                    </Menu>
-                </Box>
-            ),
-        },
-        {
-            field: "homework",
-            headerName: "Homework",
-            width: 120,
-            renderCell: (params) => (
-                params.value ? <Chip label="Yes" color="success" /> : <Chip label="No" color="default" />
-            ),
-        },
-        {
-            field: "actions",
-            headerName: "Actions",
-            width: 130,
-            sortable: false,
-            renderCell: (params) => (
-                <Box>
-                    <Button
-                        size="small"
-                        onClick={() =>
-                            navigate(`/lessons/${params.row.id}`, {
-                                state: { student: getStudentById(params.row.studentId) },
-                            })
-                        }
-                    >
-                        View
-                    </Button>
-                    {user?.role === "tutor" && (
-                    <Button
-                        size="small"
-                        color="error"
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            setLessonToDelete(params.row);
-                        }}
-                    >
-                        Delete
-                    </Button>)}
-                </Box>
-            ),
-        },
-    ];
-
-    // Custom day component to show badges for days with lessons
-    const ServerDay = (props: any) => {
-        const { day, outsideCurrentMonth, ...other } = props;
-        const isSelected = day.format('YYYY-MM-DD') === selectedDate.format('YYYY-MM-DD');
-
-        // Format the date to match the API response format (YYYY-MM-DD)
-        const dateKey = day.format('YYYY-MM-DD');
-
-        // Check if there are lessons for this day from the month data
-        const lessonCount = monthLessonCounts[dateKey] || 0;
-        const hasLessons = lessonCount > 0;
-
-        // For the selected day, we can use either the API count or the loaded lessons
-        const displayCount = isSelected && lessons.length > 0 ? lessons.length : lessonCount;
-
-        return (
-            <Badge
-                key={day.toString()}
-                overlap="circular"
-                badgeContent={hasLessons ? displayCount : undefined}
-                color="primary"
-            >
-                <PickersDay 
-                    {...other} 
-                    outsideCurrentMonth={outsideCurrentMonth} 
-                    day={day}
-                    selected={isSelected}
-                    sx={{
-                        ...(hasLessons && {
-                            backgroundColor: alpha(theme.palette.primary.main, 0.1),
-                            '&:hover': {
-                                backgroundColor: alpha(theme.palette.primary.main, 0.2),
-                            },
-                        }),
-                    }}
-                />
-            </Badge>
-        );
+    // Get the current view title (e.g., "June 2023" or "June 5-11, 2023")
+    const getCurrentViewTitle = () => {
+        if (calendarRef.current) {
+            const calendarApi = calendarRef.current.getApi();
+            return calendarApi.view.title;
+        }
+        return "";
     };
 
     return (
@@ -341,220 +309,335 @@ const LessonsPage = () => {
                 minHeight: '100vh'
             }}
         >
-            <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}>
+            {/* Header */}
+            <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3, flexWrap: 'wrap', gap: 2 }}>
                 <Typography variant="h5" fontWeight={600}>
                     Lessons
                 </Typography>
-                <Box sx={{ display: 'flex', gap: 2 }}>
-                    <Tabs 
-                        value={viewMode} 
-                        onChange={(_, newValue) => setViewMode(newValue)}
-                        sx={{ 
-                            minHeight: 40,
-                            '& .MuiTabs-indicator': {
-                                height: 3,
-                                borderRadius: '3px 3px 0 0'
-                            }
-                        }}
+
+                {/* Calendar Controls */}
+                <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+                    {/* Status Filter */}
+                    <Tooltip title="Filter by status">
+                        <IconButton onClick={handleStatusFilterClick}>
+                            <FilterList />
+                        </IconButton>
+                    </Tooltip>
+                    <Menu
+                        anchorEl={anchorEl}
+                        open={statusFilterOpen}
+                        onClose={handleStatusFilterClose}
                     >
-                        <Tab 
-                            value="list" 
-                            label="List" 
-                            icon={<ViewList fontSize="small" />} 
-                            iconPosition="start"
-                            sx={{ minHeight: 40 }}
-                        />
-                        <Tab 
-                            value="calendar" 
-                            label="Schedule" 
-                            icon={<CalendarMonth fontSize="small" />} 
-                            iconPosition="start"
-                            sx={{ minHeight: 40 }}
-                        />
-                    </Tabs>
+                        <MenuItem onClick={() => handleStatusSelect("SCHEDULED")}>Scheduled</MenuItem>
+                        <MenuItem onClick={() => handleStatusSelect("COMPLETED")}>Completed</MenuItem>
+                        <MenuItem onClick={() => handleStatusSelect("CANCELED")}>Canceled</MenuItem>
+                        <MenuItem onClick={() => handleStatusSelect("")}>All</MenuItem>
+                    </Menu>
+
+                    {/* View Toggle */}
+                    <ToggleButtonGroup
+                        value={calendarView}
+                        exclusive
+                        onChange={handleViewChange}
+                        aria-label="calendar view"
+                        size="small"
+                    >
+                        <ToggleButton value="timeGridDay" aria-label="day view">
+                            <ViewDay fontSize="small" />
+                            <Typography sx={{ ml: 0.5, display: { xs: 'none', sm: 'block' } }}>Day</Typography>
+                        </ToggleButton>
+                        <ToggleButton value="timeGridWeek" aria-label="week view">
+                            <ViewWeek fontSize="small" />
+                            <Typography sx={{ ml: 0.5, display: { xs: 'none', sm: 'block' } }}>Week</Typography>
+                        </ToggleButton>
+                        <ToggleButton value="dayGridMonth" aria-label="month view">
+                            <CalendarMonth fontSize="small" />
+                            <Typography sx={{ ml: 0.5, display: { xs: 'none', sm: 'block' } }}>Month</Typography>
+                        </ToggleButton>
+                    </ToggleButtonGroup>
+
+                    {/* Add Lesson Button (for tutors only) */}
+                    {user?.role === "tutor" && (
+                        <Button
+                            variant="contained"
+                            startIcon={<AddIcon />}
+                            onClick={() => setIsModalOpen(true)}
+                        >
+                            Add Lesson
+                        </Button>
+                    )}
                 </Box>
             </Box>
 
-            {viewMode === 'list' ? (
-                <Box sx={{ height: 520, backgroundColor: "#fff" }}>
-                    <DataGrid
-                        rows={lessons}
-                        columns={columns}
-                        rowCount={totalLessons}
-                        loading={loading}
-                        paginationMode="server"
-                        paginationModel={{ page, pageSize }}
-                        onPaginationModelChange={({ page, pageSize }) => {
-                            setPage(page);
-                            setPageSize(pageSize);
+            {/* Calendar Navigation */}
+            <Box sx={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                mb: 2,
+                backgroundColor: theme.palette.background.paper,
+                borderRadius: 2,
+                p: 1.5,
+                boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+            }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <IconButton onClick={handlePrevClick} size="small">
+                        <ArrowBackIos fontSize="small" />
+                    </IconButton>
+                    <IconButton onClick={handleNextClick} size="small">
+                        <ArrowForwardIos fontSize="small" />
+                    </IconButton>
+                    <Button
+                        variant="text"
+                        onClick={handleTodayClick}
+                        sx={{
+                            minWidth: 'auto',
+                            fontWeight: 500,
+                            textTransform: 'none',
+                            fontSize: '0.9rem'
                         }}
-                        pageSizeOptions={[5, 10, 25]}
-                        disableRowSelectionOnClick
-                        getRowId={(row) => row.id}
-                    />
+                    >
+                        Today
+                    </Button>
                 </Box>
-            ) : (
-                <Box sx={{ display: 'flex', gap: 3 }}>
-                    <Paper 
-                        elevation={0} 
-                        sx={{ 
-                            p: 2, 
-                            flex: '0 0 auto', 
-                            border: `1px solid ${theme.palette.divider}`,
-                            borderRadius: 2
-                        }}
-                    >
-                        <DateCalendar 
-                            value={selectedDate}
-                            onChange={(newDate) => {
-                                if (newDate) setSelectedDate(newDate);
-                            }}
-                            slots={{
-                                day: ServerDay
-                            }}
-                            sx={{
-                                '& .MuiPickersCalendarHeader-root': {
-                                    marginTop: '8px',
-                                    paddingLeft: '16px',
-                                    paddingRight: '16px',
-                                    marginBottom: '8px'
-                                }
-                            }}
-                        />
-                    </Paper>
 
-                    <Paper 
-                        elevation={0} 
-                        sx={{ 
-                            p: 3, 
-                            flex: 1, 
-                            border: `1px solid ${theme.palette.divider}`,
-                            borderRadius: 2
-                        }}
-                    >
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                            <Typography variant="h6" fontWeight={600}>
-                                {selectedDate.format('MMMM D, YYYY')}
-                            </Typography>
-                            {user?.role === "tutor" && (
-                                <Button 
-                                    variant="contained"
-                                    startIcon={<AddIcon />} 
-                                    onClick={() => setIsModalOpen(true)}
-                                >
-                                    Add Lesson
-                                </Button>
-                            )}
-                        </Box>
+                <Typography variant="h6" fontWeight={500}>
+                    {getCurrentViewTitle()}
+                </Typography>
 
-                        {lessons.length > 0 ? (
-                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                {lessons.map((lesson) => (
-                                    <Paper
-                                        key={lesson.id}
-                                        elevation={0}
-                                        sx={{
-                                            p: 2,
-                                            borderRadius: 2,
-                                            border: `1px solid ${theme.palette.divider}`,
-                                            '&:hover': {
-                                                borderColor: theme.palette.primary.main,
-                                                boxShadow: `0 0 0 1px ${theme.palette.primary.main}`,
-                                            },
-                                            display: 'flex',
-                                            justifyContent: 'space-between',
-                                            alignItems: 'center',
-                                            cursor: 'pointer',
-                                        }}
-                                        onClick={() => navigate(`/lessons/${lesson.id}`, {
-                                            state: { student: getStudentById(lesson.studentId) },
-                                        })}
-                                    >
-                                        <Box>
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                                                <Event fontSize="small" color="primary" />
-                                                <Typography variant="subtitle1" fontWeight={600}>
-                                                    {lesson.title}
-                                                </Typography>
-                                                <Chip 
-                                                    label={lesson.status} 
-                                                    size="small"
-                                                    color={
-                                                        lesson.status === 'COMPLETED' ? 'success' : 
-                                                        lesson.status === 'CANCELED' ? 'error' : 'primary'
-                                                    }
-                                                />
-                                            </Box>
-                                            <Typography variant="body2" color="text.secondary">
-                                                {dayjs(lesson.dateTime).format('h:mm A')} - {user?.role === "tutor" 
-                                                    ? `Student: ${getStudentById(lesson.studentId)?.name || 'Unknown'}`
-                                                    : `Teacher: ${tutorsMap.get(lesson.tutorId) || 'Unknown'}`
-                                                }
+                <Box sx={{ width: 100 }}></Box> {/* Spacer for alignment */}
+            </Box>
+
+            {/* Calendar */}
+            <Paper
+                elevation={0}
+                sx={{
+                    p: 0,
+                    borderRadius: 2,
+                    border: `1px solid ${theme.palette.divider}`,
+                    overflow: 'hidden',
+                    height: 'calc(100vh - 240px)',
+                    minHeight: '600px'
+                }}
+            >
+                <FullCalendar
+                    ref={calendarRef}
+                    plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+                    initialView="timeGridWeek"
+                    headerToolbar={false} // We're creating our own header
+                    events={lessonsToEvents()}
+                    selectable={user?.role === "tutor"}
+                    select={handleDateSelect}
+                    eventClick={handleEventClick}
+                    dateClick={handleDayClick}
+                    height="100%"
+                    nowIndicator={true}
+                    dayMaxEvents={true}
+                    allDaySlot={false}
+                    slotMinTime="08:00:00"
+                    slotMaxTime="23:00:00"
+                    expandRows={true}
+                    stickyHeaderDates={true}
+                    editable={user?.role === "tutor"} // Enable drag-and-drop for tutors
+                    eventDrop={(info) => {
+                        // Handle event drop (reschedule)
+                        const lesson = info.event.extendedProps.lesson;
+                        const newStart = info.event.start;
+                        const newEnd = info.event.end;
+
+                        if (newStart && newEnd) {
+                            // Calculate new duration in minutes
+                            const newDuration = Math.round((newEnd.getTime() - newStart.getTime()) / (1000 * 60));
+
+                            // Show loading indicator
+                            const originalElement = info.el;
+                            originalElement.style.opacity = '0.7';
+
+                            // Update lesson in backend
+                            updateLesson(lesson.id, {
+                                dateTime: newStart.toISOString(),
+                                duration: newDuration
+                            })
+                            .then(() => {
+                                // Success - show confirmation
+                                originalElement.style.opacity = '1';
+                                originalElement.classList.add('status-change');
+                                setTimeout(() => {
+                                    originalElement.classList.remove('status-change');
+                                }, 500);
+
+                                // Refresh lessons to get updated data
+                                refreshLessons();
+                            })
+                            .catch((error) => {
+                                console.error("Failed to update lesson:", error);
+                                info.revert(); // Revert the drag if update fails
+                            });
+                        }
+                    }}
+                    dayHeaderFormat={{ weekday: 'short', month: 'numeric', day: 'numeric', omitCommas: true }}
+                    eventTimeFormat={{
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        meridiem: false
+                    }}
+                    slotLabelFormat={{
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: false
+                    }}
+                    eventContent={(eventInfo) => {
+                        const lesson = eventInfo.event.extendedProps.lesson;
+                        const student = eventInfo.event.extendedProps.student;
+                        const status = eventInfo.event.extendedProps.status;
+
+                        // Get student initials for avatar
+                        const getInitials = (name: string) => {
+                            return name
+                                .split(' ')
+                                .map(part => part[0])
+                                .join('')
+                                .toUpperCase()
+                                .substring(0, 2);
+                        };
+
+                        const studentName = student?.name || 'Unknown';
+                        const studentInitials = getInitials(studentName);
+
+                        // Generate a consistent color based on student name
+                        const getAvatarColor = (name: string) => {
+                            const colors = [
+                                '#2573ff', '#00d7c2', '#f6c344', '#ff6b6b', 
+                                '#a394f0', '#4ecdc4', '#ff9f1c', '#8675a9'
+                            ];
+
+                            let hash = 0;
+                            for (let i = 0; i < name.length; i++) {
+                                hash = name.charCodeAt(i) + ((hash << 5) - hash);
+                            }
+
+                            return colors[Math.abs(hash) % colors.length];
+                        };
+
+                        const avatarColor = getAvatarColor(studentName);
+
+                        // Add status-specific class for styling
+                        const statusClass = `status-${status.toLowerCase()}`;
+
+                        return (
+                            <Tooltip 
+                                title={
+                                    <Box sx={{ p: 1 }}>
+                                        <Typography variant="subtitle2" fontWeight={600}>
+                                            {lesson.title}
+                                        </Typography>
+                                        <Typography variant="body2">
+                                            {eventInfo.timeText} ({lesson.duration} min)
+                                        </Typography>
+                                        <Typography variant="body2">
+                                            Status: {status}
+                                        </Typography>
+                                        {lesson.location && (
+                                            <Typography variant="body2">
+                                                Location: {lesson.location}
                                             </Typography>
-                                        </Box>
-                                        <Box>
-                                            <Button
-                                                size="small"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    navigate(`/lessons/${lesson.id}`, {
-                                                        state: { student: getStudentById(lesson.studentId) },
-                                                    });
-                                                }}
-                                            >
-                                                View
-                                            </Button>
-                                            {user?.role === "tutor" && (
-                                                <Button
-                                                    size="small"
-                                                    color="error"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setLessonToDelete(lesson);
-                                                    }}
-                                                >
-                                                    Delete
-                                                </Button>
-                                            )}
-                                        </Box>
-                                    </Paper>
-                                ))}
-                            </Box>
-                        ) : (
-                            <Box sx={{ 
-                                display: 'flex', 
-                                flexDirection: 'column', 
-                                alignItems: 'center', 
-                                justifyContent: 'center',
-                                py: 8,
-                                color: 'text.secondary'
-                            }}>
-                                <CalendarMonth sx={{ fontSize: 48, opacity: 0.5, mb: 2 }} />
-                                <Typography variant="h6" gutterBottom>No lessons scheduled</Typography>
-                                <Typography variant="body2">
-                                    There are no lessons scheduled for this date.
-                                </Typography>
-                            </Box>
-                        )}
-                    </Paper>
-                </Box>
-            )}
+                                        )}
+                                    </Box>
+                                }
+                                arrow
+                                placement="top"
+                            >
+                                <Box 
+                                    className={`fc-event ${statusClass}`}
+                                    sx={{ 
+                                        p: 1, 
+                                        height: '100%',
+                                        overflow: 'hidden',
+                                        fontSize: '0.9rem',
+                                        lineHeight: 1.3,
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        backgroundColor: '#E6F0FF',
+                                        borderRadius: '8px',
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                                        '&:hover': {
+                                            boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
+                                            transform: 'translateY(-2px)'
+                                        },
+                                        transition: 'all 0.2s ease',
+                                        cursor: 'pointer',
+                                        position: 'relative',
+                                        zIndex: 1
+                                    }}
+                                >
+                                    {/* Time */}
+                                    <Box sx={{ 
+                                        fontWeight: 500, 
+                                        mb: 0.5, 
+                                        fontSize: '13px',
+                                        color: theme.palette.text.secondary,
+                                        pointerEvents: 'none'
+                                    }}>
+                                        {eventInfo.timeText}
+                                    </Box>
 
-            <AddLessonModal
+                                    {/* Student name with avatar/initials */}
+                                    <Box sx={{ 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        gap: 1,
+                                        pointerEvents: 'none'
+                                    }}>
+                                        <Avatar 
+                                            sx={{ 
+                                                width: 24, 
+                                                height: 24, 
+                                                fontSize: '12px',
+                                                bgcolor: avatarColor,
+                                                fontWeight: 600
+                                            }}
+                                        >
+                                            {studentInitials}
+                                        </Avatar>
+                                        <Typography 
+                                            sx={{ 
+                                                fontWeight: 600,
+                                                fontSize: '15px',
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                whiteSpace: 'nowrap'
+                                            }}
+                                        >
+                                            {studentName}
+                                        </Typography>
+                                    </Box>
+                                </Box>
+                            </Tooltip>
+                        );
+                    }}
+                    dayCellDidMount={(info) => {
+                        // Highlight today's date
+                        if (info.isToday) {
+                            info.el.style.backgroundColor = alpha(theme.palette.primary.main, 0.05);
+                        }
+                    }}
+                />
+            </Paper>
+
+            {/* Add Lesson Side Panel */}
+            <LessonSidePanel
                 open={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 onCreated={() => {
                     if (user?.id) {
                         refreshLessons();
-                        if (viewMode === 'calendar') {
-                            fetchMonthLessonCounts();
-                        }
                     }
                 }}
                 students={students}
                 initialDate={selectedDate.toISOString()}
             />
 
+            {/* Delete Confirmation Dialog */}
             {lessonToDelete && (
                 <Dialog open onClose={() => setLessonToDelete(null)}>
                     <DialogTitle>Delete Lesson</DialogTitle>
