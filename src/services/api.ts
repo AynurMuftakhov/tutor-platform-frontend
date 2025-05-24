@@ -4,7 +4,7 @@ import { NotificationMessage} from "../context/NotificationsSocketContext";
 import { ApiError } from '../context/ApiErrorContext';
 
 const api = axios.create({
-    baseURL: process.env.REACT_APP_API_URL,
+    baseURL: import.meta.env.VITE_API_URL,
     headers: {
         'Content-Type': 'application/json',
     },
@@ -169,6 +169,11 @@ export const getTutorStatistics = async (tutorId: string) => {
 
 export const fetchUserById = async (userId: string) => {
     const response = await api.get(`users-service/api/users/${userId}`);
+    return response.data;
+}
+
+export const deleteUser = async (userId: string) => {
+    const response = await api.delete(`/users-service/api/users/${userId}`);
     return response.data;
 }
 

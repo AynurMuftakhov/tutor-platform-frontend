@@ -19,8 +19,7 @@ import { DataGrid, GridColDef, GridRenderCellParams } from "@mui/x-data-grid";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
-import MainLayout from "../layout/MainLayout";
-import {createStudent, fetchStudents} from "../services/api";
+import {createStudent, deleteUser, fetchStudents} from "../services/api";
 import { useAuth } from '../context/AuthContext';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
@@ -46,8 +45,10 @@ const MyStudentsPage: React.FC = () => {
     const [addDialogOpen, setAddDialogOpen] = useState(false);
     const [newStudent, setNewStudent] = useState({ name: "", email: "", level: "Beginner" as EnglishLevel });
     const [addLoading, setAddLoading] = useState(false);
+    const [deleteLoading, setDeleteLoading] = useState(false);
     const [snackbarOpen, setSnackbarOpen] = useState(false);
     const [snackbarMessage, setSnackbarMessage] = useState('');
+    const [snackbarSeverity, setSnackbarSeverity] = useState<'success' | 'error'>('success');
 
     const [totalStudents, setTotalStudents] = useState(0);
     const [page, setPage] = useState(0);
@@ -80,12 +81,26 @@ const MyStudentsPage: React.FC = () => {
         setStudentToDelete(null);
     };
 
-    const handleDeleteConfirm = () => {
+    const handleDeleteConfirm = async () => {
         if (studentToDelete) {
-            setStudents((prev) => prev.filter((s) => s.id !== studentToDelete.id));
+            try {
+                setDeleteLoading(true);
+                await deleteUser(studentToDelete.id);
+                setStudents((prev) => prev.filter((s) => s.id !== studentToDelete.id));
+                setSnackbarMessage("Student successfully deleted.");
+                setSnackbarSeverity('success');
+                setSnackbarOpen(true);
+            } catch (err) {
+                console.error("Failed to delete student", err);
+                setSnackbarMessage("Failed to delete student. Please try again.");
+                setSnackbarSeverity('error');
+                setSnackbarOpen(true);
+            } finally {
+                setDeleteLoading(false);
+                setDeleteDialogOpen(false);
+                setStudentToDelete(null);
+            }
         }
-        setDeleteDialogOpen(false);
-        setStudentToDelete(null);
     };
 
     // Handler for opening the vocabulary modal
@@ -312,9 +327,13 @@ const MyStudentsPage: React.FC = () => {
                         </DialogContentText>
                     </DialogContent>
                     <DialogActions>
-                        <Button onClick={handleDeleteClose}>Cancel</Button>
-                        <Button onClick={handleDeleteConfirm} color="error">
-                            Delete
+                        <Button onClick={handleDeleteClose} disabled={deleteLoading}>Cancel</Button>
+                        <Button 
+                            onClick={handleDeleteConfirm} 
+                            color="error"
+                            disabled={deleteLoading}
+                        >
+                            {deleteLoading ? "Deleting..." : "Delete"}
                         </Button>
                     </DialogActions>
                 </Dialog>
@@ -374,7 +393,7 @@ const MyStudentsPage: React.FC = () => {
             >
                 <Alert
                     onClose={() => setSnackbarOpen(false)}
-                    severity="success"
+                    severity={snackbarSeverity}
                     sx={{ width: '100%' }}
                 >
                     {snackbarMessage}

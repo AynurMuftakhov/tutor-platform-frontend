@@ -6,7 +6,7 @@ import {
 } from '../types';
 
 const api = ky.create({
-    prefixUrl: `${process.env.REACT_APP_API_URL}/vocabulary-service/api/v1/vocabulary/`,
+    prefixUrl: `${import.meta.env.VITE_API_URL}/vocabulary-service/api/v1/vocabulary/`,
     hooks: {
         beforeRequest: [
             request => {
@@ -19,6 +19,7 @@ const api = ky.create({
         ]
     }
 });
+
 
 export const vocabApi = {
     listWords: () => api.get('words').json<VocabularyWord[]>(),

@@ -36,11 +36,8 @@ const Profile: React.FC = () => {
     const [snackbarOpen, setSnackbarOpen] = useState(false);
     const [snackbarMessage, setSnackbarMessage] = useState('');
     const [snackbarSeverity, setSnackbarSeverity] = useState<'success' | 'error'>('success');
-    const [activeTab, setActiveTab] = useState(0);
     const [isEditingName, setIsEditingName] = useState(false);
     const [loading, setLoading] = useState(false);
-    const [upcomingLessons, setUpcomingLessons] = useState<any[]>([]);
-    const [historyLessons, setHistoryLessons] = useState<any[]>([]);
 
     const resolvedAvatar = avatarPreview && avatarPreview !== ''
         ? avatarPreview
@@ -225,33 +222,6 @@ const Profile: React.FC = () => {
 
                 {/* Right Content */}
                 <Box sx={{ flex: 1 }}>
-                    {/* Lessons Statistics */}
-                    <Grid container spacing={2} sx={{ marginBottom: 3 }}>
-                        <Grid item xs={4}>
-                            <Card sx={{ textAlign: 'center', padding: 2 }}>
-                                <Typography variant="h5" color="primary">
-                                    5
-                                </Typography>
-                                <Typography variant="body2">All Lessons</Typography>
-                            </Card>
-                        </Grid>
-                        <Grid item xs={4}>
-                            <Card sx={{ textAlign: 'center', padding: 2 }}>
-                                <Typography variant="h5" color="success.main">
-                                    2
-                                </Typography>
-                                <Typography variant="body2">Completed</Typography>
-                            </Card>
-                        </Grid>
-                        <Grid item xs={4}>
-                            <Card sx={{ textAlign: 'center', padding: 2 }}>
-                                <Typography variant="h5" color="error.main">
-                                    1
-                                </Typography>
-                                <Typography variant="body2">Cancelled</Typography>
-                            </Card>
-                        </Grid>
-                    </Grid>
 
                 {/* Snackbar */}
                 <Snackbar

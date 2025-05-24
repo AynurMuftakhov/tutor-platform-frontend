@@ -45,7 +45,7 @@ export const NotificationSocketProvider: React.FC<Props> = ({ userId, children }
         if (socketRef.current) return;
         if (!userId) return;
 
-        const ws = new WebSocket(`${process.env.REACT_APP_WS_URL}/ws/notifications?userId=${userId}`);
+        const ws = new WebSocket(`${import.meta.env.VITE_WS_URL}/ws/notifications?userId=${userId}`);
         socketRef.current = ws;
 
         ws.onopen = () => console.log("WebSocket connected");
@@ -72,7 +72,7 @@ export const NotificationSocketProvider: React.FC<Props> = ({ userId, children }
         ws.onclose = () => {
             console.log("WebSocket closed");
             setTimeout(() => {
-                socketRef.current = new WebSocket(`${process.env.REACT_APP_WS_URL}/ws/notifications?userId=${userId}`);
+                socketRef.current = new WebSocket(`${import.meta.env.VITE_WS_URL}/ws/notifications?userId=${userId}`);
             }, 3000);
         };
 

@@ -33,7 +33,7 @@ import {DeleteOutline} from "@mui/icons-material";
 import MotionDivTransition from "../components/MotionDivTransition";
 
 const drawerWidth = 280;
-const BRAND_NAME = "MyTutorSpace";
+const BRAND_NAME = "SpeakShire";
 
 const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [mobileOpen, setMobileOpen] = useState(false);
