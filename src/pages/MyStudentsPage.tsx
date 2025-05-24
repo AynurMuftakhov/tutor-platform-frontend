@@ -19,7 +19,7 @@ import { DataGrid, GridColDef, GridRenderCellParams } from "@mui/x-data-grid";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
-import {createStudent, deleteUser, fetchStudents} from "../services/api";
+import {createStudent, deleteUser, fetchStudents, updateCurrentUser} from "../services/api";
 import { useAuth } from '../context/AuthContext';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
@@ -45,6 +45,7 @@ const MyStudentsPage: React.FC = () => {
     const [addDialogOpen, setAddDialogOpen] = useState(false);
     const [newStudent, setNewStudent] = useState({ name: "", email: "", level: "Beginner" as EnglishLevel });
     const [addLoading, setAddLoading] = useState(false);
+    const [editingStudentId, setEditingStudentId] = useState<string | null>(null);
     const [deleteLoading, setDeleteLoading] = useState(false);
     const [snackbarOpen, setSnackbarOpen] = useState(false);
     const [snackbarMessage, setSnackbarMessage] = useState('');
@@ -64,11 +65,15 @@ const MyStudentsPage: React.FC = () => {
     };
 
     const handleAddStudent = () => {
+        setNewStudent({ name: "", email: "", level: "Beginner" as EnglishLevel });
+        setEditingStudentId(null);
         setAddDialogOpen(true);
     };
 
     const handleEditStudent = (student: Student) => {
-        alert(`Editing student: ${student.name}`);
+        setNewStudent({ name: student.name, email: student.email, level: student.level });
+        setEditingStudentId(student.id);
+        setAddDialogOpen(true);
     };
 
     const handleConfirmDelete = (student: Student) => {
@@ -112,19 +117,30 @@ const MyStudentsPage: React.FC = () => {
     const handleCreateStudent = async () => {
         try {
             setAddLoading(true);
-            await createStudent(user!.email, newStudent);
+            if (editingStudentId) {
+                await updateCurrentUser(editingStudentId, newStudent);
+                const data = await fetchStudents(user!.id, searchText, page, pageSize);
+                setStudents(data.content);
+                setTotalStudents(data.totalElements);
+                setSnackbarMessage("Student updated successfully.");
+                setSnackbarSeverity('success');
+                setSnackbarOpen(true);
+            } else {
+                await createStudent(user!.email, newStudent);
+                const data = await fetchStudents(user!.id, searchText, page, pageSize);
+                setStudents(data.content);
+                setTotalStudents(data.totalElements);
+                setSnackbarMessage("Student successfully added. Please remind them to check the email to set the password.");
+                setSnackbarSeverity('success');
+                setSnackbarOpen(true);
+            }
             setAddDialogOpen(false);
             setNewStudent({ name: "", email: "", level: "Beginner" as EnglishLevel });
-            // Reload students after adding
-            const data = await fetchStudents(user!.id, searchText, page, pageSize);
-            setStudents(data.content);
-            setTotalStudents(data.totalElements);
-
-            setSnackbarMessage("Student successfully added. Please remind him to check the email to set the password.");
-            setSnackbarOpen(true);
+            setEditingStudentId(null);
         } catch (err) {
-            console.error("Failed to add student", err);
+            console.error("Failed to save student", err);
             setSnackbarMessage("Something went wrong. Please try again.");
+            setSnackbarSeverity('error');
             setSnackbarOpen(true);
         } finally {
             setAddLoading(false);
@@ -163,23 +179,35 @@ const MyStudentsPage: React.FC = () => {
 
     const columns: GridColDef<Student>[] = [
         {
-            field: "avatar",
-            headerName: "",
-            width: 60,
-            sortable: false,
-            renderCell: (params: GridRenderCellParams<Student>) => (
-                <Avatar src={params.row.avatar} alt={params.row.name} />
-            ),
-        },
-        {
             field: "name",
             headerName: "Name",
             flex: 1,
+            renderCell: (params: GridRenderCellParams<Student>) => (
+                <Tooltip title={params.row.email}>
+                    <Box display="flex" alignItems="center">
+                        <Avatar
+                            src={params.row.avatar}
+                            alt={params.row.name}
+                            sx={{
+                                width: 32,
+                                height: 32,
+                                fontSize: 14,
+                                bgcolor: theme => theme.palette.primary.light,
+                                mr: 1
+                            }}
+                        />
+                        <Typography fontWeight={600}>{params.row.name}</Typography>
+                    </Box>
+                </Tooltip>
+            ),
         },
         {
             field: "email",
             headerName: "Email",
             flex: 1,
+            renderCell: (params: GridRenderCellParams<Student>) => (
+                <Typography variant="body2">{params.row.email}</Typography>
+            )
         },
         {
             field: "level",
@@ -207,22 +235,6 @@ const MyStudentsPage: React.FC = () => {
             }
         },
         {
-            field: "homeworkDone",
-            headerName: "Homework",
-            width: 130,
-            renderCell: (params: GridRenderCellParams<Student>) =>
-                params.row.homeworkDone ? (
-                    <Chip label="Done" color="success" />
-                ) : (
-                    <Chip label="Missing" color="error" />
-                ),
-        },
-        {
-            field: "nextLesson",
-            headerName: "Next Lesson",
-            width: 150,
-        },
-        {
             field: "actions",
             headerName: "Actions",
             width: 120,
@@ -230,31 +242,34 @@ const MyStudentsPage: React.FC = () => {
             renderCell: (params) => {
                 const student = params.row;
                 return (
-                    <Box>
-                        <IconButton
-                            color="primary"
-                            onClick={() => handleEditStudent(student)}
-                            size="small"
-                            sx={{ mr: 1 }}
-                        >
-                            <EditIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton
-                            color="info"
-                            onClick={() => handleViewVocabulary(student)}
-                            size="small"
-                            sx={{ mr: 1 }}
-                            title="View vocabulary words"
-                        >
-                            <MenuBookIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton
-                            color="error"
-                            onClick={() => handleConfirmDelete(student)}
-                            size="small"
-                        >
-                            <DeleteIcon fontSize="small" />
-                        </IconButton>
+                    <Box display="flex" gap={1}>
+                        <Tooltip title="Edit">
+                            <IconButton
+                                color="primary"
+                                onClick={() => handleEditStudent(student)}
+                                size="small"
+                            >
+                                <EditIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Vocabulary">
+                            <IconButton
+                                color="info"
+                                onClick={() => handleViewVocabulary(student)}
+                                size="small"
+                            >
+                                <MenuBookIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Delete">
+                            <IconButton
+                                color="error"
+                                onClick={() => handleConfirmDelete(student)}
+                                size="small"
+                            >
+                                <DeleteIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
                     </Box>
                 );
             },
@@ -328,8 +343,8 @@ const MyStudentsPage: React.FC = () => {
                     </DialogContent>
                     <DialogActions>
                         <Button onClick={handleDeleteClose} disabled={deleteLoading}>Cancel</Button>
-                        <Button 
-                            onClick={handleDeleteConfirm} 
+                        <Button
+                            onClick={handleDeleteConfirm}
                             color="error"
                             disabled={deleteLoading}
                         >
@@ -339,7 +354,7 @@ const MyStudentsPage: React.FC = () => {
                 </Dialog>
             </Box>
             <Dialog open={addDialogOpen} onClose={() => setAddDialogOpen(false)}>
-                <DialogTitle>Add New Student</DialogTitle>
+                <DialogTitle>{editingStudentId ? "Edit Student" : "Add New Student"}</DialogTitle>
                 <DialogContent>
                     <TextField
                         label="Name"
@@ -380,7 +395,10 @@ const MyStudentsPage: React.FC = () => {
                         variant="contained"
                         disabled={addLoading}
                     >
-                        {addLoading ? "Adding..." : "Add"}
+                        {addLoading
+                            ? (editingStudentId ? "Saving..." : "Adding...")
+                            : (editingStudentId ? "Save" : "Add")
+                        }
                     </Button>
                 </DialogActions>
             </Dialog>

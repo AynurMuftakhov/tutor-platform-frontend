@@ -10,6 +10,7 @@ import {
     Tooltip,
     LinearProgress
 } from "@mui/material";
+import { blue, green, amber } from '@mui/material/colors';
 import { useTutorStatistics } from "../hooks/useTutorStatistics";
 import VideoCallButton from "../components/VideoCallButton";
 import SchoolIcon from "@mui/icons-material/School";
@@ -31,7 +32,7 @@ type StatCardProps = {
 const StatCard = ({ title, value, icon, color = "primary", progress, progressLabel }: StatCardProps) => {
     const theme = useTheme();
     const mainColor = theme.palette[color].main;
-    const lightColor = alpha(mainColor, 0.1)
+    const lightColor = alpha(mainColor, 0.08)
 
     return (
         <motion.div
@@ -40,15 +41,15 @@ const StatCard = ({ title, value, icon, color = "primary", progress, progressLab
             transition={{ duration: 0.4 }}
             whileHover={{ y: -5, transition: { duration: 0.2 } }}
         >
-            <Paper 
-                elevation={0} 
-                sx={{ 
-                    p: 3, 
+            <Paper
+                elevation={0}
+                sx={{
+                    p: 3,
                     borderRadius: 1,
-                    display: 'flex', 
+                    display: 'flex',
                     flexDirection: 'column',
                     height: '100%',
-                    background: `linear-gradient(135deg, white 0%, ${lightColor} 100%)`,
+                    background: `linear-gradient(135deg, #F7F9FC 0%, ${lightColor} 100%)`,
                     border: `1px solid ${alpha(mainColor, 0.1)}`,
                     boxShadow: `0 4px 20px ${alpha(mainColor, 0.1)}`,
                     position: 'relative',

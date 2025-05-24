@@ -59,7 +59,7 @@ let theme = createTheme({
             disabled: '#9ca3af'
         },
         background: {
-            default: '#fafbfd',
+            default: '#F7F9FC',
             paper: '#ffffff'
         },
         divider: 'rgba(0, 0, 0, 0.08)'

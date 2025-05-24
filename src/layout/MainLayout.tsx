@@ -45,6 +45,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const isProfileMenuOpen = Boolean(profileAnchorEl);
 
     const { user, logout } = useAuth();
+    const isTeacher = user?.role === "tutor";
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -245,7 +246,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             </Box>
 
             {/* User Resources Section */}
-            <Box px={2} mb={2}>
+            {isTeacher && (<Box px={2} mb={2}>
                 <Typography variant="overline" color="text.secondary" sx={{ px: 1, mb: 1, display: 'block' }}>
                     Resources
                 </Typography>
@@ -279,7 +280,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                         </ListItemButton>
                     </ListItem>
                 </List>
-            </Box>
+            </Box>)}
 
             {/* Bottom footer with gradient card */}
             <Box mt="auto" px={3} mb={3}>

@@ -1,7 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import AdminDashboard from './pages/AdminDashboard';
-import Users from './pages/Users';
 import PrivateRoute from './components/PrivateRoute';
 import Profile from "./pages/Profile";
 import AppWrapper from "./layout/AppWrapper";
@@ -46,15 +45,6 @@ const App: React.FC = () => {
                                 element={
                                     <PrivateRoute>
                                         <MyStudentsPage />
-                                    </PrivateRoute>
-                                }
-                            />
-
-                            <Route
-                                path="/users"
-                                element={
-                                    <PrivateRoute>
-                                        <Users />
                                     </PrivateRoute>
                                 }
                             />
