@@ -10,19 +10,14 @@ import {
     DialogActions,
     IconButton,
     Menu,
-    Chip,
     Paper,
     useTheme,
     alpha,
     Tooltip,
-    Fab,
     Avatar,
-    Zoom,
-    useMediaQuery,
     ToggleButtonGroup,
     ToggleButton,
 } from "@mui/material";
-import { motion } from "framer-motion";
 import AddIcon from "@mui/icons-material/Add";
 import {
     fetchStudents,
@@ -38,13 +33,11 @@ import {
     ViewDay, 
     ViewWeek, 
     CalendarMonth, 
-    Event, 
-    ArrowBackIos, 
+    ArrowBackIos,
     ArrowForwardIos,
 } from "@mui/icons-material";
 import dayjs from "dayjs";
 import LessonSidePanel from "../components/LessonSidePanel";
-import LessonDetailPanel from "../components/LessonDetailPanel";
 
 // Import custom calendar styles
 import "../styles/calendar.css";

@@ -4,14 +4,9 @@ import {
     Grid,
     Paper,
     Avatar,
-    Divider,
     useTheme,
-    useMediaQuery,
     Button,
     alpha,
-    Card,
-    CardContent,
-    IconButton,
     Tooltip,
     LinearProgress
 } from "@mui/material";
@@ -19,12 +14,6 @@ import { useTutorStatistics } from "../hooks/useTutorStatistics";
 import VideoCallButton from "../components/VideoCallButton";
 import SchoolIcon from "@mui/icons-material/School";
 import EventNoteIcon from "@mui/icons-material/EventNote";
-import TaskAltIcon from "@mui/icons-material/TaskAlt";
-import TrendingUpIcon from "@mui/icons-material/TrendingUp";
-import AddTaskIcon from "@mui/icons-material/AddTask";
-import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
-import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
-import MainLayout from "../layout/MainLayout";
 import { useAuth } from "../context/AuthContext";
 import UpcomingLessonsSection from "../components/dashboard/UpcomingLessonsSection";
 import { motion } from "framer-motion";
@@ -55,7 +44,7 @@ const StatCard = ({ title, value, icon, color = "primary", progress, progressLab
                 elevation={0} 
                 sx={{ 
                     p: 3, 
-                    borderRadius: 2,
+                    borderRadius: 1,
                     display: 'flex', 
                     flexDirection: 'column',
                     height: '100%',
@@ -71,8 +60,8 @@ const StatCard = ({ title, value, icon, color = "primary", progress, progressLab
                         position: 'absolute',
                         top: -20,
                         right: -20,
-                        width: 120,
-                        height: 120,
+                        width: 100,
+                        height: 100,
                         borderRadius: '50%',
                         background: lightColor,
                         zIndex: 0
@@ -246,23 +235,6 @@ const Dashboard = () => {
                             );
                         })()}
                     </Grid>
-                   {/* <Grid item xs={12} sm={6} md={3}>
-                        <StatCard
-                            title="Pending Tasks"
-                            value="2"
-                            icon={<TaskAltIcon />}
-                            color="warning"
-                        />
-                    </Grid>
-                    <Grid item xs={12} sm={6} md={3}>
-                        <StatCard
-                            title="Progress Score"
-                            value="88%"
-                            icon={<TrendingUpIcon />}
-                            color="success"
-                            progress={88}
-                        />
-                    </Grid>*/}
                 </Grid>
             )}
 
@@ -324,176 +296,6 @@ const Dashboard = () => {
                         </Paper>
                     </motion.div>
                 </Grid>
-
-                {/* Tasks Section */}
-               {/* <Grid item xs={12} md={4}>
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.5, delay: 0.3 }}
-                    >
-                        <Paper
-                            elevation={0}
-                            sx={{
-                                borderRadius: 4,
-                                overflow: 'hidden',
-                                height: '100%',
-                                border: `1px solid ${alpha(theme.palette.secondary.main, 0.1)}`,
-                                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)',
-                            }}
-                        >
-                            <Box
-                                sx={{
-                                    p: 3,
-                                    borderBottom: `1px solid ${theme.palette.divider}`,
-                                    background: `linear-gradient(90deg, ${alpha(theme.palette.secondary.main, 0.05)} 0%, ${alpha(theme.palette.secondary.light, 0.02)} 100%)`,
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center'
-                                }}
-                            >
-                                <Typography variant="h6" fontWeight={600} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    <TaskAltIcon sx={{ color: 'secondary.main' }} /> Tasks
-                                </Typography>
-                                <Tooltip title="Add new task">
-                                    <IconButton
-                                        size="small"
-                                        sx={{
-                                            color: theme.palette.secondary.main,
-                                            bgcolor: alpha(theme.palette.secondary.main, 0.1),
-                                            '&:hover': {
-                                                bgcolor: alpha(theme.palette.secondary.main, 0.2)
-                                            }
-                                        }}
-                                    >
-                                        <AddTaskIcon fontSize="small" />
-                                    </IconButton>
-                                </Tooltip>
-                            </Box>
-
-                            <Box sx={{ p: 3 }}>
-                                 Task Item 1
-                                <Box
-                                    sx={{
-                                        p: 2,
-                                        mb: 2,
-                                        borderRadius: 3,
-                                        border: `1px solid ${theme.palette.divider}`,
-                                        display: 'flex',
-                                        alignItems: 'flex-start',
-                                        gap: 2,
-                                        transition: 'all 0.2s ease',
-                                        '&:hover': {
-                                            bgcolor: alpha(theme.palette.background.default, 0.5),
-                                            borderColor: alpha(theme.palette.primary.main, 0.2)
-                                        }
-                                    }}
-                                >
-                                    <Avatar
-                                        sx={{
-                                            bgcolor: alpha(theme.palette.primary.main, 0.1),
-                                            color: theme.palette.primary.main,
-                                            width: 36,
-                                            height: 36
-                                        }}
-                                    >
-                                        <EventNoteIcon fontSize="small" />
-                                    </Avatar>
-                                    <Box sx={{ flex: 1 }}>
-                                        <Typography variant="subtitle2" fontWeight={600}>
-                                            Review Essay Draft
-                                        </Typography>
-                                        <Typography variant="caption" color="text.secondary">
-                                            Due tomorrow • High priority
-                                        </Typography>
-                                    </Box>
-                                    <Tooltip title="Mark as complete">
-                                        <IconButton
-                                            size="small"
-                                            sx={{
-                                                color: theme.palette.success.main,
-                                                '&:hover': {
-                                                    bgcolor: alpha(theme.palette.success.main, 0.1)
-                                                }
-                                            }}
-                                        >
-                                            <CheckCircleOutlineIcon fontSize="small" />
-                                        </IconButton>
-                                    </Tooltip>
-                                </Box>
-
-                                 Task Item 2
-                                <Box
-                                    sx={{
-                                        p: 2,
-                                        mb: 2,
-                                        borderRadius: 3,
-                                        border: `1px solid ${theme.palette.divider}`,
-                                        display: 'flex',
-                                        alignItems: 'flex-start',
-                                        gap: 2,
-                                        transition: 'all 0.2s ease',
-                                        '&:hover': {
-                                            bgcolor: alpha(theme.palette.background.default, 0.5),
-                                            borderColor: alpha(theme.palette.primary.main, 0.2)
-                                        }
-                                    }}
-                                >
-                                    <Avatar
-                                        sx={{
-                                            bgcolor: alpha(theme.palette.secondary.main, 0.1),
-                                            color: theme.palette.secondary.main,
-                                            width: 36,
-                                            height: 36
-                                        }}
-                                    >
-                                        <SchoolIcon fontSize="small" />
-                                    </Avatar>
-                                    <Box sx={{ flex: 1 }}>
-                                        <Typography variant="subtitle2" fontWeight={600}>
-                                            Create Vocabulary Quiz
-                                        </Typography>
-                                        <Typography variant="caption" color="text.secondary">
-                                            Due in 3 days • Medium priority
-                                        </Typography>
-                                    </Box>
-                                    <Tooltip title="Mark as complete">
-                                        <IconButton
-                                            size="small"
-                                            sx={{
-                                                color: theme.palette.success.main,
-                                                '&:hover': {
-                                                    bgcolor: alpha(theme.palette.success.main, 0.1)
-                                                }
-                                            }}
-                                        >
-                                            <CheckCircleOutlineIcon fontSize="small" />
-                                        </IconButton>
-                                    </Tooltip>
-                                </Box>
-
-                                 View All Tasks Button
-                                <Button
-                                    fullWidth
-                                    variant="outlined"
-                                    sx={{
-                                        mt: 2,
-                                        borderRadius: 2,
-                                        py: 1,
-                                        borderColor: alpha(theme.palette.secondary.main, 0.5),
-                                        color: theme.palette.secondary.main,
-                                        '&:hover': {
-                                            borderColor: theme.palette.secondary.main,
-                                            bgcolor: alpha(theme.palette.secondary.main, 0.05)
-                                        }
-                                    }}
-                                >
-                                    View All Tasks
-                                </Button>
-                            </Box>
-                        </Paper>
-                    </motion.div>
-                </Grid>*/}
             </Grid>
         </Box>
     );
