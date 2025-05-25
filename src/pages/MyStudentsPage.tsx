@@ -13,6 +13,7 @@ import {
     DialogActions,
     Chip, Tooltip,
 } from "@mui/material";
+import MenuItem from "@mui/material/MenuItem";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
 
 import { DataGrid, GridColDef, GridRenderCellParams } from "@mui/x-data-grid";
@@ -313,7 +314,8 @@ const MyStudentsPage: React.FC = () => {
                 </Box>
 
                 {/* DataGrid */}
-                <Box sx={{ height: 500, backgroundColor: "#fff" }}>
+                <Box sx={{ width: '100%', overflowX: 'auto', backgroundColor: '#fff' }}>
+                  <Box sx={{ minWidth: 600 }}>
                     <DataGrid<Student>
                         rows={students}
                         columns={columns}
@@ -329,6 +331,7 @@ const MyStudentsPage: React.FC = () => {
                         disableRowSelectionOnClick
                         autoHeight
                     />
+                  </Box>
                 </Box>
 
                 {/* Confirm Delete Dialog */}
@@ -379,12 +382,11 @@ const MyStudentsPage: React.FC = () => {
                         onChange={(e) =>
                             setNewStudent({ ...newStudent, level: e.target.value as EnglishLevel })
                         }
-                        SelectProps={{ native: true }}
                     >
                         {Object.entries(ENGLISH_LEVELS).map(([key, val]) => (
-                            <option key={key} value={key}>
+                            <MenuItem key={key} value={key}>
                                 {key} ({val.code})
-                            </option>
+                            </MenuItem>
                         ))}
                     </TextField>
                 </DialogContent>

@@ -121,10 +121,10 @@ const Profile: React.FC = () => {
     };
 
     return (
-        <Box sx={{ display: 'flex', flexDirection: 'row', gap: 2, padding: 3 }}>
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, padding: 3 }}>
                 {/* Left Sidebar */}
                 <Box sx={{
-                        width: '25%',
+                        width: { xs: '100%', md: '25%' },
                         backgroundColor: '#f8f9fa',
                         borderRadius: 2,
                         padding: 3,
@@ -137,7 +137,7 @@ const Profile: React.FC = () => {
                         <Avatar
                             src={resolvedAvatar}
                             alt={user?.name || 'User'}
-                            sx={{ width: 200, height: 200 }}
+                            sx={{ width: { xs: 120, sm: 160, md: 200 }, height: { xs: 120, sm: 160, md: 200 } }}
                         />
                         <IconButton
                             component="label"

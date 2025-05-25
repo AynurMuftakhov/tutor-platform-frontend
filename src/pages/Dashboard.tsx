@@ -10,15 +10,14 @@ import {
     Tooltip,
     LinearProgress
 } from "@mui/material";
-import { blue, green, amber } from '@mui/material/colors';
 import { useTutorStatistics } from "../hooks/useTutorStatistics";
-import VideoCallButton from "../components/VideoCallButton";
 import SchoolIcon from "@mui/icons-material/School";
 import EventNoteIcon from "@mui/icons-material/EventNote";
 import { useAuth } from "../context/AuthContext";
 import UpcomingLessonsSection from "../components/dashboard/UpcomingLessonsSection";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 
 type StatCardProps = {
     title: string;
@@ -56,8 +55,8 @@ const StatCard = ({ title, value, icon, color = "primary", progress, progressLab
                     overflow: 'hidden'
                 }}
             >
-                <Box 
-                    sx={{ 
+                <Box
+                    sx={{
                         position: 'absolute',
                         top: -20,
                         right: -20,
@@ -66,13 +65,13 @@ const StatCard = ({ title, value, icon, color = "primary", progress, progressLab
                         borderRadius: '50%',
                         background: lightColor,
                         zIndex: 0
-                    }} 
+                    }}
                 />
 
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, position: 'relative', zIndex: 1 }}>
-                    <Avatar 
-                        sx={{ 
-                            bgcolor: lightColor, 
+                    <Avatar
+                        sx={{
+                            bgcolor: lightColor,
                             color: mainColor,
                             width: 48,
                             height: 48,
@@ -81,10 +80,10 @@ const StatCard = ({ title, value, icon, color = "primary", progress, progressLab
                     >
                         {icon}
                     </Avatar>
-                    <Typography 
-                        variant="h4" 
+                    <Typography
+                        variant="h4"
                         fontWeight={700}
-                        sx={{ 
+                        sx={{
                             color: mainColor,
                             textShadow: `0 2px 4px ${alpha(mainColor, 0.2)}`
                         }}
@@ -93,10 +92,10 @@ const StatCard = ({ title, value, icon, color = "primary", progress, progressLab
                     </Typography>
                 </Box>
 
-                <Typography 
-                    variant="subtitle1" 
-                    fontWeight={600} 
-                    sx={{ 
+                <Typography
+                    variant="subtitle1"
+                    fontWeight={600}
+                    sx={{
                         mb: 1,
                         position: 'relative',
                         zIndex: 1
@@ -112,17 +111,17 @@ const StatCard = ({ title, value, icon, color = "primary", progress, progressLab
                                 {progressLabel ? `${progress}% ${progressLabel}` : `Progress: ${progress}%`}
                             </Typography>
                         </Box>
-                        <LinearProgress 
-                            variant="determinate" 
-                            value={progress} 
-                            sx={{ 
-                                height: 6, 
+                        <LinearProgress
+                            variant="determinate"
+                            value={progress}
+                            sx={{
+                                height: 6,
                                 borderRadius: 3,
                                 bgcolor: alpha(mainColor, 0.2),
                                 '& .MuiLinearProgress-bar': {
                                     bgcolor: mainColor
                                 }
-                            }} 
+                            }}
                         />
                     </Box>
                 )}
@@ -136,6 +135,7 @@ const Dashboard = () => {
     const theme = useTheme();
     const isTeacher = user?.role === "tutor";
     const navigate = useNavigate();
+    const [isAddLessonOpen, setAddLessonOpen] = useState(false);
 
     // Fetch tutor statistics if user is a tutor
     const { data: tutorStats, isLoading: isLoadingStats } = useTutorStatistics(
@@ -145,9 +145,11 @@ const Dashboard = () => {
     return (
         <Box
             sx={{
-                p: { xs: 2, sm: 4 },
+                p: { xs: 2, sm: 3, md: 4 },
                 bgcolor: '#fafbfd',
-                minHeight: '100vh'
+                minHeight: '100dvh',
+                width: '100%',
+                overflowX: 'hidden'
             }}
         >
             {/* Header Section with Greeting */}
@@ -182,35 +184,12 @@ const Dashboard = () => {
                         {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                     </Typography>
                 </Box>
-
-                {isTeacher && (
-                    <Box sx={{ display: 'flex', gap: 2 }}>
-                        <Button
-                            variant="contained"
-                            startIcon={<EventNoteIcon />}
-                            sx={{
-                                borderRadius: 3,
-                                px: 3,
-                                py: 1.2,
-                                boxShadow: '0 4px 14px rgba(37, 115, 255, 0.2)',
-                                background: `linear-gradient(90deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
-                            }}
-                        >
-                            Schedule New Lesson
-                        </Button>
-                        <VideoCallButton 
-                            variant="contained"
-                            color="secondary"
-                            size="medium"
-                        />
-                    </Box>
-                )}
             </Box>
 
             {/* Stats Cards Section */}
             {user?.role === "tutor" && (
-                <Grid container spacing={3} sx={{ mb: 5 }}>
-                    <Grid item xs={12} sm={6} md={3}>
+                <Grid container spacing={2} sx={{ mb: 4 }} wrap="wrap">
+                    <Grid item xs={6} sm={6} md={6} lg={3}>
                         <StatCard
                             title="Students Taught"
                             value={isLoadingStats ? "..." : tutorStats?.taughtStudents.toString() || "0"}
@@ -218,7 +197,7 @@ const Dashboard = () => {
                             color="primary"
                         />
                     </Grid>
-                    <Grid item xs={12} sm={6} md={3}>
+                    <Grid item xs={6} sm={6} md={6} lg={3}>
                         {(() => {
                             const completedLessons = tutorStats?.completedLessons || 0;
                             const monthlyGoal = 20;

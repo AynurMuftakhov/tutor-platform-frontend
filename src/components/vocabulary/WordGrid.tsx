@@ -78,10 +78,10 @@ const WordGrid: React.FC<WordGridProps> = ({
     return (
         <Grid container spacing={3}>
             {data.map((word) => (
-                <Grid item xs={12} sm={6} md={4} key={word.id}>
-                    <WordCard 
-                        word={word} 
-                        onDelete={!readOnly ? onDelete : undefined} 
+                <Grid item xs={12} sm={6} md={4} key={word.id} sx={{ px: 1 }}>
+                    <WordCard
+                        word={word}
+                        onDelete={!readOnly ? onDelete : undefined}
                         onEdit={!readOnly ? onEdit : undefined}
                         onToggleLearned={onToggleLearned}
                         onAddToMyVocabulary={onAddToMyVocabulary}
@@ -90,6 +90,7 @@ const WordGrid: React.FC<WordGridProps> = ({
                         isSelected={selectedWords.includes(word.id)}
                         onToggleSelection={onToggleSelection}
                         readOnly={readOnly}
+                        compact={readOnly}
                     />
                 </Grid>
             ))}

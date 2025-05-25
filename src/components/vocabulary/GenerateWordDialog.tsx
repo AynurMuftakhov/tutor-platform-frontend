@@ -101,8 +101,8 @@ const GenerateWordDialog: React.FC<Props> = ({ open, onClose }) => {
                             Add New Vocabulary Word
                         </Typography>
                     </DialogTitle>
-                    <DialogContent sx={{ pt: 3, pb: 4 }}>
-                        <Paper elevation={0} sx={{ p: 3, bgcolor: '#f8f9fa', borderRadius: 2 }}>
+                    <DialogContent sx={{ pt: 2, pb: 3 }}>
+                        <Paper elevation={0} sx={{ p: 2, bgcolor: '#f8f9fa', borderRadius: 2 }}>
                             <Typography variant="body1" gutterBottom color="text.secondary" sx={{ mb: 3 }}>
                                 Enter an English word to generate its definition, translation, and other details automatically.
                             </Typography>
@@ -115,8 +115,8 @@ const GenerateWordDialog: React.FC<Props> = ({ open, onClose }) => {
                                 onChange={e => setInput(e.target.value)}
                                 onKeyDown={e => e.key === 'Enter' && handleGenerate()}
                                 variant="outlined"
-                                sx={{ 
-                                    '& .MuiOutlinedInput-root': { 
+                                sx={{
+                                    '& .MuiOutlinedInput-root': {
                                         borderRadius: 1.5,
                                         fontSize: '1.1rem'
                                     }
@@ -124,21 +124,21 @@ const GenerateWordDialog: React.FC<Props> = ({ open, onClose }) => {
                             />
                         </Paper>
                     </DialogContent>
-                    <DialogActions sx={{ px: 3, pb: 3 }}>
-                        <Button 
+                    <DialogActions sx={{ px: 2, pb: 2 }}>
+                        <Button
                             onClick={onClose}
-                            sx={{ 
+                            sx={{
                                 borderRadius: 1.5,
                                 px: 3
                             }}
                         >
                             Cancel
                         </Button>
-                        <Button 
-                            variant="contained" 
-                            onClick={handleGenerate} 
+                        <Button
+                            variant="contained"
+                            onClick={handleGenerate}
                             disabled={createWord.isPending}
-                            sx={{ 
+                            sx={{
                                 borderRadius: 1.5,
                                 px: 3,
                                 bgcolor: '#2573ff',
@@ -163,12 +163,12 @@ const GenerateWordDialog: React.FC<Props> = ({ open, onClose }) => {
                             </IconButton>
                         </Tooltip>
                     </DialogTitle>
-                    <DialogContent dividers sx={{ display: 'grid', gap: 3, py: 3 }}>
-                        <Paper elevation={0} sx={{ p: 2, bgcolor: '#f8f9fa', borderRadius: 2 }}>
+                    <DialogContent dividers sx={{ display: 'grid', gap: 2, py: 3 }}>
+                        <Paper elevation={0} sx={{ p: 1.5, bgcolor: '#f8f9fa', borderRadius: 2 }}>
                             <Typography variant="subtitle1" fontWeight="600" gutterBottom color="primary">
                                 Basic Information
                             </Typography>
-                            <Box sx={{ display: 'grid', gap: 2 }}>
+                            <Box sx={{ display: 'grid', gap: 1.5 }}>
                                 <TextField
                                     label="Definition"
                                     multiline
@@ -201,11 +201,11 @@ const GenerateWordDialog: React.FC<Props> = ({ open, onClose }) => {
                             </Box>
                         </Paper>
 
-                        <Paper elevation={0} sx={{ p: 2, bgcolor: '#f8f9fa', borderRadius: 2 }}>
+                        <Paper elevation={0} sx={{ p: 1.5, bgcolor: '#f8f9fa', borderRadius: 2 }}>
                             <Typography variant="subtitle1" fontWeight="600" gutterBottom color="primary">
                                 Classification
                             </Typography>
-                            <Box sx={{ display: 'grid', gap: 2 }}>
+                            <Box sx={{ display: 'grid', gap: 1.5 }}>
                                 <FormControl fullWidth variant="outlined" sx={{ '& .MuiOutlinedInput-root': { borderRadius: 1.5 } }}>
                                     <InputLabel>Part of speech</InputLabel>
                                     <Select
@@ -238,11 +238,11 @@ const GenerateWordDialog: React.FC<Props> = ({ open, onClose }) => {
                             </Box>
                         </Paper>
 
-                        <Paper elevation={0} sx={{ p: 2, bgcolor: '#f8f9fa', borderRadius: 2 }}>
+                        <Paper elevation={0} sx={{ p: 1.5, bgcolor: '#f8f9fa', borderRadius: 2 }}>
                             <Typography variant="subtitle1" fontWeight="600" gutterBottom color="primary">
                                 Difficulty & Usage
                             </Typography>
-                            <Box sx={{ display: 'grid', gap: 3 }}>
+                            <Box sx={{ display: 'grid', gap: 2 }}>
                                 <Box>
                                     <Typography variant="body2" gutterBottom>
                                         Difficulty Level: {patch.difficulty ?? draft.difficulty ?? 3}/5
@@ -283,11 +283,11 @@ const GenerateWordDialog: React.FC<Props> = ({ open, onClose }) => {
                             </Box>
                         </Paper>
 
-                        <Paper elevation={0} sx={{ p: 2, bgcolor: '#f8f9fa', borderRadius: 2 }}>
+                        <Paper elevation={0} sx={{ p: 1.5, bgcolor: '#f8f9fa', borderRadius: 2 }}>
                             <Typography variant="subtitle1" fontWeight="600" gutterBottom color="primary">
                                 Pronunciation
                             </Typography>
-                            <Box sx={{ display: 'grid', gap: 2 }}>
+                            <Box sx={{ display: 'grid', gap: 1.5 }}>
                                 {draft.audioUrl && (
                                     <audio controls src={draft.audioUrl} style={{ width: '100%' }} />
                                 )}
@@ -299,7 +299,7 @@ const GenerateWordDialog: React.FC<Props> = ({ open, onClose }) => {
                             </Box>
                         </Paper>
                     </DialogContent>
-                    <DialogActions>
+                    <DialogActions sx={{ px: 2, pb: 2 }}>
                         <Button onClick={onClose}>Cancel</Button>
                         <Button variant="contained" onClick={handleSave}>Save</Button>
                     </DialogActions>

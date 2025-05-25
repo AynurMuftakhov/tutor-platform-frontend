@@ -198,7 +198,10 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                                 animate={{ opacity: 1, x: 0 }}
                                 transition={{ duration: 0.3, delay: 0.1 + index * 0.05 }}
                                 whileHover={{ x: 5 }}
-                                onClick={() => navigate(path)}
+                                onClick={() => {
+                                    navigate(path);
+                                    setMobileOpen(false);
+                                }}
                                 selected={location.pathname === path}
                                 sx={{
                                     borderRadius: 2,
@@ -294,7 +297,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return (
         <>
             <NotificationToasterWrapper/>
-            <Box sx={{ display: "flex" }}>
+            <Box sx={{ display: "flex", flexDirection: "row", width: "100%", overflowX: "hidden" }}>
                 <CssBaseline />
 
                 <AppBar
@@ -669,7 +672,13 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                     ModalProps={{ keepMounted: true }}
                     sx={{
                         display: { xs: "block", md: "none" },
-                        "& .MuiDrawer-paper": { boxSizing: "border-box", width: drawerWidth },
+                        "& .MuiDrawer-paper": {
+                            boxSizing: "border-box",
+                            width: drawerWidth,
+                            top: (theme) => theme.mixins.toolbar.minHeight,
+                            height: (theme) => `calc(100% - ${theme.mixins.toolbar.minHeight}px)`,
+                            position: 'fixed'
+                        },
                     }}
                 >
                     {drawer}
@@ -677,8 +686,8 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
                 <Drawer
                     variant="permanent"
-
                     sx={{
+                        display: { xs: "none", md: "block" },
                         width: drawerWidth,
                         flexShrink: 0,
                         "& .MuiDrawer-paper": { boxSizing: "border-box", width: drawerWidth },
@@ -692,11 +701,10 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                     component="main"
                     sx={{
                         flexGrow: 1,
-
                         minWidth: 0,
                         mt: 8,
                         background: `linear-gradient(180deg, ${alpha(theme.palette.background.default, 0.8)} 0%, ${alpha(theme.palette.background.default, 1)} 100%)`,
-                        minHeight: '100vh',
+                        minHeight: '100dvh',
                         position: 'relative',
                         overflow: 'hidden',
                         '&::before': {

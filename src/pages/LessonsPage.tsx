@@ -61,7 +61,21 @@ const LessonsPage = () => {
     const [deleting, setDeleting] = useState(false);
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
     const statusFilterOpen = Boolean(anchorEl);
-    const [calendarView, setCalendarView] = useState<'timeGridDay' | 'timeGridWeek' | 'dayGridMonth'>('timeGridWeek');
+    // Set default calendar view based on screen size (xs: day, sm+: week)
+    const getDefaultCalendarView = () => {
+        if (window && window.matchMedia && window.matchMedia('(max-width:600px)').matches) {
+            return 'timeGridDay';
+        }
+        return 'timeGridWeek';
+    };
+    const [calendarView, setCalendarView] = useState<'timeGridDay' | 'timeGridWeek' | 'dayGridMonth'>(getDefaultCalendarView());
+    // Force FullCalendar to re-render after layout stabilizes (fixes blank calendar on mobile with scroll container)
+    useEffect(() => {
+        if (calendarRef.current) {
+            const calendarApi = calendarRef.current.getApi();
+            calendarApi.updateSize();
+        }
+    }, [calendarView]);
     const [selectedDate, setSelectedDate] = useState<dayjs.Dayjs>(dayjs());
     const theme = useTheme();
     const calendarRef = useRef<any>(null);
@@ -297,19 +311,31 @@ const LessonsPage = () => {
     return (
         <Box
             sx={{
-                p: { xs: 2, sm: 4 },
+                p: { xs: 2, sm: 3 },
                 bgcolor: '#fafbfd',
-                minHeight: '100vh'
+                minHeight: '100dvh',
+                width: '100%',
+                overflowX: 'hidden'
             }}
         >
             {/* Header */}
-            <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3, flexWrap: 'wrap', gap: 2 }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", rowGap: 2, columnGap: 3, mb: 3 }}>
                 <Typography variant="h5" fontWeight={600}>
                     Lessons
                 </Typography>
 
                 {/* Calendar Controls */}
-                <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+                <Box
+                    sx={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        alignItems: 'center',
+                        rowGap: 1.5,
+                        columnGap: 2,
+                        justifyContent: { xs: 'flex-start', sm: 'flex-end' },
+                        flexDirection: 'row'
+                    }}
+                >
                     {/* Status Filter */}
                     <Tooltip title="Filter by status">
                         <IconButton onClick={handleStatusFilterClick}>
@@ -394,7 +420,16 @@ const LessonsPage = () => {
                     </Button>
                 </Box>
 
-                <Typography variant="h6" fontWeight={500}>
+                <Typography
+                    variant="h6"
+                    fontWeight={500}
+                    sx={{
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        maxWidth: { xs: '60vw', sm: '100%' }
+                    }}
+                >
                     {getCurrentViewTitle()}
                 </Typography>
 
@@ -402,220 +437,236 @@ const LessonsPage = () => {
             </Box>
 
             {/* Calendar */}
-            <Paper
-                elevation={0}
+            {/* Calendar container with horizontal scroll on mobile */}
+            <Box
                 sx={{
-                    p: 0,
+                    overflowX: { xs: 'auto', sm: 'visible' },
+                    overflowY: 'auto',
+                    WebkitOverflowScrolling: 'touch',
+                    width: '100%',
+                    // Paper wrapper style
                     borderRadius: 2,
                     border: `1px solid ${theme.palette.divider}`,
-                    overflow: 'hidden',
-                    height: 'calc(100vh - 240px)',
-                    minHeight: '600px'
+                    bgcolor: theme.palette.background.paper,
+                    p: 0,
+                    // Height for calendar
+                    height: { xs: '70dvh', md: 'calc(100vh - 240px)' },
+                    minHeight: 400,
+                    position: 'relative',
+                    zIndex: 0,
                 }}
             >
-                <FullCalendar
-                    ref={calendarRef}
-                    plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-                    initialView="timeGridWeek"
-                    headerToolbar={false} // We're creating our own header
-                    events={lessonsToEvents()}
-                    selectable={user?.role === "tutor"}
-                    select={handleDateSelect}
-                    eventClick={handleEventClick}
-                    dateClick={handleDayClick}
-                    height="100%"
-                    nowIndicator={true}
-                    dayMaxEvents={true}
-                    allDaySlot={false}
-                    slotMinTime="08:00:00"
-                    slotMaxTime="23:00:00"
-                    expandRows={true}
-                    stickyHeaderDates={true}
-                    editable={user?.role === "tutor"} // Enable drag-and-drop for tutors
-                    eventDrop={(info) => {
-                        // Handle event drop (reschedule)
-                        const lesson = info.event.extendedProps.lesson;
-                        const newStart = info.event.start;
-                        const newEnd = info.event.end;
+                <Box sx={{
+                    minWidth: { xs: 700, sm: 'unset' }, // allow horizontal scroll on small screens
+                    position: 'relative',
+                    zIndex: 1,
+                    height: '100%',
+                }}>
+                    <FullCalendar
+                        ref={calendarRef}
+                        plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+                        initialView={getDefaultCalendarView()}
+                        headerToolbar={false} // We're creating our own header
+                        events={lessonsToEvents()}
+                        selectable={user?.role === "tutor"}
+                        select={handleDateSelect}
+                        eventClick={handleEventClick}
+                        dateClick={handleDayClick}
+                        height="100%"
+                        nowIndicator={true}
+                        dayMaxEvents={true}
+                        allDaySlot={false}
+                        slotMinTime="08:00:00"
+                        slotMaxTime="23:00:00"
+                        expandRows={true}
+                        stickyHeaderDates={true}
+                        editable={user?.role === "tutor"} // Enable drag-and-drop for tutors
+                        eventDrop={(info) => {
+                            // Handle event drop (reschedule)
+                            const lesson = info.event.extendedProps.lesson;
+                            const newStart = info.event.start;
+                            const newEnd = info.event.end;
 
-                        if (newStart && newEnd) {
-                            // Calculate new duration in minutes
-                            const newDuration = Math.round((newEnd.getTime() - newStart.getTime()) / (1000 * 60));
+                            if (newStart && newEnd) {
+                                // Calculate new duration in minutes
+                                const newDuration = Math.round((newEnd.getTime() - newStart.getTime()) / (1000 * 60));
 
-                            // Show loading indicator
-                            const originalElement = info.el;
-                            originalElement.style.opacity = '0.7';
+                                // Show loading indicator
+                                const originalElement = info.el;
+                                originalElement.style.opacity = '0.7';
 
-                            // Update lesson in backend
-                            updateLesson(lesson.id, {
-                                dateTime: newStart.toISOString(),
-                                duration: newDuration
-                            })
-                            .then(() => {
-                                // Success - show confirmation
-                                originalElement.style.opacity = '1';
-                                originalElement.classList.add('status-change');
-                                setTimeout(() => {
-                                    originalElement.classList.remove('status-change');
-                                }, 500);
+                                // Update lesson in backend
+                                updateLesson(lesson.id, {
+                                    dateTime: newStart.toISOString(),
+                                    duration: newDuration
+                                })
+                                .then(() => {
+                                    // Success - show confirmation
+                                    originalElement.style.opacity = '1';
+                                    originalElement.classList.add('status-change');
+                                    setTimeout(() => {
+                                        originalElement.classList.remove('status-change');
+                                    }, 500);
 
-                                // Refresh lessons to get updated data
-                                refreshLessons();
-                            })
-                            .catch((error) => {
-                                console.error("Failed to update lesson:", error);
-                                info.revert(); // Revert the drag if update fails
-                            });
-                        }
-                    }}
-                    dayHeaderFormat={{ weekday: 'short', month: 'numeric', day: 'numeric', omitCommas: true }}
-                    eventTimeFormat={{
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        meridiem: false
-                    }}
-                    slotLabelFormat={{
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        hour12: false
-                    }}
-                    eventContent={(eventInfo) => {
-                        const lesson = eventInfo.event.extendedProps.lesson;
-                        const student = eventInfo.event.extendedProps.student;
-                        const status = eventInfo.event.extendedProps.status;
-
-                        // Get student initials for avatar
-                        const getInitials = (name: string) => {
-                            return name
-                                .split(' ')
-                                .map(part => part[0])
-                                .join('')
-                                .toUpperCase()
-                                .substring(0, 2);
-                        };
-
-                        const studentName = student?.name || 'Unknown';
-                        const studentInitials = getInitials(studentName);
-
-                        // Generate a consistent color based on student name
-                        const getAvatarColor = (name: string) => {
-                            const colors = [
-                                '#2573ff', '#00d7c2', '#f6c344', '#ff6b6b', 
-                                '#a394f0', '#4ecdc4', '#ff9f1c', '#8675a9'
-                            ];
-
-                            let hash = 0;
-                            for (let i = 0; i < name.length; i++) {
-                                hash = name.charCodeAt(i) + ((hash << 5) - hash);
+                                    // Refresh lessons to get updated data
+                                    refreshLessons();
+                                })
+                                .catch((error) => {
+                                    console.error("Failed to update lesson:", error);
+                                    info.revert(); // Revert the drag if update fails
+                                });
                             }
+                        }}
+                        dayHeaderFormat={{ weekday: 'short', month: 'numeric', day: 'numeric', omitCommas: true }}
+                        eventTimeFormat={{
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            meridiem: false
+                        }}
+                        slotLabelFormat={{
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: false
+                        }}
+                        eventContent={(eventInfo) => {
+                            const lesson = eventInfo.event.extendedProps.lesson;
+                            const student = eventInfo.event.extendedProps.student;
+                            const status = eventInfo.event.extendedProps.status;
 
-                            return colors[Math.abs(hash) % colors.length];
-                        };
+                            // Get student initials for avatar
+                            const getInitials = (name: string) => {
+                                return name
+                                    .split(' ')
+                                    .map(part => part[0])
+                                    .join('')
+                                    .toUpperCase()
+                                    .substring(0, 2);
+                            };
 
-                        const avatarColor = getAvatarColor(studentName);
+                            const studentName = student?.name || 'Unknown';
+                            const studentInitials = getInitials(studentName);
 
-                        // Add status-specific class for styling
-                        const statusClass = `status-${status.toLowerCase()}`;
+                            // Generate a consistent color based on student name
+                            const getAvatarColor = (name: string) => {
+                                const colors = [
+                                    '#2573ff', '#00d7c2', '#f6c344', '#ff6b6b',
+                                    '#a394f0', '#4ecdc4', '#ff9f1c', '#8675a9'
+                                ];
 
-                        return (
-                            <Tooltip 
-                                title={
-                                    <Box sx={{ p: 1 }}>
-                                        <Typography variant="subtitle2" fontWeight={600}>
-                                            {lesson.title}
-                                        </Typography>
-                                        <Typography variant="body2">
-                                            {eventInfo.timeText} ({lesson.duration} min)
-                                        </Typography>
-                                        <Typography variant="body2">
-                                            Status: {status}
-                                        </Typography>
-                                        {lesson.location && (
-                                            <Typography variant="body2">
-                                                Location: {lesson.location}
-                                            </Typography>
-                                        )}
-                                    </Box>
+                                let hash = 0;
+                                for (let i = 0; i < name.length; i++) {
+                                    hash = name.charCodeAt(i) + ((hash << 5) - hash);
                                 }
-                                arrow
-                                placement="top"
-                            >
-                                <Box 
-                                    className={`fc-event ${statusClass}`}
-                                    sx={{ 
-                                        p: 1, 
-                                        height: '100%',
-                                        overflow: 'hidden',
-                                        fontSize: '0.9rem',
-                                        lineHeight: 1.3,
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        backgroundColor: '#E6F0FF',
-                                        borderRadius: '8px',
-                                        boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
-                                        '&:hover': {
-                                            boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
-                                            transform: 'translateY(-2px)'
-                                        },
-                                        transition: 'all 0.2s ease',
-                                        cursor: 'pointer',
-                                        position: 'relative',
-                                        zIndex: 1
-                                    }}
-                                >
-                                    {/* Time */}
-                                    <Box sx={{ 
-                                        fontWeight: 500, 
-                                        mb: 0.5, 
-                                        fontSize: '13px',
-                                        color: theme.palette.text.secondary,
-                                        pointerEvents: 'none'
-                                    }}>
-                                        {eventInfo.timeText}
-                                    </Box>
 
-                                    {/* Student name with avatar/initials */}
-                                    <Box sx={{ 
-                                        display: 'flex', 
-                                        alignItems: 'center', 
-                                        gap: 1,
-                                        pointerEvents: 'none'
-                                    }}>
-                                        <Avatar 
-                                            sx={{ 
-                                                width: 24, 
-                                                height: 24, 
-                                                fontSize: '12px',
-                                                bgcolor: avatarColor,
-                                                fontWeight: 600
+                                return colors[Math.abs(hash) % colors.length];
+                            };
+
+                            const avatarColor = getAvatarColor(studentName);
+
+                            // Add status-specific class for styling
+                            const statusClass = `status-${status.toLowerCase()}`;
+
+                            return (
+                                <Tooltip
+                                    title={
+                                        <Box sx={{ p: 1 }}>
+                                            <Typography variant="subtitle2" fontWeight={600}>
+                                                {lesson.title}
+                                            </Typography>
+                                            <Typography variant="body2">
+                                                {eventInfo.timeText} ({lesson.duration} min)
+                                            </Typography>
+                                            <Typography variant="body2">
+                                                Status: {status}
+                                            </Typography>
+                                            {lesson.location && (
+                                                <Typography variant="body2">
+                                                    Location: {lesson.location}
+                                                </Typography>
+                                            )}
+                                        </Box>
+                                    }
+                                    arrow
+                                    placement="top"
+                                >
+                                    <Box
+                                        className={`fc-event ${statusClass}`}
+                                        sx={{
+                                            p: 0.5,
+                                            height: '100%',
+                                            overflow: 'hidden',
+                                            fontSize: '0.8rem',
+                                            lineHeight: 1.3,
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            backgroundColor: '#E6F0FF',
+                                            borderRadius: '8px',
+                                            boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                                            '&:hover': {
+                                                boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
+                                                transform: 'translateY(-2px)'
+                                            },
+                                            transition: 'all 0.2s ease',
+                                            cursor: 'pointer',
+                                            position: 'relative',
+                                            zIndex: 1
+                                        }}
+                                    >
+                                        {/* Time (hide on mobile) */}
+                                        <Box
+                                            sx={{
+                                                display: { xs: 'none', sm: 'block' },
+                                                fontWeight: 500,
+                                                mb: 0.5,
+                                                fontSize: '13px',
+                                                color: theme.palette.text.secondary,
+                                                pointerEvents: 'none'
                                             }}
                                         >
-                                            {studentInitials}
-                                        </Avatar>
-                                        <Typography 
-                                            sx={{ 
-                                                fontWeight: 600,
-                                                fontSize: '15px',
-                                                overflow: 'hidden',
-                                                textOverflow: 'ellipsis',
-                                                whiteSpace: 'nowrap'
-                                            }}
-                                        >
-                                            {studentName}
-                                        </Typography>
+                                            {eventInfo.timeText}
+                                        </Box>
+
+                                        {/* Student name with avatar/initials */}
+                                        <Box sx={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: 1,
+                                            pointerEvents: 'none'
+                                        }}>
+                                            <Avatar
+                                                sx={{
+                                                    width: 24,
+                                                    height: 24,
+                                                    fontSize: '12px',
+                                                    bgcolor: avatarColor,
+                                                    fontWeight: 600
+                                                }}
+                                            >
+                                                {studentInitials}
+                                            </Avatar>
+                                            <Typography
+                                                sx={{
+                                                    fontWeight: 600,
+                                                    fontSize: { xs: '12px', sm: '14px' },
+                                                    whiteSpace: 'nowrap'
+                                                }}
+                                            >
+                                                {studentName}
+                                            </Typography>
+                                        </Box>
                                     </Box>
-                                </Box>
-                            </Tooltip>
-                        );
-                    }}
-                    dayCellDidMount={(info) => {
-                        // Highlight today's date
-                        if (info.isToday) {
-                            info.el.style.backgroundColor = alpha(theme.palette.primary.main, 0.05);
-                        }
-                    }}
-                />
-            </Paper>
+                                </Tooltip>
+                            );
+                        }}
+                        dayCellDidMount={(info) => {
+                            // Highlight today's date
+                            if (info.isToday) {
+                                info.el.style.backgroundColor = alpha(theme.palette.primary.main, 0.05);
+                            }
+                        }}
+                    />
+                </Box>
+            </Box>
 
             {/* Add Lesson Side Panel */}
             <LessonSidePanel

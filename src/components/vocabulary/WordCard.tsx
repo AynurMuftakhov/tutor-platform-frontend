@@ -61,6 +61,7 @@ interface WordCardProps {
     isSelected?: boolean;
     onToggleSelection?: (id: string) => void;
     readOnly?: boolean;
+    compact?: boolean;
 }
 
 // Helper function to get color based on difficulty level
@@ -75,17 +76,18 @@ const getDifficultyColor = (difficulty: number) => {
     }
 };
 
-const WordCard: React.FC<WordCardProps> = ({ 
-    word, 
-    onDelete, 
-    onEdit, 
+const WordCard: React.FC<WordCardProps> = ({
+    word,
+    onDelete,
+    onEdit,
     onToggleLearned,
     onAddToMyVocabulary,
     isLearned = false,
     selectionMode = false,
     isSelected = false,
     onToggleSelection,
-    readOnly = false
+    readOnly = false,
+    compact = false
 }) => {
     const [expanded, setExpanded] = useState(false);
     const theme = useTheme();
@@ -144,42 +146,42 @@ const WordCard: React.FC<WordCardProps> = ({
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4 }}
-            whileHover={{ 
+            whileHover={{
                 y: -5,
                 transition: { duration: 0.2 }
             }}
             style={{ height: '100%' }}
         >
-            <Card 
-                sx={{ 
-                    height: '100%', 
-                    display: 'flex', 
+            <Card
+                sx={{
+                    height: '100%',
+                    display: 'flex',
                     flexDirection: 'column',
                     borderRadius: 3,
-                    boxShadow: isLearned 
+                    boxShadow: isLearned
                         ? `0 8px 24px ${alpha(theme.palette.success.main, 0.15)}`
                         : isSelected
                             ? `0 8px 24px ${alpha(theme.palette.primary.main, 0.15)}`
                             : '0 4px 20px rgba(0,0,0,0.06)',
                     position: 'relative',
                     overflow: 'visible',
-                    bgcolor: isLearned 
+                    bgcolor: isLearned
                         ? alpha(theme.palette.success.main, 0.03)
-                        : isSelected 
+                        : isSelected
                             ? alpha(theme.palette.primary.main, 0.03)
                             : '#ffffff',
                     transition: 'all 0.3s ease',
-                    border: isLearned 
-                        ? `1px solid ${alpha(theme.palette.success.main, 0.3)}` 
-                        : isSelected 
-                            ? `1px solid ${alpha(theme.palette.primary.main, 0.3)}` 
+                    border: isLearned
+                        ? `1px solid ${alpha(theme.palette.success.main, 0.3)}`
+                        : isSelected
+                            ? `1px solid ${alpha(theme.palette.primary.main, 0.3)}`
                             : '1px solid rgba(0,0,0,0.08)',
                     cursor: selectionMode ? 'pointer' : 'default',
-                    ...(selectionMode && { 
-                        '&:hover': { 
+                    ...(selectionMode && {
+                        '&:hover': {
                             borderColor: theme.palette.primary.main,
                             bgcolor: alpha(theme.palette.primary.main, 0.03)
-                        } 
+                        }
                     })
                 }}
                 onClick={selectionMode ? handleToggleSelection : undefined}
@@ -192,22 +194,22 @@ const WordCard: React.FC<WordCardProps> = ({
                             animate={{ scale: 1 }}
                             exit={{ scale: 0 }}
                             transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                            style={{ 
-                                position: 'absolute', 
-                                top: -10, 
-                                right: -10, 
-                                zIndex: 1 
+                            style={{
+                                position: 'absolute',
+                                top: -10,
+                                right: -10,
+                                zIndex: 1
                             }}
                         >
                             <Badge
                                 overlap="circular"
                                 badgeContent={
-                                    <CheckCircleIcon 
-                                        fontSize="small" 
-                                        sx={{ 
+                                    <CheckCircleIcon
+                                        fontSize="small"
+                                        sx={{
                                             color: 'white',
                                             filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.2))'
-                                        }} 
+                                        }}
                                     />
                                 }
                                 sx={{
@@ -230,22 +232,22 @@ const WordCard: React.FC<WordCardProps> = ({
                             animate={{ scale: 1 }}
                             exit={{ scale: 0 }}
                             transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                            style={{ 
-                                position: 'absolute', 
-                                top: -10, 
-                                right: -10, 
-                                zIndex: 1 
+                            style={{
+                                position: 'absolute',
+                                top: -10,
+                                right: -10,
+                                zIndex: 1
                             }}
                         >
                             <Badge
                                 overlap="circular"
                                 badgeContent={
-                                    <CheckCircleIcon 
-                                        fontSize="small" 
-                                        sx={{ 
+                                    <CheckCircleIcon
+                                        fontSize="small"
+                                        sx={{
                                             color: 'white',
                                             filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.2))'
-                                        }} 
+                                        }}
                                     />
                                 }
                                 sx={{
@@ -262,15 +264,15 @@ const WordCard: React.FC<WordCardProps> = ({
                     )}
                 </AnimatePresence>
 
-                <CardContent sx={{ flexGrow: 1, p: 3 }}>
+                <CardContent sx={{ flexGrow: 1, p: readOnly ? 2 : 3, pt: readOnly ? 1.5 : 3 }}>
                     {/* Word Header */}
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: readOnly ? 1 : 2 }}>
                         <Box>
-                            <Typography 
-                                variant="h5" 
-                                component="div" 
-                                sx={{ 
-                                    fontWeight: 700, 
+                            <Typography
+                                variant="h5"
+                                component="div"
+                                sx={{
+                                    fontWeight: 700,
                                     color: theme.palette.primary.main,
                                     mb: 0.5,
                                     lineHeight: 1.2
@@ -281,9 +283,9 @@ const WordCard: React.FC<WordCardProps> = ({
 
                             {word.phonetic && (
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    <Typography 
-                                        variant="body2" 
-                                        sx={{ 
+                                    <Typography
+                                        variant="body2"
+                                        sx={{
                                             color: 'text.secondary',
                                             fontFamily: 'monospace',
                                             letterSpacing: 0.5
@@ -294,10 +296,10 @@ const WordCard: React.FC<WordCardProps> = ({
 
                                     {word.audioUrl && (
                                         <Tooltip title="Play pronunciation">
-                                            <IconButton 
-                                                size="small" 
+                                            <IconButton
+                                                size="small"
                                                 onClick={handlePlayAudio}
-                                                sx={{ 
+                                                sx={{
                                                     color: theme.palette.primary.main,
                                                     bgcolor: alpha(theme.palette.primary.main, 0.1),
                                                     width: 24,
@@ -317,10 +319,10 @@ const WordCard: React.FC<WordCardProps> = ({
 
                         <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                             {word.partOfSpeech && (
-                                <Chip 
-                                    label={word.partOfSpeech} 
-                                    size="small" 
-                                    sx={{ 
+                                <Chip
+                                    label={word.partOfSpeech}
+                                    size="small"
+                                    sx={{
                                         textTransform: 'capitalize',
                                         bgcolor: alpha(theme.palette.primary.main, 0.1),
                                         color: theme.palette.primary.main,
@@ -328,37 +330,37 @@ const WordCard: React.FC<WordCardProps> = ({
                                         fontSize: '0.7rem',
                                         height: 24,
                                         borderRadius: 1.5
-                                    }} 
+                                    }}
                                 />
                             )}
                         </Box>
                     </Box>
 
                     {/* Metrics Row */}
-                    <Box 
-                        sx={{ 
-                            display: 'flex', 
-                            gap: 1.5, 
-                            mb: 2,
+                    <Box
+                        sx={{
+                            display: 'flex',
+                            gap: readOnly ? 1 : 1.5,
+                            mb: readOnly ? 1 : 2,
                             flexWrap: 'wrap'
                         }}
                     >
                         {word.difficulty && (
                             <Tooltip title={`Difficulty: ${word.difficulty}/5`}>
-                                <Chip 
-                                    label={`Difficulty: ${word.difficulty}`} 
-                                    size="small" 
-                                    icon={<Box 
-                                        component="span" 
-                                        sx={{ 
-                                            width: 8, 
-                                            height: 8, 
-                                            borderRadius: '50%', 
+                                <Chip
+                                    label={`Difficulty: ${word.difficulty}`}
+                                    size="small"
+                                    icon={<Box
+                                        component="span"
+                                        sx={{
+                                            width: 8,
+                                            height: 8,
+                                            borderRadius: '50%',
                                             bgcolor: getDifficultyColor(word.difficulty),
                                             ml: 1
-                                        }} 
+                                        }}
                                     />}
-                                    sx={{ 
+                                    sx={{
                                         bgcolor: alpha(getDifficultyColor(word.difficulty), 0.1),
                                         color: 'text.primary',
                                         fontWeight: 500,
@@ -368,27 +370,27 @@ const WordCard: React.FC<WordCardProps> = ({
                                             ml: 0.5,
                                             mr: -0.5
                                         }
-                                    }} 
+                                    }}
                                 />
                             </Tooltip>
                         )}
 
                         {word.popularity && (
                             <Tooltip title={`Popularity: ${word.popularity}/5`}>
-                                <Chip 
-                                    label={`Popularity: ${word.popularity}`} 
-                                    size="small" 
-                                    icon={<Box 
-                                        component="span" 
-                                        sx={{ 
-                                            width: 8, 
-                                            height: 8, 
-                                            borderRadius: '50%', 
+                                <Chip
+                                    label={`Popularity: ${word.popularity}`}
+                                    size="small"
+                                    icon={<Box
+                                        component="span"
+                                        sx={{
+                                            width: 8,
+                                            height: 8,
+                                            borderRadius: '50%',
                                             bgcolor: theme.palette.secondary.main,
                                             ml: 1
-                                        }} 
+                                        }}
                                     />}
-                                    sx={{ 
+                                    sx={{
                                         bgcolor: alpha(theme.palette.secondary.main, 0.1),
                                         color: 'text.primary',
                                         fontWeight: 500,
@@ -398,29 +400,29 @@ const WordCard: React.FC<WordCardProps> = ({
                                             ml: 0.5,
                                             mr: -0.5
                                         }
-                                    }} 
+                                    }}
                                 />
                             </Tooltip>
                         )}
                     </Box>
 
                     {/* Translation */}
-                    <Box 
-                        sx={{ 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            gap: 1.5,
-                            p: 2,
+                    <Box
+                        sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: readOnly ? 1 : 1.5,
+                            p: readOnly ? 1.5 : 2,
                             borderRadius: 2,
                             bgcolor: alpha(theme.palette.background.default, 0.7),
                             border: `1px solid ${theme.palette.divider}`,
-                            mb: 2
+                            mb: readOnly ? 1.5 : 2
                         }}
                     >
                         <TranslateIcon sx={{ color: theme.palette.secondary.main }} />
-                        <Typography 
-                            variant="body1" 
-                            sx={{ 
+                        <Typography
+                            variant="body1"
+                            sx={{
                                 fontWeight: 600,
                                 color: 'text.primary'
                             }}
@@ -441,8 +443,8 @@ const WordCard: React.FC<WordCardProps> = ({
 
                                 {/* Definition Section */}
                                 {word.definitionEn && (
-                                    <Box 
-                                        sx={{ 
+                                    <Box
+                                        sx={{
                                             mb: 2,
                                             p: 2,
                                             borderRadius: 2,
@@ -450,20 +452,20 @@ const WordCard: React.FC<WordCardProps> = ({
                                             border: `1px solid ${theme.palette.divider}`
                                         }}
                                     >
-                                        <Typography 
-                                            variant="subtitle2" 
-                                            fontWeight={600} 
-                                            color="primary" 
+                                        <Typography
+                                            variant="subtitle2"
+                                            fontWeight={600}
+                                            color="primary"
                                             gutterBottom
                                             sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
                                         >
-                                            <Box 
-                                                sx={{ 
-                                                    width: 4, 
-                                                    height: 16, 
-                                                    bgcolor: 'primary.main', 
-                                                    borderRadius: 1 
-                                                }} 
+                                            <Box
+                                                sx={{
+                                                    width: 4,
+                                                    height: 16,
+                                                    bgcolor: 'primary.main',
+                                                    borderRadius: 1
+                                                }}
                                             />
                                             Definition
                                         </Typography>
@@ -475,8 +477,8 @@ const WordCard: React.FC<WordCardProps> = ({
 
                                 {/* Example Section */}
                                 {word.exampleSentence && (
-                                    <Box 
-                                        sx={{ 
+                                    <Box
+                                        sx={{
                                             mb: 2,
                                             p: 2,
                                             borderRadius: 2,
@@ -484,26 +486,26 @@ const WordCard: React.FC<WordCardProps> = ({
                                             border: `1px solid ${alpha(theme.palette.secondary.main, 0.2)}`
                                         }}
                                     >
-                                        <Typography 
-                                            variant="subtitle2" 
-                                            fontWeight={600} 
-                                            color="secondary" 
+                                        <Typography
+                                            variant="subtitle2"
+                                            fontWeight={600}
+                                            color="secondary"
                                             gutterBottom
                                             sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
                                         >
-                                            <Box 
-                                                sx={{ 
-                                                    width: 4, 
-                                                    height: 16, 
-                                                    bgcolor: 'secondary.main', 
-                                                    borderRadius: 1 
-                                                }} 
+                                            <Box
+                                                sx={{
+                                                    width: 4,
+                                                    height: 16,
+                                                    bgcolor: 'secondary.main',
+                                                    borderRadius: 1
+                                                }}
                                             />
                                             Example
                                         </Typography>
-                                        <Typography 
-                                            variant="body2" 
-                                            sx={{ 
+                                        <Typography
+                                            variant="body2"
+                                            sx={{
                                                 lineHeight: 1.6,
                                                 fontStyle: 'italic',
                                                 pl: 2,
@@ -518,30 +520,30 @@ const WordCard: React.FC<WordCardProps> = ({
                                 {/* Synonyms Section */}
                                 {word.synonymsEn && word.synonymsEn.length > 0 && (
                                     <Box sx={{ mb: 1 }}>
-                                        <Typography 
-                                            variant="subtitle2" 
-                                            fontWeight={600} 
-                                            color="text.primary" 
+                                        <Typography
+                                            variant="subtitle2"
+                                            fontWeight={600}
+                                            color="text.primary"
                                             gutterBottom
                                             sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
                                         >
-                                            <Box 
-                                                sx={{ 
-                                                    width: 4, 
-                                                    height: 16, 
-                                                    bgcolor: 'text.primary', 
-                                                    borderRadius: 1 
-                                                }} 
+                                            <Box
+                                                sx={{
+                                                    width: 4,
+                                                    height: 16,
+                                                    bgcolor: 'text.primary',
+                                                    borderRadius: 1
+                                                }}
                                             />
                                             Synonyms
                                         </Typography>
                                         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.8, mt: 1 }}>
                                             {word.synonymsEn.map((syn, index) => (
-                                                <Chip 
-                                                    key={index} 
-                                                    label={syn} 
-                                                    size="small" 
-                                                    sx={{ 
+                                                <Chip
+                                                    key={index}
+                                                    label={syn}
+                                                    size="small"
+                                                    sx={{
                                                         bgcolor: alpha(theme.palette.secondary.main, 0.1),
                                                         color: theme.palette.secondary.main,
                                                         fontWeight: 500,
@@ -551,7 +553,7 @@ const WordCard: React.FC<WordCardProps> = ({
                                                             bgcolor: alpha(theme.palette.secondary.main, 0.2),
                                                             transform: 'translateY(-2px)'
                                                         }
-                                                    }} 
+                                                    }}
                                                 />
                                             ))}
                                         </Box>
@@ -562,14 +564,14 @@ const WordCard: React.FC<WordCardProps> = ({
                     </AnimatePresence>
                 </CardContent>
 
-                <CardActions 
-                    disableSpacing 
-                    sx={{ 
-                        pt: 0, 
-                        px: 3, 
-                        pb: 2,
+                <CardActions
+                    disableSpacing
+                    sx={{
+                        pt: 0,
+                        px: readOnly ? 2 : 3,
+                        pb: readOnly ? 1 : 2,
                         borderTop: expanded ? `1px solid ${theme.palette.divider}` : 'none',
-                        mt: expanded ? 2 : 0
+                        mt: expanded ? 1.5 : 0
                     }}
                 >
                     <Box sx={{ display: 'flex', gap: 1 }}>

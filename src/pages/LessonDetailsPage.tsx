@@ -5,7 +5,8 @@ import {
     CircularProgress,
     Typography,
     Grid,
-    Button
+    Button,
+    Box
 } from "@mui/material";
 import { Videocam as VideoIcon } from "@mui/icons-material";
 import {fetchUserById, getLessonById, updateLesson} from "../services/api";
@@ -62,29 +63,41 @@ const LessonDetailPage = () => {
         <Container maxWidth="lg" sx={{ mt: 4, mb: 6 }}>
             <Grid item xs={12}>
                 {user?.role === "tutor" && (
-                    <LessonActions
-                        currentStatus={lesson.status}
-                        currentDatetime={lesson.dateTime}
-                        lessonId={lesson.id}
-                        studentId={lesson.studentId}
-                        onChangeStatus={async (newStatus, extraData) => {
-                            const updatedFields: Partial<Lesson> = {
-                                status: newStatus,
-                            };
-
-                            if (extraData?.newDate) {
-                                updatedFields.dateTime = extraData.newDate;
-                            }
-
-                            try {
-                                await updateLesson(lesson.id, updatedFields);
-                                setLesson((prev) => prev ? { ...prev, ...updatedFields } : prev);
-                            } catch (error) {
-                                console.error("Failed to update lesson", error);
-                                // Optional: Show toast/snackbar
-                            }
+                    <Box
+                        sx={{
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            flexDirection: 'row',
+                            gap: 1,
+                            mb: 2,
+                            justifyContent: { xs: 'flex-start', sm: 'flex-start' }
                         }}
-                    />)}
+                    >
+                        <LessonActions
+                            currentStatus={lesson.status}
+                            currentDatetime={lesson.dateTime}
+                            lessonId={lesson.id}
+                            studentId={lesson.studentId}
+                            onChangeStatus={async (newStatus, extraData) => {
+                                const updatedFields: Partial<Lesson> = {
+                                    status: newStatus,
+                                };
+
+                                if (extraData?.newDate) {
+                                    updatedFields.dateTime = extraData.newDate;
+                                }
+
+                                try {
+                                    await updateLesson(lesson.id, updatedFields);
+                                    setLesson((prev) => prev ? { ...prev, ...updatedFields } : prev);
+                                } catch (error) {
+                                    console.error("Failed to update lesson", error);
+                                    // Optional: Show toast/snackbar
+                                }
+                            }}
+                        />
+                    </Box>
+                )}
 
                 {user?.role === "student" && lesson.status === "IN_PROGRESS" && (
                     <Button
