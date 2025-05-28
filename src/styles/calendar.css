@@ -85,10 +85,7 @@
 .fc .fc-timegrid-slot-label {
   font-size: 13px;
   font-weight: 500;
-  color: #777;
-  position: sticky;
-  left: 0;
-  z-index: 2;
+  color: #777
 }
 
 /* Event Styles - Lesson Cards */

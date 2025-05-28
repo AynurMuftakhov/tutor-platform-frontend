@@ -39,11 +39,14 @@ const Profile: React.FC = () => {
     const [isEditingName, setIsEditingName] = useState(false);
     const [loading, setLoading] = useState(false);
 
-    const resolvedAvatar = avatarPreview && avatarPreview !== ''
-        ? avatarPreview
-        : user?.avatar
-            ? `${api.defaults.baseURL}/users-service${user.avatar}`
-            : undefined;
+    const resolvedAvatar =
+        avatarPreview && avatarPreview !== ''
+            ? avatarPreview
+            : user?.avatar
+                ? user.avatar.startsWith('/avatars')
+                    ? `/users-service${user.avatar}`
+                    : user.avatar
+                : undefined;
 
     const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];

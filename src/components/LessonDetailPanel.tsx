@@ -62,7 +62,7 @@ const LessonDetailPanel: React.FC<LessonDetailPanelProps> = ({
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const { user } = useAuth();
     const [statusColor, setStatusColor] = useState<'primary' | 'success' | 'error'>('primary');
-    const [statusIcon, setStatusIcon] = useState<React.ReactNode>(null);
+    const [statusIcon, setStatusIcon] = useState<React.ReactElement | undefined>(undefined);
 
     useEffect(() => {
         if (lesson) {
@@ -87,7 +87,7 @@ const LessonDetailPanel: React.FC<LessonDetailPanelProps> = ({
     const formattedDate = dayjs(lesson.dateTime).format('dddd, MMMM D, YYYY');
     const formattedTime = dayjs(lesson.dateTime).format('h:mm A');
     const endTime = dayjs(lesson.dateTime).add(lesson.duration, 'minute').format('h:mm A');
-    
+
     // Get student initials for avatar
     const getInitials = (name: string) => {
         return name
@@ -104,15 +104,15 @@ const LessonDetailPanel: React.FC<LessonDetailPanelProps> = ({
     // Generate a consistent color based on student name
     const getAvatarColor = (name: string) => {
         const colors = [
-            '#2573ff', '#00d7c2', '#f6c344', '#ff6b6b', 
+            '#2573ff', '#00d7c2', '#f6c344', '#ff6b6b',
             '#a394f0', '#4ecdc4', '#ff9f1c', '#8675a9'
         ];
-        
+
         let hash = 0;
         for (let i = 0; i < name.length; i++) {
             hash = name.charCodeAt(i) + ((hash << 5) - hash);
         }
-        
+
         return colors[Math.abs(hash) % colors.length];
     };
 
@@ -128,17 +128,17 @@ const LessonDetailPanel: React.FC<LessonDetailPanelProps> = ({
                 <Typography variant="h5" fontWeight={600} gutterBottom>
                     {lesson.title}
                 </Typography>
-                
-                <Chip 
+
+                <Chip
                     icon={statusIcon}
-                    label={lesson.status} 
+                    label={lesson.status}
                     color={statusColor}
                     size="medium"
-                    sx={{ 
+                    sx={{
                         mb: 3,
                         fontWeight: 500,
-                        backgroundColor: theme.palette.mode === 'light' 
-                            ? `${theme.palette[statusColor].light}30` 
+                        backgroundColor: theme.palette.mode === 'light'
+                            ? `${theme.palette[statusColor].light}30`
                             : `${theme.palette[statusColor].dark}30`,
                         color: theme.palette[statusColor].main,
                         '& .MuiChip-icon': {

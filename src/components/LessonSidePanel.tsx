@@ -195,42 +195,46 @@ const LessonSidePanel: React.FC<LessonSidePanelProps> = ({
                 Add New Lesson
             </Typography>
             
-            <TextField
-                label="Lesson Title"
-                name="title"
-                fullWidth
-                value={formData.title}
-                onChange={handleTitleChange}
-                error={!!errors.title}
-                helperText={errors.title}
-                sx={{ mt: 2 }}
-                component={motion.div}
+            <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: 0.1 }}
-            />
-            
-            <TextField
-                label="Student"
-                name="studentId"
-                select
-                fullWidth
-                value={formData.studentId}
-                onChange={handleChange}
-                error={!!errors.studentId}
-                helperText={errors.studentId}
-                component={motion.div}
+            >
+                <TextField
+                    label="Lesson Title"
+                    name="title"
+                    fullWidth
+                    value={formData.title}
+                    onChange={handleTitleChange}
+                    error={!!errors.title}
+                    helperText={errors.title}
+                    sx={{ mt: 2 }}
+                />
+            </motion.div>
+
+            <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: 0.15 }}
             >
-                {students.map((student) => (
-                    <MenuItem key={student.id} value={student.id}>
-                        {student.name} ({student.email})
-                    </MenuItem>
-                ))}
-            </TextField>
-            
+                <TextField
+                    label="Student"
+                    name="studentId"
+                    select
+                    fullWidth
+                    value={formData.studentId}
+                    onChange={handleChange}
+                    error={!!errors.studentId}
+                    helperText={errors.studentId}
+                >
+                    {students.map((student) => (
+                        <MenuItem key={student.id} value={student.id}>
+                            {student.name} ({student.email})
+                        </MenuItem>
+                    ))}
+                </TextField>
+            </motion.div>
+
             <Box component={motion.div}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -243,76 +247,86 @@ const LessonSidePanel: React.FC<LessonSidePanelProps> = ({
                     helperText={errors.dateTime}
                 />
             </Box>
-            
-            <TextField
-                label="Duration (minutes)"
-                name="duration"
-                type="number"
-                fullWidth
-                value={formData.duration}
-                onChange={handleChange}
-                error={!!errors.duration}
-                helperText={errors.duration}
-                component={motion.div}
+
+            <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: 0.25 }}
-            />
-            
-            <TextField
-                label="Location (Zoom link or in-person)"
-                name="location"
-                fullWidth
-                value={formData.location}
-                onChange={handleChange}
-                component={motion.div}
+            >
+                <TextField
+                    label="Duration (minutes)"
+                    name="duration"
+                    type="number"
+                    fullWidth
+                    value={formData.duration}
+                    onChange={handleChange}
+                    error={!!errors.duration}
+                    helperText={errors.duration}
+                />
+            </motion.div>
+
+            <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: 0.3 }}
-            />
-            
-            <TextField
-                label="Lesson Plan"
-                name="lessonPlan"
-                multiline
-                rows={2}
-                fullWidth
-                value={formData.lessonPlan}
-                onChange={handleChange}
-                component={motion.div}
+            >
+                <TextField
+                    label="Location (Zoom link or in-person)"
+                    name="location"
+                    fullWidth
+                    value={formData.location}
+                    onChange={handleChange}
+                />
+            </motion.div>
+
+            <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: 0.35 }}
-            />
-            
-            <TextField
-                label="Learning Objectives"
-                name="learningObjectives"
-                multiline
-                rows={2}
-                fullWidth
-                value={formData.learningObjectives}
-                onChange={handleChange}
-                component={motion.div}
+            >
+                <TextField
+                    label="Lesson Plan"
+                    name="lessonPlan"
+                    multiline
+                    rows={2}
+                    fullWidth
+                    value={formData.lessonPlan}
+                    onChange={handleChange}
+                />
+            </motion.div>
+
+            <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: 0.4 }}
-            />
-            
-            <FormControlLabel
-                control={
-                    <Checkbox
-                        name="repeatWeekly"
-                        checked={formData.repeatWeekly}
-                        onChange={handleChange}
-                    />
-                }
-                label="Repeat this lesson weekly"
-                component={motion.div}
+            >
+                <TextField
+                    label="Learning Objectives"
+                    name="learningObjectives"
+                    multiline
+                    rows={2}
+                    fullWidth
+                    value={formData.learningObjectives}
+                    onChange={handleChange}
+                />
+            </motion.div>
+
+            <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: 0.45 }}
-            />
+            >
+                <FormControlLabel
+                    control={
+                        <Checkbox
+                            name="repeatWeekly"
+                            checked={formData.repeatWeekly}
+                            onChange={handleChange}
+                        />
+                    }
+                    label="Repeat this lesson weekly"
+                />
+            </motion.div>
 
             <Collapse in={formData.repeatWeekly} timeout="auto" unmountOnExit>
                 <Paper 
