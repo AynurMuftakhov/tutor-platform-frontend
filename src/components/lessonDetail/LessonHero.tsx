@@ -59,7 +59,7 @@ const LessonHero: React.FC<Props> = ({ lesson, student }) => {
                                 fontWeight={700}
                                 sx={{ color: theme.palette.primary.main }}
                             >
-                                Lesson with {student?.name || "Unnamed Student"}
+                                {lesson.title}
                             </Typography>
 
                             {levelInfo && (

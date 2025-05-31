@@ -14,7 +14,8 @@ const UpcomingLessonsSection: React.FC = () => {
             try {
                 const studentId = user?.role === "student" ? user?.id : undefined;
                 const tutorId = user?.role === "tutor" ? user?.id : undefined;
-                const res = await getUpcomingLessons(tutorId as string, studentId as string);
+                const now = new Date();
+                const res = await getUpcomingLessons(tutorId as string, studentId as string, now.toISOString());
                 setLessons(res);
             } catch (error) {
                 console.error("Failed to fetch lessons:", error);

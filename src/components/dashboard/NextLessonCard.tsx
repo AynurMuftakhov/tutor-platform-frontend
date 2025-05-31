@@ -58,7 +58,7 @@ const NextLessonCard = ({ lesson }: { lesson: Lesson }) => {
             {/* Info */}
             <Box sx={{ flexGrow: 1 }}>
                 <Typography fontWeight={600} fontSize={14}>
-                    {lesson.title} – {start.format("DD MMM")}, {start.format("HH:mm")} – {lesson.duration} min
+                    {lesson.title}
                 </Typography>
 
                 <Box display="flex" alignItems="center" gap={0.5}>

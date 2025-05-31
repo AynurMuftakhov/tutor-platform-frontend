@@ -4,24 +4,17 @@ import {
     Typography,
     Button,
     MenuItem,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
     IconButton,
     Menu,
-    Paper,
     useTheme,
     alpha,
     Tooltip,
-    Avatar,
     ToggleButtonGroup,
-    ToggleButton,
+    ToggleButton
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import {
     fetchStudents,
-    deleteLesson,
     getLessons,
     fetchUserById, updateLesson,
 } from "../services/api";
@@ -57,8 +50,6 @@ const LessonsPage = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [students, setStudents] = useState<Student[]>([]);
     const [tutorsMap, setTutorsMap] = useState<Map<string, string>>(new Map());
-    const [lessonToDelete, setLessonToDelete] = useState<any | null>(null);
-    const [deleting, setDeleting] = useState(false);
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
     const statusFilterOpen = Boolean(anchorEl);
     // Set default calendar view based on screen size (xs: day, sm+: week)
@@ -73,7 +64,8 @@ const LessonsPage = () => {
     useEffect(() => {
         if (calendarRef.current) {
             const calendarApi = calendarRef.current.getApi();
-            calendarApi.updateSize();
+            const now = new Date();
+            calendarApi.scrollToTime(now.toTimeString().substring(0, 8));
         }
     }, [calendarView]);
     const [selectedDate, setSelectedDate] = useState<dayjs.Dayjs>(dayjs());
@@ -96,13 +88,20 @@ const LessonsPage = () => {
 
     const refreshLessons = async () => {
         try {
+            const calendarApi = calendarRef.current?.getApi();
+            const view = calendarApi?.view;
+            const startDate = view?.activeStart?.toISOString();
+            const endDate = view?.activeEnd?.toISOString();
+
             const studentId = user?.role === "student" ? user?.id : undefined;
             const tutorId = user?.role === "tutor" ? user?.id : undefined;
 
-            // For calendar view, we don't need to filter by date as FullCalendar will handle the date range
-            const result = await getLessons(studentId as string, tutorId as string, status);
+            if (!startDate || !endDate) {
+                console.warn("Calendar view dates not available");
+                return;
+            }
 
-            const lessons = result.content;
+            const lessons = await getLessons(studentId as string, tutorId as string, status, startDate, endDate);
             setLessons(lessons);
 
             if (user?.role === "student") {
@@ -121,20 +120,6 @@ const LessonsPage = () => {
             }
         } catch (e) {
             console.error("Failed to fetch lessons", e);
-        }
-    };
-
-    const handleDeleteLesson = async () => {
-        if (!lessonToDelete || !user) return;
-        try {
-            setDeleting(true);
-            await deleteLesson(lessonToDelete.id);
-            await refreshLessons();
-            setLessonToDelete(null);
-        } catch (e) {
-            console.error("Failed to delete lesson", e);
-        } finally {
-            setDeleting(false);
         }
     };
 
@@ -157,7 +142,7 @@ const LessonsPage = () => {
         return lessons.map(lesson => {
             const student = getStudentById(lesson.studentId);
             const tutorName = tutorsMap.get(lesson.tutorId) || "Unknown";
-            const displayName = user?.role === "tutor" ? student?.name || "Unknown" : tutorName;
+            const displayName =  user?.role === "tutor" ? lesson.title :`Lesson with ${tutorName}`;
 
             // Calculate end time based on start time and duration
             const startTime = dayjs(lesson.dateTime);
@@ -183,7 +168,7 @@ const LessonsPage = () => {
 
             return {
                 id: lesson.id,
-                title: `${lesson.title} - ${displayName}`,
+                title: `${displayName}`,
                 start: lesson.dateTime,
                 end: endTime.toISOString(),
                 backgroundColor,
@@ -287,7 +272,7 @@ const LessonsPage = () => {
         if (user) {
             refreshLessons();
         }
-    }, [user, status]);
+    }, [user, status, calendarView, selectedDate]);
 
     useEffect(() => {
         const loadStudents = async () => {
@@ -440,8 +425,8 @@ const LessonsPage = () => {
             {/* Calendar container with horizontal scroll on mobile */}
             <Box
                 sx={{
+                    minWidth: { xs: '100%', sm: 'unset' },
                     overflowX: { xs: 'auto', sm: 'visible' },
-                    overflowY: 'auto',
                     WebkitOverflowScrolling: 'touch',
                     width: '100%',
                     // Paper wrapper style
@@ -450,18 +435,13 @@ const LessonsPage = () => {
                     bgcolor: theme.palette.background.paper,
                     p: 0,
                     // Height for calendar
-                    height: { xs: '70dvh', md: 'calc(100vh - 240px)' },
+                    height: { xs: 'calc(100dvh - 280px)', md: 'calc(100vh - 240px)' },
                     minHeight: 400,
                     position: 'relative',
                     zIndex: 0,
                 }}
             >
-                <Box sx={{
-                    minWidth: { xs: 700, sm: 'unset' }, // allow horizontal scroll on small screens
-                    position: 'relative',
-                    zIndex: 1,
-                    height: '100%',
-                }}>
+                <Box sx={{ width: '100%', height: '100%', position: 'relative', zIndex: 1 }}>
                     <FullCalendar
                         ref={calendarRef}
                         plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
@@ -470,6 +450,7 @@ const LessonsPage = () => {
                         events={lessonsToEvents()}
                         selectable={user?.role === "tutor"}
                         select={handleDateSelect}
+                        selectOverlap={false}
                         eventClick={handleEventClick}
                         dateClick={handleDayClick}
                         height="100%"
@@ -478,9 +459,15 @@ const LessonsPage = () => {
                         allDaySlot={false}
                         slotMinTime="08:00:00"
                         slotMaxTime="23:00:00"
+                        slotDuration="01:00:00"
+                        slotLabelInterval="01:00:00"
+                        snapDuration="00:15:00"
                         expandRows={true}
                         stickyHeaderDates={true}
-                        editable={user?.role === "tutor"} // Enable drag-and-drop for tutors
+                        editable={user?.role === "tutor"}
+                        datesSet={() => {
+                            refreshLessons();
+                        }}
                         eventDrop={(info) => {
                             // Handle event drop (reschedule)
                             const lesson = info.event.extendedProps.lesson;
@@ -528,136 +515,7 @@ const LessonsPage = () => {
                             minute: '2-digit',
                             hour12: false
                         }}
-                        eventContent={(eventInfo) => {
-                            const lesson = eventInfo.event.extendedProps.lesson;
-                            const student = eventInfo.event.extendedProps.student;
-                            const status = eventInfo.event.extendedProps.status;
 
-                            // Get student initials for avatar
-                            const getInitials = (name: string) => {
-                                return name
-                                    .split(' ')
-                                    .map(part => part[0])
-                                    .join('')
-                                    .toUpperCase()
-                                    .substring(0, 2);
-                            };
-
-                            const studentName = student?.name || 'Unknown';
-                            const studentInitials = getInitials(studentName);
-
-                            // Generate a consistent color based on student name
-                            const getAvatarColor = (name: string) => {
-                                const colors = [
-                                    '#2573ff', '#00d7c2', '#f6c344', '#ff6b6b',
-                                    '#a394f0', '#4ecdc4', '#ff9f1c', '#8675a9'
-                                ];
-
-                                let hash = 0;
-                                for (let i = 0; i < name.length; i++) {
-                                    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-                                }
-
-                                return colors[Math.abs(hash) % colors.length];
-                            };
-
-                            const avatarColor = getAvatarColor(studentName);
-
-                            // Add status-specific class for styling
-                            const statusClass = `status-${status.toLowerCase()}`;
-
-                            return (
-                                <Tooltip
-                                    title={
-                                        <Box sx={{ p: 1 }}>
-                                            <Typography variant="subtitle2" fontWeight={600}>
-                                                {lesson.title}
-                                            </Typography>
-                                            <Typography variant="body2">
-                                                {eventInfo.timeText} ({lesson.duration} min)
-                                            </Typography>
-                                            <Typography variant="body2">
-                                                Status: {status}
-                                            </Typography>
-                                            {lesson.location && (
-                                                <Typography variant="body2">
-                                                    Location: {lesson.location}
-                                                </Typography>
-                                            )}
-                                        </Box>
-                                    }
-                                    arrow
-                                    placement="top"
-                                >
-                                    <Box
-                                        className={`fc-event ${statusClass}`}
-                                        sx={{
-                                            p: 0.5,
-                                            height: '100%',
-                                            overflow: 'hidden',
-                                            fontSize: '0.8rem',
-                                            lineHeight: 1.3,
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            backgroundColor: '#E6F0FF',
-                                            borderRadius: '8px',
-                                            boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
-                                            '&:hover': {
-                                                boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
-                                                transform: 'translateY(-2px)'
-                                            },
-                                            transition: 'all 0.2s ease',
-                                            cursor: 'pointer',
-                                            position: 'relative',
-                                            zIndex: 1
-                                        }}
-                                    >
-                                        {/* Time (hide on mobile) */}
-                                        <Box
-                                            sx={{
-                                                display: { xs: 'none', sm: 'block' },
-                                                fontWeight: 500,
-                                                mb: 0.5,
-                                                fontSize: '13px',
-                                                color: theme.palette.text.secondary,
-                                                pointerEvents: 'none'
-                                            }}
-                                        >
-                                            {eventInfo.timeText}
-                                        </Box>
-
-                                        {/* Student name with avatar/initials */}
-                                        <Box sx={{
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: 1,
-                                            pointerEvents: 'none'
-                                        }}>
-                                            <Avatar
-                                                sx={{
-                                                    width: 24,
-                                                    height: 24,
-                                                    fontSize: '12px',
-                                                    bgcolor: avatarColor,
-                                                    fontWeight: 600
-                                                }}
-                                            >
-                                                {studentInitials}
-                                            </Avatar>
-                                            <Typography
-                                                sx={{
-                                                    fontWeight: 600,
-                                                    fontSize: { xs: '12px', sm: '14px' },
-                                                    whiteSpace: 'nowrap'
-                                                }}
-                                            >
-                                                {studentName}
-                                            </Typography>
-                                        </Box>
-                                    </Box>
-                                </Tooltip>
-                            );
-                        }}
                         dayCellDidMount={(info) => {
                             // Highlight today's date
                             if (info.isToday) {
@@ -680,28 +538,6 @@ const LessonsPage = () => {
                 students={students}
                 initialDate={selectedDate.toISOString()}
             />
-
-            {/* Delete Confirmation Dialog */}
-            {lessonToDelete && (
-                <Dialog open onClose={() => setLessonToDelete(null)}>
-                    <DialogTitle>Delete Lesson</DialogTitle>
-                    <DialogContent>
-                        Are you sure you want to delete the lesson with{" "}
-                        <strong>{getStudentById(lessonToDelete.studentId)?.name || "Unknown"}</strong>?
-                    </DialogContent>
-                    <DialogActions>
-                        <Button onClick={() => setLessonToDelete(null)}>Cancel</Button>
-                        <Button
-                            onClick={handleDeleteLesson}
-                            color="error"
-                            variant="contained"
-                            disabled={deleting}
-                        >
-                            {deleting ? "Deleting..." : "Delete"}
-                        </Button>
-                    </DialogActions>
-                </Dialog>
-            )}
         </Box>
     );
 };

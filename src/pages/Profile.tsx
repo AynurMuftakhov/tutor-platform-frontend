@@ -4,25 +4,16 @@ import {
     Box,
     Typography,
     IconButton,
-    Card,
-    Grid,
-    List,
-    ListItem,
-    ListItemText,
-    Divider,
     Snackbar,
     Alert,
-    Tabs,
-    Tab,
     TextField,
     CircularProgress, Button,
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
-import api, {getHistoryLessons, getUpcomingLessons, updateUserProfile} from '../services/api';
+import api, {updateUserProfile} from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import MainLayout from "../layout/MainLayout";
 
 const Profile: React.FC = () => {
     const {user, updateUser} = useAuth();

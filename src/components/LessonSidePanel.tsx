@@ -157,11 +157,9 @@ const LessonSidePanel: React.FC<LessonSidePanelProps> = ({
         if (hasCustomTitle) return;
 
         const studentName = getStudentName(formData.studentId);
-        const date = dayjs(formData.dateTime);
 
-        if (studentName && date.isValid() && formData.duration) {
-            const formattedDate = date.format("DD MMM, HH:mm"); // e.g. 02 Apr, 16:00
-            const newTitle = `${studentName} – ${formattedDate} – ${formData.duration} min`;
+        if (studentName) {
+            const newTitle = `Lesson with ${studentName}`;
             setFormData((prev) => ({ ...prev, title: newTitle }));
         }
     }, [formData.studentId, formData.dateTime, formData.duration, hasCustomTitle, students]);

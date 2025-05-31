@@ -1,261 +1,265 @@
-/* FullCalendar Modern Bento-style Styles (2025 Design Trends) */
+/* ------------------------------------------------------------------
+   SpeakShire Calendar – 2025 Fluid Bento Design
+   Built for FullCalendar v6.x         Author: SpeakShire UI Team
+------------------------------------------------------------------- */
 
-/* General Calendar Styles */
-.fc {
-  --fc-border-color: rgba(0, 0, 0, 0.08);
-  --fc-page-bg-color: #fff;
-  --fc-neutral-bg-color: #f8f9fa;
-  --fc-list-event-hover-bg-color: #f8f9fa;
-  /* Soft pastel colors for status */
-  --fc-scheduled-color: #2573ff;
-  --fc-scheduled-bg-color: rgba(37, 115, 255, 0.1);
-  --fc-completed-color: #00d7c2;
-  --fc-completed-bg-color: rgba(0, 215, 194, 0.1);
-  --fc-canceled-color: #ff6b6b;
-  --fc-canceled-bg-color: rgba(255, 107, 107, 0.1);
-  /* Today highlight with frosted glass effect */
-  --fc-today-bg-color: rgba(37, 115, 255, 0.03);
-  --fc-event-text-color: #333;
-  --fc-event-selected-overlay-color: rgba(0, 0, 0, 0.05);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "SF Pro Rounded", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+/* ========== 1. DESIGN TOKENS =================================== */
+:root {
+  /* brand palette */
+  --ss-brand-50 : #eef4ff;
+  --ss-brand-100: #d5e1ff;
+  --ss-brand-200: #adc5ff;
+  --ss-brand-300: #7fa2ff;
+  --ss-brand-400: #5381ff;
+  --ss-brand-500: #2563ff;  /* primary */
+  --ss-brand-600: #1c54e6;
+  --ss-brand-700: #1545c4;
+  --ss-brand-800: #1036a1;
+  --ss-brand-900: #0a2673;
+
+  /* semantic status */
+  --ss-green      : #00d7c2;
+  --ss-red        : #ff6b6b;
+  --ss-neutral-50 : #fafbfc;
+  --ss-neutral-100: #f4f6f8;
+  --ss-neutral-200: #e5e9ef;
+  --ss-neutral-300: #cfd6e0;
+  --ss-neutral-400: #b0b8c5;
+  --ss-neutral-500: #8c94a3;
+  --ss-neutral-600: #68707e;
+  --ss-neutral-700: #474f5c;
+  --ss-neutral-800: #2e3440;
+  --ss-neutral-900: #1c2028;
+
+  /* calendar surface */
+  --fc-border-color               : var(--ss-neutral-200);
+  --fc-page-bg-color              : #ffffff;
+  --fc-neutral-bg-color           : var(--ss-neutral-50);
+  --fc-event-selected-overlay-color: rgba(0, 0, 0, .05);
+
+  /* event statuses */
+  --fc-scheduled-color      : var(--ss-brand-500);
+  --fc-scheduled-bg-color   : rgba(37, 99, 255, .10);
+  --fc-completed-color      : var(--ss-green);
+  --fc-completed-bg-color   : rgba(0, 215, 194, .10);
+  --fc-canceled-color       : var(--ss-red);
+  --fc-canceled-bg-color    : rgba(255, 107, 107, .10);
+
+  /* today highlight */
+  --fc-today-bg-color: rgba(37, 99, 255, .03);
+
+  /* axis width for time labels */
+  --fc-axis-width: 60px;
+
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Rounded",
+               "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
-/* Header Styles */
-.fc .fc-toolbar {
-  margin-bottom: 0.5em;
-}
-
-.fc .fc-toolbar-title {
-  font-size: 1.25rem;
-  font-weight: 500;
-}
-
-/* Bento-style Calendar Layout */
+/* ========== 2. CORE LAYOUT ===================================== */
 .fc {
   border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
   background-color: var(--fc-page-bg-color);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, .04);
   padding: 12px;
 }
 
-/* Day Header Styles */
-.fc .fc-col-header-cell {
-  padding: 12px 0;
-  background-color: var(--fc-page-bg-color);
-  border-bottom: 1px solid var(--fc-border-color);
+/* header */
+.fc .fc-toolbar {
+  margin-bottom: .5rem;
 }
+.fc .fc-toolbar-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+/* sticky day‑header strip */
+.fc .fc-col-header-cell {
+  border-bottom: 1px solid var(--fc-border-color);
+  padding: 12px 0;
+  background: var(--fc-page-bg-color);
+  position: relative;
+  z-index: 11;
+
+}
+
 
 .fc .fc-col-header-cell-cushion {
-  padding: 8px 4px;
-  font-weight: 500;
-  font-size: 13px;
-  color: #555;
   text-decoration: none;
+  padding: 6px 4px;
+  font-size: .8125rem;
+  color: var(--ss-neutral-600);
+  font-weight: 500;
+  margin-left: var(--fc-axis-width);
+  display: inline-block;
+  width: calc(100% - var(--fc-axis-width));
 }
 
-/* Today Highlight - Frosted Glass Effect */
+/* ========== 3. TODAY HIGHLIGHT (FIXES CLICK/DRAG) ============== */
 .fc .fc-day-today {
-  background-color: var(--fc-today-bg-color) !important;
-  backdrop-filter: blur(8px);
-  position: relative;
+  position: relative;          /* stacking context */
 }
 
-.fc .fc-day-today::after {
-  content: '';
+.fc .fc-day-today::before {
+  content: "";
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(to bottom, rgba(37, 115, 255, 0.05), transparent);
+  inset: 0;
+  background: var(--fc-today-bg-color);
+  backdrop-filter: blur(8px);
   pointer-events: none;
+  z-index: -1; /* keep behind all other content */
 }
 
-/* Time Grid Styles */
+/* ========== 4. GRID LINES ===================================== */
 .fc .fc-timegrid-slot {
-  height: 44px;
+  min-height: 5.25em;
+  height: 5.25em;
   border-bottom: 1px solid var(--fc-border-color);
 }
-
 .fc .fc-timegrid-slot-minor {
-  border-bottom-color: rgba(0, 0, 0, 0.03);
+  border-bottom-color: rgba(0,0,0,.03);
 }
-
 .fc .fc-timegrid-slot-label {
-  font-size: 13px;
+  font-size: .8125rem;
   font-weight: 500;
-  color: #777
+  color: var(--ss-neutral-600);
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding-top: 2px;
+  padding-left: 4px;
+  height: 100%;
 }
 
-/* Event Styles - Lesson Cards */
+/* ========== 5. EVENTS ========================================= */
 .fc-event {
-  border-radius: 12px;
+  position: relative;
+  z-index: 1;                  /* above today overlay */
   border: none;
+  border-radius: 10px;
   padding: 6px 8px;
-  font-size: 15px;
-  line-height: 1.4;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  transition: all 0.2s cubic-bezier(0.25, 1, 0.5, 1);
-  overflow: hidden;
+  font-size: .9375rem;
+  line-height: 1.35;
+  color: var(--ss-neutral-900);
+  background: var(--fc-scheduled-bg-color);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .06);
+  transition: transform .18s cubic-bezier(.25,1,.5,1),
+              box-shadow .18s cubic-bezier(.25,1,.5,1);
+  overflow: hidden;            /* tidy corners */
 }
 
-/* Hover interaction */
+/* hover lift */
 .fc-event:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, .10);
 }
 
-/* Status-specific styling */
+/* status modifiers */
 .fc-event.status-scheduled {
-  background-color: var(--fc-scheduled-bg-color);
+  background: var(--fc-scheduled-bg-color);
   color: var(--fc-scheduled-color);
   border-left: 3px solid var(--fc-scheduled-color);
 }
-
 .fc-event.status-completed {
-  background-color: var(--fc-completed-bg-color);
+  background: var(--fc-completed-bg-color);
   color: var(--fc-completed-color);
   border-left: 3px solid var(--fc-completed-color);
 }
-
 .fc-event.status-canceled {
-  background-color: var(--fc-canceled-bg-color);
+  background: var(--fc-canceled-bg-color);
   color: var(--fc-canceled-color);
   border-left: 3px solid var(--fc-canceled-color);
 }
 
-/* Student avatar/initials */
+/* make entire block clickable / draggable */
+.fc-event-main {
+  cursor: pointer;
+}
+
+/* keep inner content interactive (fixes previously broken clicks) */
+.fc-event-main *,
+.fc-event-main {
+  pointer-events: auto;
+}
+
+/* drag / resize feedback */
+.fc-event.fc-event-dragging,
+.fc-event.fc-event-resizing {
+  opacity: .8;
+  transform: scale(1.03);
+  box-shadow: 0 6px 18px rgba(0,0,0,.12);
+}
+
+/* ========== 6. STUDENT AVATAR (OPTIONAL) ======================= */
 .fc-event .student-avatar {
+  float: left;
   width: 24px;
   height: 24px;
-  border-radius: 50%;
-  background-color: #f0f0f0;
+  border-radius: 999px;
+  background: var(--ss-neutral-100);
+  font-weight: 600;
+  font-size: .75rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 600;
-  font-size: 12px;
   margin-right: 6px;
-  float: left;
 }
 
-/* Current time indicator */
+/* ========== 7. NOW INDICATOR ================================== */
 .fc .fc-timegrid-now-indicator-line {
   border-color: var(--fc-scheduled-color);
   border-width: 1.5px;
   z-index: 5;
 }
-
 .fc .fc-timegrid-now-indicator-arrow {
   border-color: var(--fc-scheduled-color);
   border-width: 4px;
   z-index: 5;
 }
 
-/* Month view */
-.fc .fc-daygrid-day-top {
+/* ========== 8. MONTH & WEEK DAY NUMBERS ======================= */
+.fc-daygrid-day-top {
   justify-content: center;
   padding-top: 6px;
 }
-
 .fc .fc-daygrid-day-number {
-  font-size: 15px;
-  font-weight: 500;
-  color: #555;
-  text-decoration: none;
   width: 28px;
   height: 28px;
+  border-radius: 50%;
+  font-size: .875rem;
+  font-weight: 500;
+  color: var(--ss-neutral-700);
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
-  transition: background-color 0.2s ease;
+  transition: background-color .18s ease;
   cursor: pointer;
 }
-
+.fc .fc-daygrid-day-number:hover {
+  background: var(--fc-scheduled-bg-color);
+  color: var(--fc-scheduled-color);
+}
 .fc-day-today .fc-daygrid-day-number {
-  background-color: var(--fc-scheduled-bg-color);
+  background: var(--fc-scheduled-bg-color);
   color: var(--fc-scheduled-color);
   font-weight: 600;
 }
 
-/* Add hover effect for day cells in month view */
-.fc-dayGridMonth-view .fc-daygrid-day-number:hover {
-  background-color: var(--fc-scheduled-bg-color);
-  color: var(--fc-scheduled-color);
-  transform: scale(1.05);
+/* ========== 9. RESPONSIVE ===================================== */
+@media (max-width: 768px) {
+  .fc { padding: 8px; border-radius: 12px; }
+
+  .fc .fc-toolbar { flex-direction: column; gap: .5rem; }
+
+  .fc-event { font-size: .8125rem; padding: 4px 6px; }
+  .fc-event .student-avatar { width: 20px; height: 20px; font-size: .625rem; }
+  .fc .fc-timegrid-slot {
+    min-height: 4em;
+    height: 4em;
+  }
 }
 
-/* Week view specific */
-.fc-timeGridWeek-view .fc-col-header-cell {
-  padding: 10px 0;
-}
-
-.fc-timeGridWeek-view .fc-col-header-cell-cushion {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 8px 0;
-}
-/* Make sure FullCalendar event clicks work properly */
-.fc-event-main {
-  cursor: pointer;
-  position: relative;
-  z-index: 1;
-}
-
-/* Ensure the entire event area is clickable, even when filled with other elements */
-.fc-event-main * {
-  pointer-events: none;
-}
-
-/* Style for the status change animation */
-.status-change {
-  animation: highlight 0.5s ease-in-out;
-}
-
-@keyframes highlight {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
-}
-.fc-timeGridWeek-view .fc-col-header-cell-cushion .day-name {
-  font-weight: 600;
-  margin-bottom: 4px;
-}
-
-.fc-timeGridWeek-view .fc-col-header-cell-cushion .day-number {
-  font-size: 15px;
-  color: #666;
-}
-
-/* Day view specific */
-.fc-timeGridDay-view .fc-col-header-cell-cushion {
-  font-size: 17px;
-  font-weight: 600;
-  padding: 14px 0;
-}
-
-/* Drag-to-reschedule animation */
-.fc-event.fc-event-dragging {
-  opacity: 0.8;
-  transform: scale(1.02);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
-  transition: all 0.15s cubic-bezier(0.25, 1, 0.5, 1);
-}
-
-/* Status change animation */
-.fc-event.status-change {
-  animation: statusChange 0.5s ease;
-}
-
-@keyframes statusChange {
-  0% { opacity: 0.7; transform: scale(0.95); }
-  50% { opacity: 1; transform: scale(1.05); }
-  100% { opacity: 1; transform: scale(1); }
-}
-
-/* Accessibility focus rings */
+/* ========== 10. ACCESSIBILITY FOCUS RINGS ====================== */
 .fc button:focus-visible,
 .fc a:focus-visible,
 .fc-event:focus-visible {
@@ -263,35 +267,26 @@
   outline-offset: 2px;
 }
 
-/* Responsive adjustments */
-@media (max-width: 768px) {
-  .fc {
-    padding: 8px;
-    border-radius: 12px;
-  }
 
-  .fc .fc-toolbar {
-    flex-direction: column;
-    gap: 0.5rem;
-  }
+/* ========== 3. STICKY TIME AXIS ================================= */
+/* Делает первый столбец (оси времени) «липким» */
+.fc .fc-timegrid-axis {
+  position: sticky;
+  left: 0;
+  width: var(--fc-axis-width);
+  background: var(--fc-page-bg-color);
+  z-index: 10; /* над линиями сетки, но под заголовками дней */
+}
 
-  .fc .fc-toolbar-chunk {
-    display: flex;
-    justify-content: center;
-  }
+/* Чтобы и в заголовке сетки верхняя пустая ячейка оставалась с той же шириной */
+.fc .fc-scrollgrid-section-header .fc-timegrid-axis {
+  position: sticky;
+  left: 0;
+  width: var(--fc-axis-width);
+  background: var(--fc-page-bg-color);
+  z-index: 12; /* чуть выше остальных заголовков */
+}
 
-  .fc-event {
-    font-size: 13px;
-    padding: 4px 6px;
-  }
-
-  .fc .fc-timegrid-slot {
-    height: 40px;
-  }
-
-  .fc-event .student-avatar {
-    width: 20px;
-    height: 20px;
-    font-size: 10px;
-  }
+.fc-timeGridDay-view .fc-timegrid-event-harness {
+  margin-left: var(--fc-axis-width);
 }

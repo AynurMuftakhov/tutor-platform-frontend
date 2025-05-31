@@ -39,14 +39,15 @@ export const clearAllNotifications = async (userId: string) => {
     return api.delete(`/notifications-service/api/notifications/user/${userId}/clear`);
 };
 
-export const getUpcomingLessons = async (tutorId: string, studentId: string) => {
+export const getUpcomingLessons = async (tutorId: string, studentId: string, currentDate: string) => {
     const params = new URLSearchParams();
     if (tutorId) params.append("tutorId", tutorId);
     if (studentId) params.append("studentId", studentId);
+    if (currentDate) params.append("currentDate", currentDate);
     params.append("status", "SCHEDULED,RESCHEDULED");
 
-    const response = await api.get(`/lessons-service/api/lessons?${params}`);
-    return response.data.content;
+    const response = await api.get(`/lessons-service/api/lessons/upcoming?${params}`);
+    return response.data;
 };
 
 export const getHistoryLessons = async (userId: string) => {
@@ -54,14 +55,19 @@ export const getHistoryLessons = async (userId: string) => {
     return response.data.content;
 };
 
-export const getLessons = async (studentId: string, tutorId: string, status: string, page = 0, size = 10, date?: string) => {
+export const getLessons = async (
+    studentId: string,
+    tutorId: string,
+    status: string,
+    startDate: string,
+    endDate: string
+) => {
     const params = new URLSearchParams();
     if (tutorId) params.append("tutorId", tutorId);
     if (studentId) params.append("studentId", studentId);
     if (status) params.append("status", status);
-    if (date) params.append("date", date);
-    params.append("page", page.toString());
-    params.append("size", size.toString());
+    if (startDate) params.append("startDate", startDate);
+    if (endDate) params.append("endDate", endDate);
 
     const response = await api.get(`/lessons-service/api/lessons?${params}`);
     return response.data;
