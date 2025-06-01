@@ -239,7 +239,6 @@
   .fc .fc-toolbar { flex-direction: column; gap: .5rem; }
 
   .fc-event { font-size: .8125rem; padding: 4px 6px; }
-  .fc-event .student-avatar { width: 20px; height: 20px; font-size: .625rem; }
   .fc .fc-timegrid-slot {
     min-height: 4em;
     height: 4em;
@@ -278,7 +277,6 @@
   /* Keep grid aligned but reserve space for time axis */
   .fc .fc-timegrid-cols {
     transform: none;              /* cancel desktop translate */
-    margin-left: var(--fc-axis-width);
   }
 }
 
