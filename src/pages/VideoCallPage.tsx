@@ -5,9 +5,7 @@ import { fetchLiveKitToken } from '../services/api';
 import {
   LiveKitRoom,
   VideoConference,
-  useRoomContext,
 } from '@livekit/components-react';
-import {LocalVideoTrack} from 'livekit-client';
 import '@livekit/components-styles';
 import {useAuth} from "../context/AuthContext";
 

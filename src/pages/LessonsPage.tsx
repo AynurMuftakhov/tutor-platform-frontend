@@ -169,6 +169,10 @@ const LessonsPage = () => {
                     backgroundColor = alpha(theme.palette.error.main, 0.7);
                     borderColor = theme.palette.error.main;
                     break;
+                case 'MISSED':
+                    backgroundColor = alpha(theme.palette.warning.main, 0.7);
+                    borderColor = theme.palette.warning.main;
+                    break;
                 default:
                     backgroundColor = alpha(theme.palette.primary.main, 0.7);
                     borderColor = theme.palette.primary.main;

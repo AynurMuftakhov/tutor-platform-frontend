@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import axios from "axios";
 import {
     AppBar, Avatar, Badge, Box, Button, CssBaseline, Dialog, DialogActions, DialogContent,
     DialogTitle, Drawer, IconButton, List, ListItem, ListItemButton, Tooltip,
@@ -10,7 +11,7 @@ import {
     deleteNotificationById,
     markAllNotificationsAsRead,
     clearAllNotifications,
-    fetchNotifications
+    fetchNotifications, getCurrentLesson
 } from "../services/api";
 
 import MenuIcon from "@mui/icons-material/Menu";
@@ -41,6 +42,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [profileAnchorEl, setProfileAnchorEl] = useState<null | HTMLElement>(null);
     const { notifications, isPanelOpen, togglePanel, setNotifications } = useNotificationSocket();
     const [hasMounted, setHasMounted] = useState(false);
+    const [currentLessonId, setCurrentLessonId] = useState<string | null>(null);
 
     const isProfileMenuOpen = Boolean(profileAnchorEl);
 
@@ -112,14 +114,24 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         }
     };
 
-    const handleDeleteNotification = async (id: string) => {
-        try {
-            await deleteNotificationById(id);
-            setNotifications(prev => prev.filter(n => n.id !== id));
-        } catch (error) {
-            console.error("Failed to delete notification", error);
-        }
-    };
+    useEffect(() => {
+        const fetchCurrentLesson = async () => {
+            try {
+                const teacherId = isTeacher ? user?.id : undefined;
+                const studentId = !isTeacher ? user?.id : undefined;
+
+                const res = await getCurrentLesson(teacherId as string, studentId as string, new Date().toISOString());
+                setCurrentLessonId(res?.id || null);
+            } catch (e) {
+                setCurrentLessonId(null);
+            }
+        };
+
+        fetchCurrentLesson();
+        const interval = setInterval(fetchCurrentLesson, 60000);
+
+        return () => clearInterval(interval);
+    }, []);
 
     useEffect(() => {
         setHasMounted(true);
@@ -389,6 +401,18 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                                     </Badge>
                                 </IconButton>
                             </Tooltip>
+
+                            {currentLessonId && (
+                                <Button
+                                    variant="contained"
+                                    color="primary"
+                                    size="small"
+                                    sx={{ textTransform: 'none' }}
+                                    onClick={() => navigate(`/lessons/${currentLessonId}`)}
+                                >
+                                    Join Lesson
+                                </Button>
+                            )}
 
                             {hasMounted && (
                                 <Menu

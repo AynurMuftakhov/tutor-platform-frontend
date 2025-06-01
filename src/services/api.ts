@@ -158,6 +158,15 @@ export const getLessonById = async (lessonId: string) => {
     return response.data;
 }
 
+export const getCurrentLesson = async (tutorId: string, studentId: string, currentDate: string) => {
+    const params = new URLSearchParams();
+    if (tutorId) params.append("tutorId", tutorId);
+    if (studentId) params.append("studentId", studentId);
+    if (currentDate) params.append("currentDate", currentDate);
+    const response = await api.get(`/lessons-service/api/lessons/now?${params}`);
+    return response.data;
+}
+
 export const updateLesson = async (lessonId: string, lessonData: any) => {
     const response = await api.patch(`/lessons-service/api/lessons/${lessonId}`, lessonData);
     return response.data;
