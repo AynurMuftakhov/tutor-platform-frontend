@@ -80,9 +80,8 @@
   background: var(--fc-page-bg-color);
   position: relative;
   z-index: 11;
-
+  min-width: 80px;
 }
-
 
 .fc .fc-col-header-cell-cushion {
   text-decoration: none;
@@ -90,12 +89,15 @@
   font-size: .8125rem;
   color: var(--ss-neutral-600);
   font-weight: 500;
-  margin-left: var(--fc-axis-width);
+
+  /* keep inside the column – no extra offset */
   display: inline-block;
-  width: calc(100% - var(--fc-axis-width));
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* ========== 3. TODAY HIGHLIGHT (FIXES CLICK/DRAG) ============== */
+/* ========== 3. TODAY HIGHLIGHT ============== */
 .fc .fc-day-today {
   position: relative;          /* stacking context */
 }
@@ -190,21 +192,6 @@
   box-shadow: 0 6px 18px rgba(0,0,0,.12);
 }
 
-/* ========== 6. STUDENT AVATAR (OPTIONAL) ======================= */
-.fc-event .student-avatar {
-  float: left;
-  width: 24px;
-  height: 24px;
-  border-radius: 999px;
-  background: var(--ss-neutral-100);
-  font-weight: 600;
-  font-size: .75rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-right: 6px;
-}
-
 /* ========== 7. NOW INDICATOR ================================== */
 .fc .fc-timegrid-now-indicator-line {
   border-color: var(--fc-scheduled-color);
@@ -257,6 +244,42 @@
     min-height: 4em;
     height: 4em;
   }
+
+  /* Reduce axis width on small screens so date names remain visible */
+  :root {
+    --fc-axis-width: 50px;
+  }
+
+  /* Shrink header font and padding so dates don't get hidden */
+  .fc .fc-col-header-cell {
+    padding-inline-start: var(--fc-axis-width);
+  }
+
+  .fc .fc-col-header-cell-cushion {
+    margin-left: var(--fc-axis-width);
+    font-size: .75rem;
+  }
+
+  /* --- Fix header row on small screens --- */
+  .fc .fc-col-header-cell {
+    /* Cancel the desktop translate so headers stay in view */
+    transform: none;
+    padding-inline-start: 0;
+  }
+
+  .fc .fc-col-header-cell-cushion {
+    margin-left: 0;
+    width: 100%;
+    text-align: center;
+    font-size: .75rem;   /* smaller so it fits */
+    white-space: nowrap; /* avoid wrapping to two lines */
+  }
+
+  /* Keep grid aligned but reserve space for time axis */
+  .fc .fc-timegrid-cols {
+    transform: none;              /* cancel desktop translate */
+    margin-left: var(--fc-axis-width);
+  }
 }
 
 /* ========== 10. ACCESSIBILITY FOCUS RINGS ====================== */
@@ -269,7 +292,6 @@
 
 
 /* ========== 3. STICKY TIME AXIS ================================= */
-/* Делает первый столбец (оси времени) «липким» */
 .fc .fc-timegrid-axis {
   position: sticky;
   left: 0;
@@ -278,15 +300,28 @@
   z-index: 10; /* над линиями сетки, но под заголовками дней */
 }
 
-/* Чтобы и в заголовке сетки верхняя пустая ячейка оставалась с той же шириной */
 .fc .fc-scrollgrid-section-header .fc-timegrid-axis {
   position: sticky;
   left: 0;
   width: var(--fc-axis-width);
   background: var(--fc-page-bg-color);
-  z-index: 12; /* чуть выше остальных заголовков */
+  z-index: 12;
 }
 
-.fc-timeGridDay-view .fc-timegrid-event-harness {
+
+/* Indent events only in Day view */
+.fc-timeGridDay-view .fc-timegrid-event-harness,
+.fc-timeGridDay-view .fc-timegrid-event-harness-inset {
   margin-left: var(--fc-axis-width);
+}
+
+
+@media (max-width: 480px) {
+  .fc .fc-col-header-cell {
+    min-width: 64px;
+  }
+  .fc .fc-col-header-cell-cushion {
+    font-size: 0.6875rem;
+    padding: 4px 2px;
+  }
 }

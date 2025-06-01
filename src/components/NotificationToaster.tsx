@@ -1,5 +1,5 @@
 import React from 'react';
-import { Snackbar, Alert, AlertColor, Slide, SlideProps } from '@mui/material';
+import { Snackbar, Alert, Slide, SlideProps } from '@mui/material';
 import { NotificationMessage } from "../context/NotificationsSocketContext";
 
 interface NotificationToasterProps {

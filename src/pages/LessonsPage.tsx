@@ -504,7 +504,7 @@ const LessonsPage = () => {
                                 });
                             }
                         }}
-                        dayHeaderFormat={{ weekday: 'short', month: 'numeric', day: 'numeric', omitCommas: true }}
+                        dayHeaderFormat={{ weekday: 'short', day: 'numeric', omitCommas: true }}
                         eventTimeFormat={{
                             hour: '2-digit',
                             minute: '2-digit',
