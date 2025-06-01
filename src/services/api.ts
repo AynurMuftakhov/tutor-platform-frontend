@@ -167,6 +167,20 @@ export const getCurrentLesson = async (tutorId: string, studentId: string, curre
     return response.data;
 }
 
+export const fetchMyTutorLessons = async (tutorId: string, startDate: string, endDate: string) => {
+    const params = new URLSearchParams();
+    if (tutorId) params.append("tutorId", tutorId);
+    if (startDate) params.append("startDate", startDate);
+    if (endDate) params.append("endDate", endDate);
+    const response = await api.get(`/lessons-service/api/lessons/mytutor/schedule?${params}`);
+    return response.data;
+}
+
+export const getTeacherByStudentId = async (studentId: string) => {
+    const response = await api.get(`/users-service/api/students/${studentId}/teacher`);
+    return response.data;
+}
+
 export const updateLesson = async (lessonId: string, lessonData: any) => {
     const response = await api.patch(`/lessons-service/api/lessons/${lessonId}`, lessonData);
     return response.data;

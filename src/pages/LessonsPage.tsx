@@ -16,7 +16,7 @@ import AddIcon from "@mui/icons-material/Add";
 import {
     fetchStudents,
     getLessons,
-    fetchUserById, updateLesson,
+    fetchUserById, updateLesson, fetchMyTutorLessons, getTeacherByStudentId,
 } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { Student } from "./MyStudentsPage";
@@ -31,6 +31,7 @@ import {
 } from "@mui/icons-material";
 import dayjs from "dayjs";
 import LessonSidePanel from "../components/LessonSidePanel";
+import TeacherCalendarDialog from "../components/TeacherCalendarDialog";
 
 // Import custom calendar styles
 import "../styles/calendar.css";
@@ -52,6 +53,9 @@ const LessonsPage = () => {
     const [tutorsMap, setTutorsMap] = useState<Map<string, string>>(new Map());
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
     const statusFilterOpen = Boolean(anchorEl);
+    const [showTeacherCal, setShowTeacherCal] = useState(false);
+    const [busyEvents, setBusyEvents] = useState<EventInput[]>([]);
+
     // Set default calendar view based on screen size (xs: day, sm+: week)
     const getDefaultCalendarView = () => {
         if (window && window.matchMedia && window.matchMedia('(max-width:600px)').matches) {
@@ -129,6 +133,33 @@ const LessonsPage = () => {
         } catch (e) {
             console.error("Failed to fetch lessons", e);
         }
+    };
+
+    const loadBusySlots = async (start?: string, end?: string) => {
+        const teacher = await getTeacherByStudentId(user?.id as string);
+        const tutorId = teacher.id;
+        if (!tutorId) return;
+
+        let rangeStart = start;
+        let rangeEnd = end;
+
+        if (!rangeStart || !rangeEnd) {
+            const calendarApi = calendarRef.current?.getApi();
+            rangeStart = calendarApi?.view.activeStart.toISOString();
+            rangeEnd = calendarApi?.view.activeEnd.toISOString();
+        }
+
+        if (!rangeStart || !rangeEnd) return;
+
+        const busy = await fetchMyTutorLessons(tutorId, rangeStart, rangeEnd);
+        const events = busy.map((l: any) => ({
+            id: l.id,
+            start: l.dateTime,
+            end:   dayjs(l.dateTime).add(l.duration, 'minute').toISOString(),
+            backgroundColor: alpha(theme.palette.grey[500], 0.3),
+            borderColor: theme.palette.grey[500],
+        }));
+        setBusyEvents(events);
     };
 
     const getStudentById = (id: string) => {
@@ -280,11 +311,19 @@ const LessonsPage = () => {
         }
     };
 
+    const handleRangeChange = async (start: Date, end: Date) => {
+        await loadBusySlots(start.toISOString(), end.toISOString());
+    };
+
     useEffect(() => {
         if (user) {
             refreshLessons();
         }
     }, [user, status, calendarView, selectedDate]);
+
+    useEffect(() => {
+        if (showTeacherCal) loadBusySlots();
+    }, [showTeacherCal]);
 
     useEffect(() => {
         const loadStudents = async () => {
@@ -380,6 +419,15 @@ const LessonsPage = () => {
                             onClick={() => setIsModalOpen(true)}
                         >
                             Add Lesson
+                        </Button>
+                    )}
+
+                    {user?.role === 'student' && (
+                        <Button
+                            variant="outlined"
+                            onClick={() => setShowTeacherCal(true)}
+                        >
+                            Show teacher calendar
                         </Button>
                     )}
                 </Box>
@@ -549,6 +597,13 @@ const LessonsPage = () => {
                 }}
                 students={students}
                 initialDate={selectedDate.toISOString()}
+            />
+
+            <TeacherCalendarDialog
+                open={showTeacherCal}
+                onClose={() => setShowTeacherCal(false)}
+                events={busyEvents}
+                onRangeChange={handleRangeChange}
             />
         </Box>
     );
