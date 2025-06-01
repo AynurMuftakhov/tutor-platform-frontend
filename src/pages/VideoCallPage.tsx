@@ -5,11 +5,11 @@ import { fetchLiveKitToken } from '../services/api';
 import {
   LiveKitRoom,
   VideoConference,
-  PreJoin,
-  FocusLayout, useTracks
+  useRoomContext,
 } from '@livekit/components-react';
-import { Track } from 'livekit-client';
+import {LocalVideoTrack} from 'livekit-client';
 import '@livekit/components-styles';
+import {useAuth} from "../context/AuthContext";
 
 interface VideoCallPageProps {
   identity?: string;
@@ -28,8 +28,7 @@ const VideoCallPage: React.FC<VideoCallPageProps> = (props) => {
   const [liveKitToken, setLiveKitToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [hasJoinedRoom, setHasJoinedRoom] = useState(false);
-  const [roomReady, setRoomReady] = useState(false);
+  const { user } = useAuth()
 
   // Fetch LiveKit token
   useEffect(() => {
@@ -41,7 +40,7 @@ const VideoCallPage: React.FC<VideoCallPageProps> = (props) => {
       }
 
       try {
-        const token = await fetchLiveKitToken(identity, roomName);
+        const token = await fetchLiveKitToken(identity, roomName, user?.name || '');
         setLiveKitToken(token.token);
         setIsLoading(false);
       } catch (error) {
@@ -52,7 +51,7 @@ const VideoCallPage: React.FC<VideoCallPageProps> = (props) => {
     };
 
     fetchToken();
-  }, [identity, roomName]);
+  }, [identity, roomName, user?.name]);
 
   if (isLoading) {
     return (
@@ -118,10 +117,6 @@ const VideoCallPage: React.FC<VideoCallPageProps> = (props) => {
     );
   }
 
-  const handleJoin = () => {
-    setHasJoinedRoom(true);
-  };
-
   const handleLeave = () => {
     navigate(previousPath);
   };
@@ -133,73 +128,24 @@ const VideoCallPage: React.FC<VideoCallPageProps> = (props) => {
       connect={true}
       data-lk-theme="default"
       onDisconnected={handleLeave}
-      onConnected={() => setRoomReady(true)}
     >
-      {!hasJoinedRoom || !roomReady ? (
-        <Box
-          sx={{
-            height: '100vh',
-            display: 'flex',
-            flexDirection: 'column',
-            bgcolor: '#fafbfd',
-            padding: 4
-          }}
-        >
-          <Typography variant="h4" sx={{ mb: 3, fontWeight: 600, color: '#2573ff' }}>
-            Join Video Call
-          </Typography>
-          <Box sx={{
-            flex: 1,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            borderRadius: 4,
-            boxShadow: '0 8px 24px rgba(0,0,0,0.05)',
-            bgcolor: 'white',
-            padding: 4
-          }}>
-            <PreJoin
-              onSubmit={handleJoin}
-              onError={(err) => console.error('PreJoin error:', err)}
-              style={{ width: '100%', maxWidth: '800px' }}
-            />
-          </Box>
-        </Box>
-      ) : (
-        <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
-          <RoomContent onLeave={handleLeave} />
-        </Box>
-      )}
+      <RoomContent onLeave={handleLeave} />
     </LiveKitRoom>
   );
 };
 
 const RoomContent: React.FC<{ onLeave: () => void }> = ({ onLeave }) => {
-  const cameraTrackRef = useTracks([{ source: Track.Source.Camera }])
-    .find((trackRef) => trackRef.publication && trackRef.publication.track);
-
   return (
     <Box
       sx={{
         flex: 1,
         display: 'flex',
         flexDirection: 'column',
-        height: '100%',
-        minHeight: 0,
-        overflow: 'hidden'
+        height: '100vh',
+        overflow: 'hidden',
       }}
     >
-      {cameraTrackRef ? (
-        <FocusLayout
-          trackRef={cameraTrackRef}
-          style={{ flex: 1, height: '100%', width: '100%', minHeight: 0 }}
-        >
-          <VideoConference style={{ height: '100%', width: '100%' }} />
-        </FocusLayout>
-      ) : (
-        <VideoConference style={{ height: '100%', width: '100%' }} />
-      )}
+      <VideoConference style={{ height: '95%', width: '100%' }} />
     </Box>
   );
 };

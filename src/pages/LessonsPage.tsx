@@ -60,13 +60,21 @@ const LessonsPage = () => {
         return 'timeGridWeek';
     };
     const [calendarView, setCalendarView] = useState<'timeGridDay' | 'timeGridWeek' | 'dayGridMonth'>(getDefaultCalendarView());
-    // Force FullCalendar to re-render after layout stabilizes (fixes blank calendar on mobile with scroll container)
+    // Auto-scroll to the current time and center it in the view when calendarView changes
     useEffect(() => {
-        if (calendarRef.current) {
-            const calendarApi = calendarRef.current.getApi();
-            const now = new Date();
-            calendarApi.scrollToTime(now.toTimeString().substring(0, 8));
-        }
+        const timeout = setTimeout(() => {
+            const scroller = calendarRef.current?.el?.querySelector('.fc-scroller-harness .fc-scroller') as HTMLElement;
+            const nowIndicator = calendarRef.current?.el?.querySelector('.fc-now-indicator-line') as HTMLElement;
+
+            if (scroller && nowIndicator) {
+                const scrollerTop = scroller.getBoundingClientRect().top;
+                const indicatorTop = nowIndicator.getBoundingClientRect().top;
+                const offset = indicatorTop - scrollerTop;
+                scroller.scrollTop = offset - scroller.clientHeight / 2.2;
+            }
+        }, 800); // Wait for FullCalendar layout to stabilize
+
+        return () => clearTimeout(timeout);
     }, [calendarView]);
     const [selectedDate, setSelectedDate] = useState<dayjs.Dayjs>(dayjs());
     const theme = useTheme();

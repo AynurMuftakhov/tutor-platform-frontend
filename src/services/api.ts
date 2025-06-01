@@ -183,8 +183,8 @@ export const deleteUser = async (userId: string) => {
     return response.data;
 }
 
-export const fetchLiveKitToken = async (identity: string, roomName: string) => {
-    const response = await api.get(`video-service/api/video/token?identity=${identity}&roomName=${roomName}`);
+export const fetchLiveKitToken = async (identity: string, roomName: string, username: string) => {
+    const response = await api.get(`video-service/api/video/token?identity=${identity}&roomName=${roomName}&username=${username}`);
     return response.data;
 }
 
