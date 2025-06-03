@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import {
-    Button,
+    Button, Dialog, DialogActions, DialogContent, DialogTitle,
     Stack,
 } from "@mui/material";
 import { LessonStatus } from "../../types/Lesson";
@@ -16,6 +16,8 @@ import {ValidStatusTransitions} from "../../constants/ValidStatusTransitions";
 import RescheduleLessonDialog from "./RescheduleLessonDialog";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import DeleteIcon from "@mui/icons-material/Delete";
+import {deleteLesson} from "../../services/api";
 
 interface Props {
     currentStatus: LessonStatus;
@@ -32,6 +34,7 @@ const LessonActions: React.FC<Props> = ({ currentStatus, onChangeStatus, current
 
     // Reschedule dialog state
     const [rescheduleOpen, setRescheduleOpen] = useState(false);
+    const [deleteOpen, setDeleteOpen] = useState(false);
 
     // Start video call
     const startVideoCall = () => {
@@ -42,6 +45,12 @@ const LessonActions: React.FC<Props> = ({ currentStatus, onChangeStatus, current
                 roomName: `lesson-${lessonId}`,
             },
         });
+    };
+
+    const handleDeleteLesson = () => {
+        deleteLesson(lessonId)
+        setDeleteOpen(false)
+        navigate(`/lessons`)
     };
 
     return (
@@ -115,6 +124,16 @@ const LessonActions: React.FC<Props> = ({ currentStatus, onChangeStatus, current
                         Reschedule
                     </Button>
                 )}
+                {currentStatus != "IN_PROGRESS" && (
+                    <Button
+                        variant="contained"
+                        color="error"
+                        startIcon={<DeleteIcon />}
+                        onClick={() => setDeleteOpen(true)}
+                    >
+                        Delete
+                    </Button>
+                )}
             </Stack>
 
             <RescheduleLessonDialog
@@ -126,6 +145,25 @@ const LessonActions: React.FC<Props> = ({ currentStatus, onChangeStatus, current
                     setRescheduleOpen(false);
                 }}
             />
+
+
+            <Dialog open = { deleteOpen }
+                    onClose={() => setDeleteOpen(false)}>
+                <DialogTitle>Delete Lesson</DialogTitle>
+                <DialogContent>
+                    Are you sure you want to delete the lesson ?
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setDeleteOpen(false)}>Cancel</Button>
+                    <Button
+                        onClick={handleDeleteLesson}
+                        color="error"
+                        variant="contained"
+                        >
+                       Delete
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </>
     );
 };
