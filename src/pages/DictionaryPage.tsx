@@ -52,7 +52,7 @@ const DictionaryPage: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'my-vocabulary' | 'library'>('my-vocabulary');
 
     // Fetch all vocabulary words
-    const {data: words = []} = useDictionary();
+    const {data: words = [], refetch: refetchWords} = useDictionary();
 
     // Fetch words assigned to the student (if user is a student)
     const {data: assignedWords = []} = useAssignments(user?.id || '');
@@ -83,6 +83,17 @@ const DictionaryPage: React.FC = () => {
             }
         }
     }, [isTeacher, words, activeTab, assignedWordIds]);
+
+    // Get words for quiz - for students, always use only assigned words
+    const quizWords = useMemo(() => {
+        if (isTeacher) {
+            // Teachers see all words in quiz
+            return words;
+        } else {
+            // Students always see only assigned words in quiz
+            return words.filter(word => assignedWordIds.has(word.id));
+        }
+    }, [isTeacher, words, assignedWordIds]);
 
     const deleteWord = useDeleteWord();
     useCreateWord();
@@ -472,19 +483,28 @@ const DictionaryPage: React.FC = () => {
             </motion.div>
 
             {/* Dialogs */}
-            <GenerateWordDialog open={genOpen} onClose={() => setGenOpen(false)}/>
+            <GenerateWordDialog open={genOpen} onClose={() => {
+                setGenOpen(false);
+                refetchWords(); // Refetch words when dialog is closed
+            }}/>
 
             <ReviewWordDialog
                 open={reviewOpen}
                 data={selected}
                 onSave={handleReviewSave}
-                onClose={() => setReviewOpen(false)}
+                onClose={() => {
+                    setReviewOpen(false);
+                    refetchWords(); // Refetch words when dialog is closed
+                }}
             />
 
             <QuizMode
                 open={quizOpen}
-                onClose={() => setQuizOpen(false)}
-                words={words}
+                onClose={() => {
+                    setQuizOpen(false);
+                    refetchWords(); // Refetch words when dialog is closed
+                }}
+                words={quizWords}
             />
 
             {/* Modal for assigning words to students */}
@@ -497,6 +517,7 @@ const DictionaryPage: React.FC = () => {
                         setSelectionMode(false);
                         setSelectedWords([]);
                     }
+                    refetchWords(); // Refetch words when dialog is closed
                 }}
                 selectedWords={selectedWords}
             />
