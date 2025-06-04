@@ -1,8 +1,6 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Helmet } from 'react-helmet';
 import { Box } from '@mui/material';
-import { useAuth } from '../../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
 
 // Import all section components
 import HeroSection from './HeroSection';

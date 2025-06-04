@@ -94,7 +94,7 @@ const HeroSection: React.FC = () => {
                   variant="outlined"
                   color="primary"
                   size="large"
-                  onClick={() => navigate("/dashboard")}
+                  onClick={() => keycloak.login({ redirectUri: window.location.origin + '/dashboard' })}
                   sx={{
                     px: 4,
                     py: 1.5,

@@ -1,4 +1,4 @@
-//@ts-ignore
+//@ts-expect-error - Keycloak types may not be fully compatible with TypeScript
 import Keycloak from 'keycloak-js';
 
 const keycloak = new Keycloak({
@@ -14,7 +14,7 @@ export async function initKeycloak() {
         hasInit = true;
 
         const authenticated = await keycloak.init({
-            onLoad: 'login-required',
+            onLoad: 'check-sso',
             pkceMethod: 'S256'
         });
 

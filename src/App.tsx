@@ -35,9 +35,17 @@ const App: React.FC = () => {
                         <Route path="/" element={<LandingPage />} />
                         <Route path="/book-trial" element={<LandingPage />} /> {/* Placeholder - will be implemented later */}
                         <Route path="/pricing" element={<LandingPage />} /> {/* Placeholder - will be implemented later */}
-                        <Route path="/onboarding" element={<Onboarding />} />
 
                         {/* Protected routes - wrapped in AppWrapper */}
+                        <Route path="/onboarding"
+                               element={
+                                   <PrivateRoute>
+                                       <AppWrapper>
+                                           <Onboarding />
+                                       </AppWrapper>
+                                   </PrivateRoute>
+                               }
+                        />
                         <Route
                             path="/dashboard"
                             element={
