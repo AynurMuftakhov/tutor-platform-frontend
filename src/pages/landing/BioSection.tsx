@@ -31,16 +31,32 @@ const BioSection: React.FC = () => {
             transition={{ duration: 0.5 }}
             viewport={{ once: true }}
           >
-            <Avatar
-              src="/assets/sabina.jpg"
-              alt="Sabina - English Tutor"
+            <Box
               sx={{
-                width: { xs: 180, md: 220 },
-                height: { xs: 180, md: 220 },
+                position: 'relative',
+                width: { xs: 200, md: 240 },
+                height: { xs: 200, md: 240 },
+                borderRadius: '50%',
+                overflow: 'hidden',
                 border: `4px solid ${theme.palette.primary.main}`,
-                boxShadow: theme.shadows[3],
+                boxShadow: theme.shadows[4],
               }}
-            />
+            >
+              <Box
+                component="img"
+                src="/assets/sabina_circle.jpg"
+                alt="Sabina - English Tutor"
+                sx={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  objectPosition: 'center top',
+                }}
+                loading="lazy"
+                srcSet="/assets/sabina_circle.jpg 400w, /assets/sabina_circle.jpg 800w"
+                sizes="(max-width: 600px) 200px, 240px"
+              />
+            </Box>
           </motion.div>
 
           <Box
@@ -75,8 +91,8 @@ const BioSection: React.FC = () => {
               transition={{ duration: 0.5, delay: 0.2 }}
               viewport={{ once: true }}
             >
-              <Typography variant="body1" paragraph sx={{ mb: 3 }}>
-                With over 5 years of experience teaching English to students from around the world, 
+              <Typography variant="body1" paragraph sx={{ mb: 2 }}>
+                With over 18 years of experience teaching English to students from around the world,
                 I&apos;m passionate about creating personalized learning experiences that build confidence 
                 and fluency. My teaching approach focuses on practical communication skills while 
                 ensuring a strong foundation in grammar and vocabulary.
@@ -102,19 +118,37 @@ const BioSection: React.FC = () => {
                   label="TESOL Certified"
                   color="primary"
                   variant="outlined"
-                  sx={{ fontWeight: 500 }}
+                  aria-label="Qualification: TESOL Certified"
+                  sx={{ 
+                    fontWeight: 500,
+                    '&:hover': {
+                      boxShadow: `0 0 0 1px ${theme.palette.primary.main}`,
+                    }
+                  }}
                 />
                 <Chip
-                  label="5+ Years Experience"
+                  label="18+ Years Experience"
                   color="primary"
                   variant="outlined"
-                  sx={{ fontWeight: 500 }}
+                  aria-label="Experience: More than 18 years teaching English"
+                  sx={{ 
+                    fontWeight: 500,
+                    '&:hover': {
+                      boxShadow: `0 0 0 1px ${theme.palette.primary.main}`,
+                    }
+                  }}
                 />
                 <Chip
                   label="Business English"
                   color="primary"
                   variant="outlined"
-                  sx={{ fontWeight: 500 }}
+                  aria-label="Specialization: Business English"
+                  sx={{ 
+                    fontWeight: 500,
+                    '&:hover': {
+                      boxShadow: `0 0 0 1px ${theme.palette.primary.main}`,
+                    }
+                  }}
                 />
               </Box>
             </motion.div>
@@ -149,7 +183,7 @@ const BioSection: React.FC = () => {
                 variant="outlined"
                 color="primary"
                 startIcon={<LinkedInIcon />}
-                href="https://linkedin.com"
+                href="https://www.linkedin.com/in/sabina-shekhmametyeva-490604232"
                 target="_blank"
                 rel="noopener noreferrer"
                 sx={{

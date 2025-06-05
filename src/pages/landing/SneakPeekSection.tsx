@@ -1,20 +1,32 @@
-import React, { useState } from 'react';
-import { Box, Container, Typography, useTheme, Dialog, IconButton, useMediaQuery } from '@mui/material';
-import { motion } from 'framer-motion';
+import React, { useState, useRef, useEffect } from 'react';
+import { Box, Container, Typography, useTheme, Dialog, IconButton, useMediaQuery, alpha } from '@mui/material';
+import { motion, AnimatePresence } from 'framer-motion';
 import CloseIcon from '@mui/icons-material/Close';
+import NavigateNextIcon from '@mui/icons-material/NavigateNext';
+import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
+// Import Swiper and modules
+import { Swiper, SwiperSlide } from 'swiper/react';
+import { Navigation, Pagination, A11y, EffectFade } from 'swiper/modules';
+import 'swiper/css';
+import 'swiper/css/navigation';
+import 'swiper/css/pagination';
+import 'swiper/css/effect-fade';
 
 const screenshots = [
   {
     id: 'dashboard',
-    src: '/assets/screens/dashboard.jpg',
+    type: 'video',
+    src: '/assets/screens/dashboard.mp4',
+    poster: '/assets/screens/dashboard-poster.jpg',
     alt: 'Student Dashboard',
     caption: 'Student Dashboard - Track your progress and upcoming lessons'
   },
   {
     id: 'lessons-schedule',
+    type: 'gif',
     src: '/assets/screens/lessons-schedule.jpg',
-    alt: 'Lesson Room',
-    caption: 'Lesson Schedule - Interactive schedule to track your lessons'
+    alt: 'Lesson Calendar',
+    caption: 'Interactive Calendar - Schedule and manage your lessons'
   }
 ];
 
@@ -22,6 +34,10 @@ const SneakPeekSection: React.FC = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [isHovering, setIsHovering] = useState(false);
+  const swiperRef = useRef<any>(null);
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   const handleOpenLightbox = (src: string) => {
     setSelectedImage(src);
@@ -29,6 +45,66 @@ const SneakPeekSection: React.FC = () => {
 
   const handleCloseLightbox = () => {
     setSelectedImage(null);
+  };
+
+  const handleSlideChange = (swiper: any) => {
+    setActiveIndex(swiper.activeIndex);
+  };
+
+  // Media component that handles different content types
+  const MediaContent = ({ item }: { item: typeof screenshots[0] }) => {
+    switch (item.type) {
+      case 'video':
+        return (
+          <Box
+            component="video"
+            src={item.src}
+            poster={item.poster}
+            autoPlay
+            muted
+            loop
+            playsInline
+            sx={{
+              width: '100%',
+              height: 'auto',
+              display: 'block',
+              borderRadius: 3,
+              boxShadow: theme.shadows[3],
+            }}
+          />
+        );
+      case 'gif':
+        return (
+          <Box
+            component="img"
+            src={item.src}
+            alt={item.alt}
+            sx={{
+              width: '100%',
+              height: 'auto',
+              display: 'block',
+              borderRadius: 3,
+              boxShadow: theme.shadows[3],
+            }}
+          />
+        );
+      default:
+        return (
+          <Box
+            component="img"
+            src={item.src}
+            alt={item.alt}
+            sx={{
+              width: '100%',
+              height: 'auto',
+              display: 'block',
+              borderRadius: 3,
+              boxShadow: theme.shadows[3],
+            }}
+            loading="lazy"
+          />
+        );
+    }
   };
 
   return (
@@ -62,67 +138,141 @@ const SneakPeekSection: React.FC = () => {
           </Typography>
         </Box>
 
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: isMobile ? 'column' : 'row',
-            gap: 4,
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          viewport={{ once: true }}
+          style={{ width: '100%', maxWidth: 900, margin: '0 auto' }}
+          onMouseEnter={() => setIsHovering(true)}
+          onMouseLeave={() => setIsHovering(false)}
         >
-          {screenshots.map((screenshot, index) => (
-            <motion.div
-              key={screenshot.id}
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: index * 0.2 }}
-              viewport={{ once: true }}
-              style={{ width: isMobile ? '100%' : '45%' }}
+          <Box
+            sx={{
+              position: 'relative',
+              borderRadius: 4,
+              overflow: 'hidden',
+              boxShadow: theme.shadows[4],
+            }}
+          >
+            <Swiper
+              onSwiper={(swiper) => {
+                swiperRef.current = swiper;
+              }}
+              modules={[Navigation, Pagination, A11y, EffectFade]}
+              spaceBetween={0}
+              slidesPerView={1}
+              navigation={{
+                nextEl: '.swiper-button-next',
+                prevEl: '.swiper-button-prev',
+              }}
+              pagination={{ 
+                clickable: true,
+                el: '.swiper-pagination'
+              }}
+              effect={prefersReducedMotion ? 'slide' : 'fade'}
+              onSlideChange={handleSlideChange}
+              style={{ borderRadius: '16px' }}
             >
-              <Box
-                sx={{
-                  position: 'relative',
-                  cursor: 'pointer',
-                  overflow: 'hidden',
-                  borderRadius: 4,
-                  boxShadow: theme.shadows[3],
-                  transition: 'transform 0.3s ease, box-shadow 0.3s ease',
-                  '&:hover': {
-                    transform: 'scale(1.02)',
-                    boxShadow: theme.shadows[6],
-                  },
-                }}
-                onClick={() => handleOpenLightbox(screenshot.src)}
-              >
-                <Box
-                  component="img"
-                  src={screenshot.src}
-                  alt={screenshot.alt}
-                  sx={{
-                    width: '100%',
-                    height: 'auto',
-                    display: 'block',
-                  }}
-                  loading="lazy"
-                />
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-                    color: 'white',
-                    padding: 2,
-                  }}
-                >
-                  <Typography variant="body2">{screenshot.caption}</Typography>
-                </Box>
-              </Box>
-            </motion.div>
-          ))}
-        </Box>
+              {screenshots.map((item) => (
+                <SwiperSlide key={item.id}>
+                  <Box 
+                    sx={{ 
+                      position: 'relative',
+                      cursor: item.type === 'image' ? 'pointer' : 'default',
+                    }}
+                    onClick={() => item.type === 'image' && handleOpenLightbox(item.src)}
+                  >
+                    <MediaContent item={item} />
+
+                    {/* Caption with pill chip and backdrop blur */}
+                    <AnimatePresence>
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 20 }}
+                        transition={{ duration: 0.3 }}
+                      >
+                        <Box
+                          sx={{
+                            position: 'absolute',
+                            bottom: 16,
+                            left: 16,
+                            maxWidth: '80%',
+                            backgroundColor: alpha(theme.palette.common.black, 0.6),
+                            backdropFilter: 'blur(8px)',
+                            color: 'white',
+                            padding: '8px 16px',
+                            borderRadius: '24px',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                          }}
+                        >
+                          <Typography variant="body2">{item.caption}</Typography>
+                        </Box>
+                      </motion.div>
+                    </AnimatePresence>
+                  </Box>
+                </SwiperSlide>
+              ))}
+            </Swiper>
+
+            {/* Custom navigation buttons */}
+            <IconButton
+              className="swiper-button-prev"
+              sx={{
+                position: 'absolute',
+                left: 16,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                zIndex: 10,
+                backgroundColor: alpha(theme.palette.common.white, 0.8),
+                backdropFilter: 'blur(4px)',
+                color: theme.palette.text.primary,
+                '&:hover': {
+                  backgroundColor: alpha(theme.palette.common.white, 0.9),
+                },
+                opacity: isHovering ? 1 : 0,
+                transition: 'opacity 0.3s ease',
+              }}
+            >
+              <NavigateBeforeIcon />
+            </IconButton>
+
+            <IconButton
+              className="swiper-button-next"
+              sx={{
+                position: 'absolute',
+                right: 16,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                zIndex: 10,
+                backgroundColor: alpha(theme.palette.common.white, 0.8),
+                backdropFilter: 'blur(4px)',
+                color: theme.palette.text.primary,
+                '&:hover': {
+                  backgroundColor: alpha(theme.palette.common.white, 0.9),
+                },
+                opacity: isHovering ? 1 : 0,
+                transition: 'opacity 0.3s ease',
+              }}
+            >
+              <NavigateNextIcon />
+            </IconButton>
+
+            {/* Custom pagination */}
+            <Box
+              className="swiper-pagination"
+              sx={{
+                position: 'absolute',
+                bottom: 16,
+                right: 16,
+                display: 'flex',
+                gap: 1,
+                zIndex: 10,
+              }}
+            />
+          </Box>
+        </motion.div>
 
         <Dialog
           open={!!selectedImage}

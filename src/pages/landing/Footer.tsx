@@ -42,58 +42,7 @@ const Footer: React.FC = () => {
           </Grid>
 
           <Grid item xs={12} sm={6} md={4}>
-            <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-              Quick Links
-            </Typography>
-            <Box component="nav" sx={{ display: 'flex', flexDirection: 'column' }}>
-              <MuiLink
-                component={Link}
-                to="/book-trial"
-                sx={{
-                  color: theme.palette.grey[300],
-                  mb: 1,
-                  textDecoration: 'none',
-                  '&:hover': { color: 'white', textDecoration: 'underline' },
-                }}
-              >
-                Book a Trial
-              </MuiLink>
-              <MuiLink
-                component={Link}
-                to="/pricing"
-                sx={{
-                  color: theme.palette.grey[300],
-                  mb: 1,
-                  textDecoration: 'none',
-                  '&:hover': { color: 'white', textDecoration: 'underline' },
-                }}
-              >
-                Pricing
-              </MuiLink>
-              <MuiLink
-                component={Link}
-                to="/login"
-                sx={{
-                  color: theme.palette.grey[300],
-                  mb: 1,
-                  textDecoration: 'none',
-                  '&:hover': { color: 'white', textDecoration: 'underline' },
-                }}
-              >
-                Log In
-              </MuiLink>
-              <MuiLink
-                component="a"
-                href="mailto:contact@speakshire.com"
-                sx={{
-                  color: theme.palette.grey[300],
-                  textDecoration: 'none',
-                  '&:hover': { color: 'white', textDecoration: 'underline' },
-                }}
-              >
-                Contact Us
-              </MuiLink>
-            </Box>
+
           </Grid>
 
           <Grid item xs={12} sm={6} md={4}>
@@ -102,25 +51,8 @@ const Footer: React.FC = () => {
             </Typography>
             <Box sx={{ display: 'flex', gap: 1 }}>
               <IconButton
-                aria-label="Facebook"
-                sx={{
-                  color: theme.palette.grey[300],
-                  '&:hover': { color: 'white', backgroundColor: 'rgba(255, 255, 255, 0.1)' },
-                }}
-              >
-                <FacebookIcon />
-              </IconButton>
-              <IconButton
-                aria-label="Twitter"
-                sx={{
-                  color: theme.palette.grey[300],
-                  '&:hover': { color: 'white', backgroundColor: 'rgba(255, 255, 255, 0.1)' },
-                }}
-              >
-                <TwitterIcon />
-              </IconButton>
-              <IconButton
                 aria-label="Instagram"
+                href="https://www.instagram.com/mew.sabina/"
                 sx={{
                   color: theme.palette.grey[300],
                   '&:hover': { color: 'white', backgroundColor: 'rgba(255, 255, 255, 0.1)' },
@@ -130,6 +62,7 @@ const Footer: React.FC = () => {
               </IconButton>
               <IconButton
                 aria-label="LinkedIn"
+                href="https://www.linkedin.com/in/sabina-shekhmametyeva-490604232/"
                 sx={{
                   color: theme.palette.grey[300],
                   '&:hover': { color: 'white', backgroundColor: 'rgba(255, 255, 255, 0.1)' },

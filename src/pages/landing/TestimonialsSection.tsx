@@ -1,21 +1,42 @@
-import React, { useEffect, useState } from 'react';
-import { Box, Card, Container, Typography, Avatar, useTheme, useMediaQuery } from '@mui/material';
-import { motion } from 'framer-motion';
+import React, { useEffect, useState, useRef } from 'react';
+import { Box, Card, Container, Typography, Avatar, useTheme, useMediaQuery, alpha } from '@mui/material';
+import { motion, AnimatePresence } from 'framer-motion';
 import { testimonials } from '../../data/sample-data';
+import StarRating from '../../components/StarRating';
 
 const TestimonialsSection: React.FC = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [activeIndex, setActiveIndex] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  // Auto-slide functionality
+  // Auto-slide functionality with pause on hover
   useEffect(() => {
-    const interval = setInterval(() => {
-      setActiveIndex((prevIndex) => (prevIndex + 1) % testimonials.length);
-    }, 5000);
+    // Skip auto-sliding if user prefers reduced motion
+    if (prefersReducedMotion) return;
 
-    return () => clearInterval(interval);
-  }, []);
+    if (!isPaused) {
+      intervalRef.current = setInterval(() => {
+        setActiveIndex((prevIndex) => (prevIndex + 1) % testimonials.length);
+      }, 8000); // 8 seconds per slide as specified in requirements
+    }
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [isPaused, prefersReducedMotion]);
+
+  const handleMouseEnter = () => {
+    setIsPaused(true);
+  };
+
+  const handleMouseLeave = () => {
+    setIsPaused(false);
+  };
 
   return (
     <Box
@@ -69,6 +90,8 @@ const TestimonialsSection: React.FC = () => {
               gap: 3,
               justifyContent: isMobile ? 'flex-start' : 'center',
             }}
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
           >
             {testimonials.map((testimonial, index) => (
               <motion.div
@@ -93,18 +116,35 @@ const TestimonialsSection: React.FC = () => {
                     boxShadow: index === activeIndex ? theme.shadows[4] : theme.shadows[1],
                     border: index === activeIndex ? `2px solid ${theme.palette.primary.main}` : '1px solid rgba(0, 0, 0, 0.08)',
                     transition: 'all 0.3s ease',
-                    transform: index === activeIndex ? 'scale(1.03)' : 'scale(1)',
+                    transform: index === activeIndex ? 'scale(1.04)' : 'scale(1)',
+                    position: 'relative',
                     '&:hover': {
                       boxShadow: theme.shadows[4],
-                      transform: 'scale(1.03)',
+                      transform: 'scale(1.04)',
                     },
+                    '&::after': index === activeIndex ? {
+                      content: '""',
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      borderRadius: 4,
+                      boxShadow: `0 0 20px ${alpha(theme.palette.primary.main, 0.4)}`,
+                      zIndex: -1,
+                    } : {},
                   }}
                 >
                   <Box sx={{ display: 'flex', mb: 2, alignItems: 'center' }}>
                     <Avatar
                       src={testimonial.avatar}
                       alt={testimonial.name}
-                      sx={{ width: 56, height: 56, mr: 2 }}
+                      sx={{ 
+                        width: 56, 
+                        height: 56, 
+                        mr: 2,
+                        border: index === activeIndex ? `2px solid ${theme.palette.primary.main}` : 'none',
+                      }}
                     />
                     <Box>
                       <Typography variant="h6" component="h3" gutterBottom sx={{ fontWeight: 600 }}>
@@ -126,6 +166,15 @@ const TestimonialsSection: React.FC = () => {
                   >
                     &ldquo;{testimonial.quote}&rdquo;
                   </Typography>
+
+                  {/* Star Rating */}
+                  <Box sx={{ mt: 'auto', mb: 1 }}>
+                    <StarRating 
+                      rating={testimonial.rating} 
+                      size="medium" 
+                      color={theme.palette.secondary.main}
+                    />
+                  </Box>
                 </Card>
               </motion.div>
             ))}

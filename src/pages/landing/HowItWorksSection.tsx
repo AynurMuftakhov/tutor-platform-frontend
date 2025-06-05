@@ -1,12 +1,86 @@
-import React from 'react';
-import { Box, Button, Container, Typography, useTheme, useMediaQuery, Stepper, Step, StepLabel, StepContent } from '@mui/material';
-import { motion } from 'framer-motion';
+import React, { useState, useEffect } from 'react';
+import { Box, Button, Container, Typography, useTheme, useMediaQuery, Stepper, Step, StepLabel, StepContent, StepIcon, StepIconProps } from '@mui/material';
+import { motion, useAnimation, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { howItWorksSteps } from '../../data/sample-data';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+
+// Custom StepIcon component with animated check mark
+const CustomStepIcon: React.FC<StepIconProps> = (props) => {
+  const { active, completed, icon } = props;
+  const theme = useTheme();
+  const controls = useAnimation();
+  const [hasAnimated, setHasAnimated] = useState(false);
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  useEffect(() => {
+    if (completed && !hasAnimated && !prefersReducedMotion) {
+      // Start animation after 1 second delay
+      const timer = setTimeout(() => {
+        controls.start({
+          scale: [1, 1.2, 1],
+          opacity: 1,
+          transition: { duration: 0.5 }
+        });
+        setHasAnimated(true);
+      }, 1000);
+
+      return () => clearTimeout(timer);
+    } else if (completed) {
+      // For users who prefer reduced motion or after animation
+      controls.set({ opacity: 1 });
+    }
+  }, [completed, controls, hasAnimated, prefersReducedMotion]);
+
+  return (
+    <Box sx={{ position: 'relative', display: 'inline-flex' }}>
+      {/* Number circle */}
+      <Box
+        sx={{
+          width: 32,
+          height: 32,
+          borderRadius: '50%',
+          backgroundColor: active 
+            ? theme.palette.primary.main 
+            : completed 
+              ? theme.palette.secondary.main 
+              : theme.palette.grey[300],
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#fff',
+          zIndex: 1,
+          transition: 'background-color 0.3s ease',
+        }}
+      >
+        {completed ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={controls}
+          >
+            <CheckCircleIcon />
+          </motion.div>
+        ) : (
+          <Typography variant="body2" component="span" sx={{ fontWeight: 600 }}>
+            {icon}
+          </Typography>
+        )}
+      </Box>
+    </Box>
+  );
+};
 
 const HowItWorksSection: React.FC = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const [activeStep, setActiveStep] = useState(-1);
+
+  // Track which steps are in viewport for animations
+  const handleStepInView = (index: number, inView: boolean) => {
+    if (inView && activeStep < index) {
+      setActiveStep(index);
+    }
+  };
 
   return (
     <Box
@@ -48,53 +122,92 @@ const HowItWorksSection: React.FC = () => {
           <Stepper
             orientation={isMobile ? 'vertical' : 'horizontal'}
             alternativeLabel={!isMobile}
+            activeStep={activeStep}
             sx={{
               '& .MuiStepConnector-line': {
                 borderColor: theme.palette.primary.light,
+                transition: 'border-color 0.3s ease',
               },
-              '& .MuiStepIcon-root.Mui-active': {
-                color: theme.palette.primary.main,
-              },
-              '& .MuiStepIcon-root.Mui-completed': {
-                color: theme.palette.secondary.main,
+              '& .MuiStepLabel-label': {
+                mt: 1,
               },
             }}
           >
             {howItWorksSteps.map((step, index) => (
-              <Step key={step.step} completed={true}>
-                <StepLabel>
+              <Step 
+                key={step.step} 
+                completed={index <= activeStep}
+              >
+                <StepLabel StepIconComponent={CustomStepIcon}>
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: index * 0.2 }}
-                    viewport={{ once: true }}
+                    whileInView={{ 
+                      opacity: 1, 
+                      y: 0,
+                      transition: { 
+                        duration: 0.5, 
+                        delay: index * 0.2 
+                      }
+                    }}
+                    onViewportEnter={() => handleStepInView(index, true)}
+                    viewport={{ once: true, amount: 0.6 }}
                   >
-                    <Typography variant="h6" component="h3" sx={{ fontWeight: 600, mb: 1 }}>
+                    <Typography 
+                      variant="h6" 
+                      component="h3" 
+                      sx={{ 
+                        fontWeight: 600, 
+                        mb: 1,
+                        color: index <= activeStep ? theme.palette.text.primary : theme.palette.text.secondary,
+                      }}
+                    >
                       {step.title}
                     </Typography>
                   </motion.div>
                 </StepLabel>
-                <StepContent>
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: index * 0.2 + 0.1 }}
-                    viewport={{ once: true }}
-                  >
-                    <Typography color="textSecondary" sx={{ mb: 2 }}>
-                      {step.description}
-                    </Typography>
-                  </motion.div>
-                </StepContent>
-                {!isMobile && (
-                  <Box sx={{ mt: 2, textAlign: 'center' }}>
+
+                {/* Description - only shown once */}
+                {isMobile ? (
+                  <StepContent>
                     <motion.div
                       initial={{ opacity: 0, y: 20 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.5, delay: index * 0.2 + 0.1 }}
+                      whileInView={{ 
+                        opacity: 1, 
+                        y: 0,
+                        transition: { 
+                          duration: 0.5, 
+                          delay: index * 0.2 + 0.1 
+                        }
+                      }}
                       viewport={{ once: true }}
                     >
-                      <Typography color="textSecondary">
+                      <Typography color="textSecondary" sx={{ mb: 2 }}>
+                        {step.description}
+                      </Typography>
+                    </motion.div>
+                  </StepContent>
+                ) : (
+                  <Box sx={{ mt: 2, textAlign: 'center', maxWidth: 200, mx: 'auto' }}>
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      whileInView={{ 
+                        opacity: 1, 
+                        y: 0,
+                        transition: { 
+                          duration: 0.5, 
+                          delay: index * 0.2 + 0.1 
+                        }
+                      }}
+                      viewport={{ once: true }}
+                    >
+                      <Typography 
+                        color="textSecondary"
+                        variant="body2"
+                        sx={{
+                          fontSize: '0.875rem',
+                          lineHeight: 1.5,
+                        }}
+                      >
                         {step.description}
                       </Typography>
                     </motion.div>
@@ -116,7 +229,7 @@ const HowItWorksSection: React.FC = () => {
                 color="primary"
                 size="large"
                 component={Link}
-                to="/book-trial"
+                to="/contact-us"
                 sx={{
                   px: 4,
                   py: 1.5,
@@ -125,7 +238,7 @@ const HowItWorksSection: React.FC = () => {
                   fontWeight: 600,
                 }}
               >
-                Book a Free Trial
+                Contact with Us
               </Button>
             </motion.div>
           </Box>

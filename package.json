@@ -12,6 +12,7 @@
     "@fullcalendar/timegrid": "^6.1.17",
     "@livekit/components-react": "^2.9.9",
     "@livekit/components-styles": "^1.0.7",
+    "@lottiefiles/react-lottie-player": "^3.6.0",
     "@mui/icons-material": "^6.3.0",
     "@mui/material": "^6.1.10",
     "@mui/x-data-grid": "^7.28.2",
@@ -28,6 +29,7 @@
     "react-dom": "^18.3.1",
     "react-helmet": "^6.1.0",
     "react-router-dom": "^7.0.2",
+    "swiper": "^11.2.8",
     "tanstack": "^1.0.0",
     "web-vitals": "^4.2.4"
   },
