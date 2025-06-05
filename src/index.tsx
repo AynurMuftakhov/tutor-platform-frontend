@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
 import { AuthProvider } from './context/AuthContext';
-import { createTheme, ThemeProvider, responsiveFontSizes } from '@mui/material';
+import { createTheme, ThemeProvider, responsiveFontSizes, CssBaseline } from '@mui/material';
 
 // 2025 Modern Design System
 let theme = createTheme({
@@ -59,8 +59,11 @@ let theme = createTheme({
             disabled: '#9ca3af'
         },
         background: {
-            default: '#F7F9FC',
+            default: '#eef4ff',
             paper: '#ffffff'
+        },
+        gradients: {
+            lightRadial: 'radial-gradient(circle, #eef4ff 0%, #ffffff 100%)',
         },
         divider: 'rgba(0, 0, 0, 0.08)'
     },
@@ -68,7 +71,7 @@ let theme = createTheme({
         fontFamily: ['Inter', 'Roboto', 'sans-serif'].join(','),
         h1: {
             fontWeight: 700,
-            fontSize: '2.5rem',
+            fontSize: 'clamp(2.5rem, 4vw + 1rem, 4rem)',
             lineHeight: 1.2,
             letterSpacing: '-0.01em'
         },
@@ -111,7 +114,10 @@ let theme = createTheme({
             lineHeight: 1.5
         },
         body1: {
-            fontSize: '1rem',
+            fontSize: {
+                xs: '1rem',
+                xl: '1.125rem'
+            },
             lineHeight: 1.5
         },
         body2: {
@@ -332,17 +338,70 @@ let theme = createTheme({
     }
 });
 
+// Add custom properties for motion preferences
+theme = createTheme(theme, {
+    components: {
+        ...theme.components,
+        MuiCssBaseline: {
+            styleOverrides: {
+                '@media (prefers-reduced-motion: reduce)': {
+                    '*': {
+                        animationDuration: '0.01ms !important',
+                        animationIterationCount: '1 !important',
+                        transitionDuration: '0.01ms !important',
+                        scrollBehavior: 'auto !important',
+                    },
+                },
+                // Preload critical fonts
+                '@font-face': [
+                    {
+                        fontFamily: 'Playfair Display',
+                        fontStyle: 'normal',
+                        fontWeight: 700,
+                        fontDisplay: 'swap',
+                        src: `url(https://fonts.gstatic.com/s/playfairdisplay/v30/nuFvD-vYSZviVYUb_rj3ij__anPXJzDwcbmjWBN2PKeiukDXK1hY.woff2) format('woff2')`,
+                        unicodeRange: 'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD',
+                    },
+                    {
+                        fontFamily: 'Inter',
+                        fontStyle: 'normal',
+                        fontWeight: 400,
+                        fontDisplay: 'swap',
+                        src: `url(https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZs.woff) format('woff')`,
+                        unicodeRange: 'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD',
+                    },
+                    {
+                        fontFamily: 'Inter',
+                        fontStyle: 'normal',
+                        fontWeight: 600,
+                        fontDisplay: 'swap',
+                        src: `url(https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuGKYMZs.woff) format('woff')`,
+                        unicodeRange: 'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD',
+                    },
+                ],
+                'html': {
+                    scrollBehavior: 'smooth',
+                },
+                'body': {
+                    minHeight: '100vh',
+                    overflowX: 'hidden',
+                }
+            },
+        },
+    },
+});
+
 // Apply responsive typography
 theme = responsiveFontSizes(theme);
-
 
 const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement);
 root.render(
     <React.StrictMode>
         <ThemeProvider theme={theme}>
+            <CssBaseline />
             <AuthProvider>
                 <App />
             </AuthProvider>
-        </ThemeProvider>,
+        </ThemeProvider>
     </React.StrictMode>
 );

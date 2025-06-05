@@ -13,6 +13,7 @@ import LessonDetailPage from "./pages/LessonDetailsPage";
 import DictionaryPage from "./pages/DictionaryPage";
 import StudentVocabularyPage from "./pages/StudentVocabularyPage";
 import VideoCallPage from "./pages/VideoCallPage";
+import LandingPage from "./pages/landing/LandingPage";
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ApiErrorProvider } from './context/ApiErrorContext';
 
@@ -29,99 +30,113 @@ const App: React.FC = () => {
         <QueryClientProvider client={queryClient}>
             <ApiErrorProvider>
                 <Router>
-                    <AppWrapper>
-                        <Routes>
-                            <Route
-                                path="/profile"
-                                element={
-                                    <PrivateRoute>
+                    <Routes>
+                        {/* Public routes */}
+                        <Route path="/" element={<LandingPage />} />
+                        <Route path="/book-trial" element={<LandingPage />} /> {/* Placeholder - will be implemented later */}
+                        <Route path="/pricing" element={<LandingPage />} /> {/* Placeholder - will be implemented later */}
+
+                        {/* Protected routes - wrapped in AppWrapper */}
+                        <Route path="/onboarding"
+                               element={
+                                   <PrivateRoute>
+                                       <AppWrapper>
+                                           <Onboarding />
+                                       </AppWrapper>
+                                   </PrivateRoute>
+                               }
+                        />
+                        <Route
+                            path="/dashboard"
+                            element={
+                                <PrivateRoute>
+                                    <AppWrapper>
+                                        <Dashboard />
+                                    </AppWrapper>
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/profile"
+                            element={
+                                <PrivateRoute>
+                                    <AppWrapper>
                                         <Profile />
-                                    </PrivateRoute>
-                                }
-                            />
-
-                            <Route
-                                path="/my-students"
-                                element={
-                                    <PrivateRoute>
+                                    </AppWrapper>
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/my-students"
+                            element={
+                                <PrivateRoute>
+                                    <AppWrapper>
                                         <MyStudentsPage />
-                                    </PrivateRoute>
-                                }
-                            />
-
-                            <Route
-                                path="/dashboard"
-                                element={
-                                    <PrivateRoute>
-                                        <Dashboard />
-                                    </PrivateRoute>
-                                }
-                            />
-                            <Route
-                                path="/admin"
-                                element={
-                                    <PrivateRoute>
+                                    </AppWrapper>
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/admin"
+                            element={
+                                <PrivateRoute>
+                                    <AppWrapper>
                                         <AdminDashboard />
-                                    </PrivateRoute>
-                                }
-                            />
-
-                            <Route
-                                path="/lessons"
-                                element={
-                                    <PrivateRoute>
+                                    </AppWrapper>
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/lessons"
+                            element={
+                                <PrivateRoute>
+                                    <AppWrapper>
                                         <LessonsPage />
-                                    </PrivateRoute>
-                                }
-                            />
-
-                            <Route
-                                path="/lessons/:id"
-                                element={
-                                    <PrivateRoute>
+                                    </AppWrapper>
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/lessons/:id"
+                            element={
+                                <PrivateRoute>
+                                    <AppWrapper>
                                         <LessonDetailPage />
-                                    </PrivateRoute>
-                                }
-                            />
-
-                            <Route
-                                path="/vocabulary"
-                                element={
-                                    <PrivateRoute>
+                                    </AppWrapper>
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/vocabulary"
+                            element={
+                                <PrivateRoute>
+                                    <AppWrapper>
                                         <DictionaryPage />
-                                    </PrivateRoute>
-                                }
-                            />
-
-                            <Route
-                                path="/students/:studentId/vocabulary"
-                                element={
-                                    <PrivateRoute>
+                                    </AppWrapper>
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/students/:studentId/vocabulary"
+                            element={
+                                <PrivateRoute>
+                                    <AppWrapper>
                                         <StudentVocabularyPage />
-                                    </PrivateRoute>
-                                }
-                            />
-
-                            <Route
-                                path="/video-call"
-                                element={
-                                    <PrivateRoute>
+                                    </AppWrapper>
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/video-call"
+                            element={
+                                <PrivateRoute>
+                                    <AppWrapper>
                                         <VideoCallPage />
-                                    </PrivateRoute>
-                                }
-                            />
-
-                            <Route
-                                path="/"
-                                element={
-                                    <PrivateRoute>
-                                        <Dashboard />
-                                    </PrivateRoute>
-                                }
-                            />
-                            <Route path="/onboarding" element={<Onboarding />} />
-                        </Routes>
-                    </AppWrapper>
+                                    </AppWrapper>
+                                </PrivateRoute>
+                            }
+                        />
+                    </Routes>
                 </Router>
             </ApiErrorProvider>
         </QueryClientProvider>
