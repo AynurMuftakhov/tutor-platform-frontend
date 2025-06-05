@@ -62,9 +62,6 @@ let theme = createTheme({
             default: '#eef4ff',
             paper: '#ffffff'
         },
-        gradients: {
-            lightRadial: 'radial-gradient(circle, #eef4ff 0%, #ffffff 100%)',
-        },
         divider: 'rgba(0, 0, 0, 0.08)'
     },
     typography: {
@@ -114,10 +111,7 @@ let theme = createTheme({
             lineHeight: 1.5
         },
         body1: {
-            fontSize: {
-                xs: '1rem',
-                xl: '1.125rem'
-            },
+            fontSize: '1rem',
             lineHeight: 1.5
         },
         body2: {

@@ -35,7 +35,7 @@ const LandingPage: React.FC = () => {
       <Box 
         component="main"
         sx={{
-          background: (theme.palette as any).gradients.lightRadial,
+          background: 'radial-gradient(circle, #eef4ff 0%, #ffffff 100%)',
         }}
       >
         <HeroSection />
