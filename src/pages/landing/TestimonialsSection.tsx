@@ -9,7 +9,7 @@ const TestimonialsSection: React.FC = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [activeIndex, setActiveIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   // Auto-slide functionality with pause on hover
