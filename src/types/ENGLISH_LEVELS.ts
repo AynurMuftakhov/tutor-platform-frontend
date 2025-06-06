@@ -7,6 +7,10 @@ export const ENGLISH_LEVELS = {
         code: "A2",
         description: "Can communicate in simple tasks and describe routine matters.",
     },
+    PreIntermediate: {
+        code: "A2+",
+        description: "Can understand frequently used expressions and communicate in simple terms about familiar topics.",
+    },
     Intermediate: {
         code: "B1",
         description: "Can handle most situations, describe experiences, and express opinions.",
