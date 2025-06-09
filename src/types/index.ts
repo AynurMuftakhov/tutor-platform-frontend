@@ -9,6 +9,8 @@ export enum AudioPart {
     EXAMPLE_SENTENCE = 'EXAMPLE_SENTENCE'
 }
 
+export * from './ListeningTask';
+
 export interface CreateWordRequest {
     text: string;
     teacherId: string;
