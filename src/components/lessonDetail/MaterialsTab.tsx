@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Typography, Button, CircularProgress, Paper } from '@mui/material';
-import { Add as AddIcon } from '@mui/icons-material';
+import { Box, Typography, Button, CircularProgress, Paper, Dialog, IconButton } from '@mui/material';
+import { Add as AddIcon, Close as CloseIcon } from '@mui/icons-material';
 import { ListeningTask } from '../../types/ListeningTask';
 import { getListeningTasks } from '../../services/api';
 import ListeningCard from './ListeningCard';
 import CreateListeningTaskModal from './CreateListeningTaskModal';
+import StandaloneMediaPlayer from './StandaloneMediaPlayer';
+import { extractVideoId } from '../../utils/videoUtils';
 
 interface MaterialsTabProps {
   lessonId: string;
@@ -16,6 +18,17 @@ const MaterialsTab: React.FC<MaterialsTabProps> = ({ lessonId, isTeacher }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [currentTask, setCurrentTask] = useState<ListeningTask | null>(null);
+
+  // Handle play button click
+  const handlePlay = (task: ListeningTask) => {
+    setCurrentTask(task);
+  };
+
+  // Close the player
+  const handleClosePlayer = () => {
+    setCurrentTask(null);
+  };
 
   const fetchTasks = async () => {
     try {
@@ -116,7 +129,12 @@ const MaterialsTab: React.FC<MaterialsTabProps> = ({ lessonId, isTeacher }) => {
       ) : (
         <Box>
           {tasks.map((task) => (
-            <ListeningCard key={task.id} task={task} />
+            <ListeningCard 
+              key={task.id} 
+              task={task} 
+              isTutor={isTeacher}
+              onPlay={handlePlay}
+            />
           ))}
         </Box>
       )}
@@ -128,6 +146,25 @@ const MaterialsTab: React.FC<MaterialsTabProps> = ({ lessonId, isTeacher }) => {
         lessonId={lessonId}
         onTaskCreated={fetchTasks}
       />
+
+      {/* Media Player Dialog */}
+      <Dialog
+        open={!!currentTask}
+        onClose={handleClosePlayer}
+        maxWidth="md"
+        fullWidth
+      >
+        {currentTask && (
+          <Box sx={{ position: 'relative', height: 500 }}>
+            <StandaloneMediaPlayer
+              videoId={extractVideoId(currentTask.sourceUrl) || ''}
+              startTime={currentTask.startSec}
+              endTime={currentTask.endSec}
+              onClose={handleClosePlayer}
+            />
+          </Box>
+        )}
+      </Dialog>
     </Box>
   );
 };

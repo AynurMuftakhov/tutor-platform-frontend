@@ -1,13 +1,23 @@
 import React from 'react';
-import { Box, Card, CardContent, CardMedia, Typography, Chip } from '@mui/material';
+import { Box, Card, CardContent, CardMedia, Typography, Chip, Button } from '@mui/material';
 import { ListeningTask, AssetType } from '../../types/ListeningTask';
-import { MusicNote as AudioIcon, Videocam as VideoIcon } from '@mui/icons-material';
+import { MusicNote as AudioIcon, Videocam as VideoIcon, PlayArrow as PlayIcon } from '@mui/icons-material';
 
 interface ListeningCardProps {
   task: ListeningTask;
+  isInLesson?: boolean;
+  isTutor?: boolean;
+  onPlayInLesson?: (task: ListeningTask) => void;
+  onPlay?: (task: ListeningTask) => void;
 }
 
-const ListeningCard: React.FC<ListeningCardProps> = ({ task }) => {
+const ListeningCard: React.FC<ListeningCardProps> = ({ 
+  task, 
+  isInLesson = false, 
+  isTutor = false, 
+  onPlayInLesson,
+  onPlay
+}) => {
   // Calculate duration in minutes and seconds
   const durationSec = task.endSec - task.startSec;
   const minutes = Math.floor(durationSec / 60);
@@ -46,7 +56,7 @@ const ListeningCard: React.FC<ListeningCardProps> = ({ task }) => {
           <Typography component="div" variant="h6" noWrap>
             {title}
           </Typography>
-          <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', mt: 1, justifyContent: 'space-between' }}>
             <Chip 
               icon={task.assetType === AssetType.AUDIO ? <AudioIcon /> : <VideoIcon />}
               label={formattedDuration}
@@ -54,6 +64,28 @@ const ListeningCard: React.FC<ListeningCardProps> = ({ task }) => {
               color="primary"
               variant="outlined"
             />
+            {isInLesson && isTutor && onPlayInLesson && (
+              <Button
+                size="small"
+                variant="contained"
+                color="primary"
+                startIcon={<PlayIcon />}
+                onClick={() => onPlayInLesson(task)}
+              >
+                Play in Lesson
+              </Button>
+            )}
+            {!isInLesson && isTutor && onPlay && (
+              <Button
+                size="small"
+                variant="contained"
+                color="primary"
+                startIcon={<PlayIcon />}
+                onClick={() => onPlay(task)}
+              >
+                Play
+              </Button>
+            )}
           </Box>
         </CardContent>
       </Box>
