@@ -76,10 +76,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 const { authenticated, keycloak } = await initKeycloak();
                 if (authenticated && keycloak.token) {
                     await saveToken(keycloak.token);
+                } else {
+                    await saveToken(null);
                 }
 
                 keycloak.onAuthSuccess = () => {
                     saveToken(keycloak.token);
+                };
+
+                keycloak.onTokenExpired = () => {
+                    keycloak.updateToken(0).then((refreshed: boolean) => {
+                        if (refreshed) {
+                            saveToken(keycloak.token);
+                        } else {
+                            logout();
+                        }
+                    }).catch(() => {
+                        logout();
+                    });
                 };
 
                 console.log('Keycloak authenticated:', authenticated);
