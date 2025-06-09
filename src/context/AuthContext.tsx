@@ -76,8 +76,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 const { authenticated, keycloak } = await initKeycloak();
                 if (authenticated && keycloak.token) {
                     await saveToken(keycloak.token);
-                } else {
-                    await saveToken(null);
                 }
 
                 keycloak.onAuthSuccess = () => {
