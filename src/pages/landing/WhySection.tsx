@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { Box, Card, CardContent, Container, Grid, Typography, useTheme } from '@mui/material';
 import { motion, useMotionTemplate, useSpring } from 'framer-motion';
 import { platformFeatures } from '../../data/sample-data';
-import LottieIcon from '../../components/LottieIcon';
 import PersonIcon from '@mui/icons-material/Person';
 import InsightsIcon from '@mui/icons-material/Insights';
 import VideocamIcon from '@mui/icons-material/Videocam';
