@@ -211,6 +211,23 @@ export const fetchLiveKitToken = async (identity: string, roomName: string, user
     return response.data;
 }
 
+export const getListeningTasks = async (lessonId: string) => {
+    const response = await api.get(`/lessons-service/api/lessons/${lessonId}/listening-tasks`);
+    return response.data;
+}
+
+export const createListeningTask = async (lessonId: string, taskData: {
+    assetType: string;
+    sourceUrl: string;
+    startSec: number;
+    endSec: number;
+    wordLimit?: number;
+    timeLimitSec?: number;
+}) => {
+    const response = await api.post(`/lessons-service/api/lessons/${lessonId}/listening-tasks`, taskData);
+    return response.data;
+}
+
 // Request interceptor to add authorization token
 api.interceptors.request.use((config) => {
     const token = localStorage.getItem("token");

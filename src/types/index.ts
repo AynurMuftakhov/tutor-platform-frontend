@@ -2,6 +2,8 @@ export interface VocabularyWordRequest { text: string; translation: string; part
 export interface AssignedWordResponse { id: string; vocabularyWordId: string; text: string; translation: string; status: string; repetitionCount: number; lastCheckedDate?: string; }
 export interface AssignWordsRequest { studentId: string; vocabularyWordIds: string[]; }
 
+export * from './ListeningTask';
+
 export interface CreateWordRequest {
     text: string;
     teacherId: string;
