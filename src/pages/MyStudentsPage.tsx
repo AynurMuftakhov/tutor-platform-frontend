@@ -20,12 +20,13 @@ import { DataGrid, GridColDef, GridRenderCellParams } from "@mui/x-data-grid";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
-import {createStudent, deleteUser, fetchStudents, updateCurrentUser} from "../services/api";
+import {createStudent, deleteUser, fetchStudents, resetPasswordEmail, updateCurrentUser} from "../services/api";
 import { useAuth } from '../context/AuthContext';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
 import {ENGLISH_LEVELS, EnglishLevel} from "../types/ENGLISH_LEVELS";
 import StudentVocabularyModal from "../components/vocabulary/StudentVocabularyModal";
+import RestartAltIcon from "@mui/icons-material/RestartAlt";
 
 // Extended Student type
 export interface Student {
@@ -42,12 +43,15 @@ const MyStudentsPage: React.FC = () => {
     const [students, setStudents] = useState<Student[]>([]);
     const [searchText, setSearchText] = useState("");
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
     const [studentToDelete, setStudentToDelete] = useState<Student | null>(null);
+    const [emailToReset, setEmailToReset] = useState("");
     const [addDialogOpen, setAddDialogOpen] = useState(false);
     const [newStudent, setNewStudent] = useState({ name: "", email: "", level: "Beginner" as EnglishLevel });
     const [addLoading, setAddLoading] = useState(false);
     const [editingStudentId, setEditingStudentId] = useState<string | null>(null);
     const [deleteLoading, setDeleteLoading] = useState(false);
+    const [resetLoading, setResetLoading] = useState(false);
     const [snackbarOpen, setSnackbarOpen] = useState(false);
     const [snackbarMessage, setSnackbarMessage] = useState('');
     const [snackbarSeverity, setSnackbarSeverity] = useState<'success' | 'error'>('success');
@@ -85,6 +89,37 @@ const MyStudentsPage: React.FC = () => {
     const handleDeleteClose = () => {
         setDeleteDialogOpen(false);
         setStudentToDelete(null);
+    };
+
+    const handleConfirmResetPassword = (student: Student) => {
+        setEmailToReset(student.email);
+        setResetPasswordDialogOpen(true);
+    };
+
+    const handleResetPasswordClose= () => {
+        setResetPasswordDialogOpen(false);
+        setStudentToDelete(null);
+    };
+
+    const handleResetPasswordConfirm = async () => {
+        if (emailToReset) {
+            try {
+                setResetLoading(true);
+                await resetPasswordEmail(emailToReset);
+                setSnackbarMessage("Email has been successfully sent.");
+                setSnackbarSeverity('success');
+                setSnackbarOpen(true);
+            } catch (err) {
+                console.error("Failed to send reset password email", err);
+                setSnackbarMessage("Failed to send reset password email. Please try again.");
+                setSnackbarSeverity('error');
+                setSnackbarOpen(true);
+            } finally {
+                setResetLoading(false);
+                setResetPasswordDialogOpen(false);
+                setEmailToReset("");
+            }
+        }
     };
 
     const handleDeleteConfirm = async () => {
@@ -238,7 +273,7 @@ const MyStudentsPage: React.FC = () => {
         {
             field: "actions",
             headerName: "Actions",
-            width: 120,
+            width: 160,
             sortable: false,
             renderCell: (params) => {
                 const student = params.row;
@@ -260,6 +295,15 @@ const MyStudentsPage: React.FC = () => {
                                 size="small"
                             >
                                 <MenuBookIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Send Reset Password Link">
+                            <IconButton
+                                color="info"
+                                onClick={() => handleConfirmResetPassword(student)}
+                                size="small"
+                            >
+                                <RestartAltIcon fontSize="small" />
                             </IconButton>
                         </Tooltip>
                         <Tooltip title="Delete">
@@ -352,6 +396,28 @@ const MyStudentsPage: React.FC = () => {
                             disabled={deleteLoading}
                         >
                             {deleteLoading ? "Deleting..." : "Delete"}
+                        </Button>
+                    </DialogActions>
+                </Dialog>
+
+                {/* Confirm Reset email Dialog */}
+                <Dialog open={resetPasswordDialogOpen} onClose={handleResetPasswordClose}>
+                    <DialogTitle>Resend password reset email</DialogTitle>
+                    <DialogContent>
+                        <DialogContentText>
+                            {`Are you sure you want to resent an email for resetting the password to "${
+                                emailToReset ?? "this student"
+                            }"?`}
+                        </DialogContentText>
+                    </DialogContent>
+                    <DialogActions>
+                        <Button onClick={handleResetPasswordClose} disabled={resetLoading}>Cancel</Button>
+                        <Button
+                            onClick={handleResetPasswordConfirm}
+                            color="warning"
+                            disabled={resetLoading}
+                        >
+                            {resetLoading ? "Sending email..." : "Resend"}
                         </Button>
                     </DialogActions>
                 </Dialog>
