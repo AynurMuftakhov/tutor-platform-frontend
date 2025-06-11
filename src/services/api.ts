@@ -206,6 +206,11 @@ export const deleteUser = async (userId: string) => {
     return response.data;
 }
 
+export const resetPasswordEmail = async (email: string) => {
+    const response = await api.post(`/users-service/api/students/email/resend?email=${email}`);
+    return response.data;
+}
+
 export const fetchLiveKitToken = async (identity: string, roomName: string, username: string) => {
     const response = await api.get(`video-service/api/video/token?identity=${identity}&roomName=${roomName}&username=${username}`);
     return response.data;
