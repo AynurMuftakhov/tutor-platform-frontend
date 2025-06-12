@@ -51,6 +51,8 @@ const StandaloneMediaPlayer: React.FC<StandaloneMediaPlayerProps> = ({
 
     // Initialize YouTube player
     playerRef.current = new (window as any).YT.Player(playerId, {
+      height: '100%',
+      width: '100%',
       videoId,
       playerVars: {
         start: startTime,
@@ -63,7 +65,7 @@ const StandaloneMediaPlayer: React.FC<StandaloneMediaPlayerProps> = ({
       events: {
         onReady: onPlayerReady,
         onStateChange: onPlayerStateChange,
-        onError: (e:any) => {
+        onError: (e: any) => {
           setError('Failed to load video');
         },
       },
