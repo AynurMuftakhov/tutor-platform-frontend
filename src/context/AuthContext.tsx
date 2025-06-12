@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
-import { initKeycloak, keycloak } from "../services/keycloak";
+import {getInitialToken, initKeycloak, keycloak} from "../services/keycloak";
 import { fetchCurrentUser } from "../services/api";
 
 interface User {
@@ -25,10 +25,13 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
-    const [user, setUser] = useState<User | null>(
-        localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user') || '{}') : null
-    );
+    const initialToken = getInitialToken();
+    const initialUser = initialToken && localStorage.getItem('user')
+        ? JSON.parse(localStorage.getItem('user') as string)
+        : null;
+
+    const [token, setToken] = useState<string | null>(initialToken);
+    const [user, setUser] = useState<User | null>(initialUser);
     const [authenticated, setAuthenticated] = useState<boolean>(!!token);
     const [isLoading, setIsLoading] = useState<boolean>(true);
 
@@ -137,8 +140,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, [token, logout]);
 
     return (
-        <AuthContext.Provider value={{ token, user, authenticated, setToken: saveToken, logout, updateUser, isLoading }}>
-            {children}
+        <AuthContext.Provider
+            value={{ token, user, authenticated, setToken: saveToken, logout, updateUser, isLoading }}
+        >
+            {/* De‑fer rendering children until auth is resolved so no requests use an expired token */}
+            {!isLoading && children}
         </AuthContext.Provider>
     );
 };

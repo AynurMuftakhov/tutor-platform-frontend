@@ -1,3 +1,4 @@
+import { keycloak } from './keycloak';
 import axios from 'axios';
 import {Student} from "../pages/MyStudentsPage";
 import { NotificationMessage} from "../context/NotificationsSocketContext";
@@ -48,11 +49,6 @@ export const getUpcomingLessons = async (tutorId: string, studentId: string, cur
 
     const response = await api.get(`/lessons-service/api/lessons/upcoming?${params}`);
     return response.data;
-};
-
-export const getHistoryLessons = async (userId: string) => {
-    const response = await api.get(`/lessons-service/api/lessons?tutorId=${userId}&status=COMPLETED`);
-    return response.data.content;
 };
 
 export const getLessons = async (
@@ -216,11 +212,25 @@ export const fetchLiveKitToken = async (identity: string, roomName: string, user
     return response.data;
 }
 
-// Request interceptor to add authorization token
-api.interceptors.request.use((config) => {
-    const token = localStorage.getItem("token");
-    if(token){
-        config.headers.Authorization = `Bearer ${token}`;
+// Request interceptor to add authorization token and refresh Keycloak token if needed
+api.interceptors.request.use(async (config) => {
+    if (keycloak?.isTokenExpired?.()) {
+        try {
+            const refreshed = await keycloak.updateToken(10); // refresh if expiring within 10s
+            if (refreshed && keycloak.token) {
+                config.headers.Authorization = `Bearer ${keycloak.token}`;
+            } else {
+                console.warn('Keycloak token refresh failed. Logging out.');
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+            }
+        } catch (e) {
+            console.error('Token refresh error:', e);
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+        }
+    } else if (keycloak?.token) {
+        config.headers.Authorization = `Bearer ${keycloak.token}`;
     }
     return config;
 });
