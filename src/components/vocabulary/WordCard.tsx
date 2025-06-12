@@ -5,6 +5,7 @@ import {
     CardActions,
     Typography,
     IconButton,
+    IconButtonProps,
     Box,
     Chip,
     Tooltip,
@@ -27,27 +28,24 @@ import { VocabularyWord } from '../../types';
 import { motion, AnimatePresence } from 'framer-motion';
 import {useAuth} from "../../context/AuthContext";
 
-const ExpandMore = styled((props: {
-    expand: boolean;
-    onClick: () => void;
-    'aria-expanded': boolean;
-    'aria-label': string;
-    children: React.ReactNode;
-}) => {
-    const { expand, ...other } = props;
-    return <IconButton {...other} />;
-})(({ theme, expand }) => ({
-    transform: !expand ? 'rotate(0deg)' : 'rotate(180deg)',
-    marginLeft: 'auto',
-    transition: theme.transitions.create('transform', {
-        duration: theme.transitions.duration.shortest,
-    }),
-    width: 32,
-    height: 32,
-    borderRadius: '50%',
-    '&:hover': {
-        backgroundColor: alpha(theme.palette.primary.main, 0.08),
-    }
+interface ExpandMoreProps extends IconButtonProps {
+  expand: boolean;
+}
+
+const ExpandMore = styled(IconButton, {
+  shouldForwardProp: (prop) => prop !== 'expand',
+})<ExpandMoreProps>(({ theme, expand }) => ({
+  transform: !expand ? 'rotate(0deg)' : 'rotate(180deg)',
+  marginLeft: 'auto',
+  transition: theme.transitions.create('transform', {
+    duration: theme.transitions.duration.shortest,
+  }),
+  width: 32,
+  height: 32,
+  borderRadius: '50%',
+  '&:hover': {
+    backgroundColor: alpha(theme.palette.primary.main, 0.08),
+  },
 }));
 
 interface WordCardProps {

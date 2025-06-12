@@ -104,7 +104,7 @@ const DictionaryPage: React.FC = () => {
     const [assignOpen, setAssignOpen] = useState(false);
     const [selected, setSelected] = useState<VocabularyWord | null>(null);
     const [search, setSearch] = useState('');
-    const [category, setCategory] = useState<'ALL' | string>('ALL');
+    const [category, setCategory] = useState<'0' | '1' | '2' | '3' | '4' | '5'>('0');
     const [page, setPage] = useState(1); // 1-based for Pagination component
     const [showOnlyLearned, setShowOnlyLearned] = useState(false);
     const [learnedWords, setLearnedWords] = useState<Set<string>>(new Set());
@@ -123,7 +123,7 @@ const DictionaryPage: React.FC = () => {
         () =>
             displayWords.filter(w => {
                 const matchSearch = w.text.toLowerCase().includes(search.toLowerCase());
-                const matchCat = category === 'ALL' ? true : w.difficulty?.toString() === category;
+                const matchCat = category === '0' ? true : w.difficulty?.toString() === category;
                 const matchLearned = showOnlyLearned ? learnedWords.has(w.id) : true;
                 return matchSearch && matchCat && matchLearned;
             }),
@@ -440,7 +440,7 @@ const DictionaryPage: React.FC = () => {
 
                     <Divider sx={{ my: 2 }} />
 
-                    <CategoryTabs value={category} onChange={setCategory} />
+                    <CategoryTabs value={category} onChange={(v) => setCategory(v as '0' | '1' | '2' | '3' | '4' | '5')} />
                 </Box>
 
                 {/* Word Grid */}

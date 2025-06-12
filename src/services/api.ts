@@ -1,3 +1,4 @@
+import { keycloak } from './keycloak';
 import axios from 'axios';
 import {Student} from "../pages/MyStudentsPage";
 import { NotificationMessage} from "../context/NotificationsSocketContext";
@@ -48,11 +49,6 @@ export const getUpcomingLessons = async (tutorId: string, studentId: string, cur
 
     const response = await api.get(`/lessons-service/api/lessons/upcoming?${params}`);
     return response.data;
-};
-
-export const getHistoryLessons = async (userId: string) => {
-    const response = await api.get(`/lessons-service/api/lessons?tutorId=${userId}&status=COMPLETED`);
-    return response.data.content;
 };
 
 export const getLessons = async (
@@ -257,7 +253,7 @@ export const removeTaskFromLesson = async (lessonId: string, taskId: string) => 
 
 // Request interceptor to add authorization token
 api.interceptors.request.use((config) => {
-    const token = localStorage.getItem("token");
+    const token = sessionStorage.getItem("token");
     if(token){
         config.headers.Authorization = `Bearer ${token}`;
     }
