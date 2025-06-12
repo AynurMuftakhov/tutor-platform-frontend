@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useId } from 'react';
 import { Box, CircularProgress, Typography, IconButton } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
 
@@ -16,124 +16,203 @@ const StandaloneMediaPlayer: React.FC<StandaloneMediaPlayerProps> = ({
   onClose,
 }) => {
   const playerRef = useRef<YT.Player | null>(null);
+  const playerContainerRef = useRef<HTMLDivElement>(null);
   const [isReady, setIsReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
-  // Track if we're the one who initiated a seek to avoid feedback loops
-  const seekingRef = useRef(false);
-  
-  // Load YouTube IFrame API
+  const playerId = useId().replace(/:/g, '-');  // unique id for each rendered player, replace colons which can cause issues
+  const loopIntervalRef = useRef<number | null>(null);
+  const [isApiReady, setIsApiReady] = useState(false);
+
   useEffect(() => {
-    // Create YouTube script tag if it doesn't exist
-    if (!window.YT) {
+    // Check for window existence and YT API
+    if (typeof window !== 'undefined' && (!('YT' in window) || !(window as any).YT.Player)) {
       const tag = document.createElement('script');
       tag.src = 'https://www.youtube.com/iframe_api';
-      const firstScriptTag = document.getElementsByTagName('script')[0];
-      firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
-    }
-    
-    // Initialize player when API is ready
-    const onYouTubeIframeAPIReady = () => {
-      playerRef.current = new window.YT.Player('youtube-player', {
-        videoId,
-        playerVars: {
-          start: startTime,
-          controls: 1,
-          disablekb: 0,
-          rel: 0,
-        },
-        events: {
-          onReady: onPlayerReady,
-          onStateChange: onPlayerStateChange,
-          onError: (e) => {
-            console.error('YouTube player error:', e);
-            setError('Failed to load video');
-          },
-        },
-      });
-    };
-    
-    // Setup YouTube API callback
-    if (window.YT && window.YT.Player) {
-      onYouTubeIframeAPIReady();
+      document.head.appendChild(tag);
+      window.onYouTubeIframeAPIReady = () => {
+        setIsApiReady(true);
+      };
     } else {
-      window.onYouTubeIframeAPIReady = onYouTubeIframeAPIReady;
+      setIsApiReady(true);
     }
-    
+  }, []);
+
+  useEffect(() => {
+    if (!isApiReady || !playerContainerRef.current) return;
+
+    // Clear previous container contents
+    while (playerContainerRef.current.firstChild) {
+      playerContainerRef.current.removeChild(playerContainerRef.current.firstChild);
+    }
+    // Create a fresh player div
+    const playerElement = document.createElement('div');
+    playerElement.id = playerId;
+    playerContainerRef.current.appendChild(playerElement);
+
+    // Initialize YouTube player
+    playerRef.current = new (window as any).YT.Player(playerId, {
+      videoId,
+      playerVars: {
+        start: startTime,
+        controls: 1,
+        disablekb: 0,
+        rel: 0,
+        origin: window.location.origin,
+        enablejsapi: 1,
+      },
+      events: {
+        onReady: onPlayerReady,
+        onStateChange: onPlayerStateChange,
+        onError: (e:any) => {
+          setError('Failed to load video');
+        },
+      },
+    });
+
     return () => {
+      if (loopIntervalRef.current) {
+        clearInterval(loopIntervalRef.current);
+      }
       if (playerRef.current) {
         playerRef.current.destroy();
       }
     };
-  }, [videoId, startTime]);
-  
+  }, [isApiReady, videoId, startTime, endTime, playerId]);
+
   // Handle player ready event
-  const onPlayerReady = () => {
-    setIsReady(true);
-    
-    // Start a timer to check if we need to loop back to start time
-    const checkTimeInterval = setInterval(() => {
-      if (playerRef.current) {
-        const currentTime = playerRef.current.getCurrentTime();
-        
-        // If we've reached the end time, seek back to start time
-        if (currentTime >= endTime) {
-          seekingRef.current = true;
-          playerRef.current.seekTo(startTime, true);
+  const onPlayerReady = (event: YT.OnStateChangeEvent) => {
+    try {
+      // Make sure the player is actually ready and accessible
+      if (event.target && typeof event.target.playVideo === 'function') {
+        // Store a reference to the player
+        playerRef.current = event.target;
+
+        // Seek to the desired start and play segment
+        playerRef.current?.seekTo(startTime, true);
+        playerRef.current?.playVideo();
+        setIsReady(true);
+
+        // Set up the loop interval
+        loopIntervalRef.current = window.setInterval(() => {
+          if (playerRef.current) {
+            try {
+              const currentTime = playerRef.current.getCurrentTime();
+              if (currentTime >= endTime) {
+                playerRef.current.pauseVideo();
+                clearInterval(loopIntervalRef.current!);
+                loopIntervalRef.current = null;
+              }
+            } catch (err) {
+              setError('Player ready event received but player is invalid');
+            }
+          }
+        }, 1000);
+
+        // Start playback after a short delay to ensure correct segment is loaded
+        try {
           setTimeout(() => {
-            seekingRef.current = false;
+            playerRef.current?.playVideo();
           }, 500);
+        } catch (err) {
+          setError('Unable to play a video');
         }
+      } else {
+        setError('Player ready event received but player is invalid');
       }
-    }, 1000);
-    
-    return () => {
-      clearInterval(checkTimeInterval);
-    };
+    } catch (err) {
+      setError('Error in player ready callback');
+    }
   };
-  
+
   // Handle player state change events
   const onPlayerStateChange = (event: YT.OnStateChangeEvent) => {
-    // No need to handle state changes for standalone player
+
+    // Check if the player is in an error state
+    if (event.data === -1) {
+      // If the player is unstarted for too long, it might indicate an issue
+      setTimeout(() => {
+        if (playerRef.current && !isReady) {
+          try {
+            playerRef.current.playVideo();
+          } catch (err) {
+            setError('Player ready event received but player is invalid');
+          }
+        }
+      }, 3000);
+    }
   };
-  
-  if (error) {
-    return (
-      <Box sx={{ p: 2, textAlign: 'center' }}>
-        <Typography color="error">{error}</Typography>
-      </Box>
-    );
-  }
-  
-  if (!isReady) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
-  
+
   return (
-    <Box sx={{ width: '100%', height: '100%', position: 'relative' }}>
+    <Box sx={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}>
       {onClose && (
-        <IconButton 
+        <IconButton
           onClick={onClose}
-          sx={{ 
-            position: 'absolute', 
-            top: 8, 
-            right: 8, 
-            zIndex: 1, 
+          sx={{
+            position: 'absolute',
+            top: 8,
+            right: 8,
+            zIndex: 2,
             bgcolor: 'rgba(0, 0, 0, 0.5)',
             color: 'white',
             '&:hover': {
               bgcolor: 'rgba(0, 0, 0, 0.7)',
-            }
+            },
           }}
         >
           <CloseIcon />
         </IconButton>
       )}
-      <div id="youtube-player" style={{ width: '100%', height: '100%' }}></div>
+
+      {/* Always‑mounted container for the YouTube player */}
+      <div
+        ref={playerContainerRef}
+        style={{
+          width: '100%',
+          height: '100%',
+          minHeight: '300px',
+          backgroundColor: '#000',
+        }}
+      />
+
+      {/* Loading overlay */}
+      {!isReady && !error && (
+        <Box
+          sx={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            bgcolor: 'rgba(0,0,0,0.3)',
+            zIndex: 1,
+          }}
+        >
+          <CircularProgress />
+        </Box>
+      )}
+
+      {/* Error overlay */}
+      {error && (
+        <Box
+          sx={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            bgcolor: 'rgba(0,0,0,0.6)',
+            zIndex: 1,
+          }}
+        >
+          <Typography color="error">{error}</Typography>
+        </Box>
+      )}
     </Box>
   );
 };
