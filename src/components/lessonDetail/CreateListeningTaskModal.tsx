@@ -17,33 +17,36 @@ import {
 } from '@mui/material';
 import ReactPlayer from 'react-player';
 import { AssetType } from '../../types';
-import { createListeningTask } from '../../services/api';
+import { createListeningTask, createGlobalListeningTask } from '../../services/api';
 
 interface CreateListeningTaskModalProps {
   open: boolean;
   onClose: () => void;
-  lessonId: string;
+  lessonId?: string;
   onTaskCreated: () => void;
+  isGlobal?: boolean;
 }
 
 const CreateListeningTaskModal: React.FC<CreateListeningTaskModalProps> = ({
   open,
   onClose,
   lessonId,
-  onTaskCreated
+  onTaskCreated,
+  isGlobal = false
 }) => {
   // Form state
   const [assetType, setAssetType] = useState<AssetType>(AssetType.VIDEO);
   const [sourceUrl, setSourceUrl] = useState('');
+  const [title, setTitle] = useState('');
   const [startSec, setStartSec] = useState(0);
   const [endSec, setEndSec] = useState(60); // Default 1 minute
   const [wordLimit, setWordLimit] = useState(100); // Default 100 words
   const [timeLimitSec, setTimeLimitSec] = useState(900); // Default 15 minutes (900 seconds)
-  
+
   // Validation state
   const [urlError, setUrlError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   // Player state
   const [duration, setDuration] = useState(0);
   const [isReady, setIsReady] = useState(false);
@@ -54,6 +57,7 @@ const CreateListeningTaskModal: React.FC<CreateListeningTaskModalProps> = ({
     if (open) {
       setAssetType(AssetType.VIDEO);
       setSourceUrl('');
+      setTitle('');
       setStartSec(0);
       setEndSec(60);
       setWordLimit(100);
@@ -111,16 +115,25 @@ const CreateListeningTaskModal: React.FC<CreateListeningTaskModalProps> = ({
       return;
     }
 
+    const taskData = {
+      assetType,
+      sourceUrl,
+      startSec,
+      endSec,
+      wordLimit,
+      timeLimitSec,
+      title
+    };
+
     setIsSubmitting(true);
     try {
-      await createListeningTask(lessonId, {
-        assetType,
-        sourceUrl,
-        startSec,
-        endSec,
-        wordLimit,
-        timeLimitSec
-      });
+      if (isGlobal) {
+        await createGlobalListeningTask(taskData);
+      } else if (lessonId) {
+        await createListeningTask(lessonId, taskData);
+      } else {
+        throw new Error('Either lessonId or isGlobal must be provided');
+      }
       onTaskCreated();
       onClose();
     } catch (error) {
@@ -159,6 +172,15 @@ const CreateListeningTaskModal: React.FC<CreateListeningTaskModalProps> = ({
             }}
             error={!!urlError}
             helperText={urlError}
+            sx={{ mb: 3 }}
+          />
+
+          <TextField
+            fullWidth
+            label="Title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Enter a descriptive title for this listening task"
             sx={{ mb: 3 }}
           />
 

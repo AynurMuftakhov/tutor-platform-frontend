@@ -14,6 +14,7 @@ import DictionaryPage from "./pages/DictionaryPage";
 import StudentVocabularyPage from "./pages/StudentVocabularyPage";
 import VideoCallPage from "./pages/VideoCallPage";
 import LandingPage from "./pages/landing/LandingPage";
+import LearningMaterialsPage from "./pages/LearningMaterialsPage";
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ApiErrorProvider } from './context/ApiErrorContext';
 
@@ -132,6 +133,16 @@ const App: React.FC = () => {
                                 <PrivateRoute>
                                     <AppWrapper>
                                         <VideoCallPage />
+                                    </AppWrapper>
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/learning-materials"
+                            element={
+                                <PrivateRoute>
+                                    <AppWrapper>
+                                        <LearningMaterialsPage />
                                     </AppWrapper>
                                 </PrivateRoute>
                             }

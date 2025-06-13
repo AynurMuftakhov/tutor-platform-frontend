@@ -13,4 +13,5 @@ export interface ListeningTask {
     wordLimit?: number;
     timeLimitSec?: number;
     createdAt: string;
+    title?: string;
 }

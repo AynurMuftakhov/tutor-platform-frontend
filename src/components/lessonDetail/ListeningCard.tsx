@@ -24,9 +24,13 @@ const ListeningCard: React.FC<ListeningCardProps> = ({
   const seconds = durationSec % 60;
   const formattedDuration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
 
-  // Extract title from URL (simplified approach)
-  const urlParts = task.sourceUrl.split('/');
-  const title = urlParts[urlParts.length - 1].replace(/\.[^/.]+$/, "").replace(/-|_/g, " ");
+  // Use provided title or extract from URL as fallback
+  const extractTitleFromUrl = () => {
+    const urlParts = task.sourceUrl.split('/');
+    return urlParts[urlParts.length - 1].replace(/\.[^/.]+$/, "").replace(/-|_/g, " ");
+  };
+
+  const title = task.title || extractTitleFromUrl();
 
   // Get thumbnail based on asset type
   const getThumbnail = () => {

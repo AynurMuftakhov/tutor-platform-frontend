@@ -276,22 +276,50 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                         <ListItemButton
                             component={motion.div}
                             whileHover={{ x: 5 }}
+                            onClick={() => {
+                                navigate('/learning-materials');
+                                setMobileOpen(false);
+                            }}
+                            selected={location.pathname === '/learning-materials'}
                             sx={{
                                 borderRadius: 2,
                                 px: 2,
                                 py: 1.5,
+                                "&.Mui-selected": {
+                                    backgroundColor: alpha(theme.palette.primary.main, 0.08),
+                                    "& .MuiListItemIcon-root": {
+                                        color: 'primary.main',
+                                    },
+                                    "& .MuiListItemText-primary": {
+                                        color: 'primary.main',
+                                        fontWeight: 600
+                                    }
+                                }
                             }}
                         >
-                            <ListItemIcon sx={{ minWidth: 36, color: 'text.secondary' }}>
+                            <ListItemIcon sx={{ minWidth: 36, color: location.pathname === '/learning-materials' ? 'primary.main' : 'text.secondary' }}>
                                 <BookIcon />
                             </ListItemIcon>
                             <ListItemText
                                 primary="Learning Materials"
                                 primaryTypographyProps={{
-                                    fontWeight: 500,
+                                    fontWeight: location.pathname === '/learning-materials' ? 600 : 500,
                                     fontSize: '0.95rem'
                                 }}
                             />
+                            {location.pathname === '/learning-materials' && (
+                                <Box
+                                    component={motion.div}
+                                    layoutId="activeIndicator"
+                                    sx={{
+                                        width: 4,
+                                        height: 20,
+                                        bgcolor: 'primary.main',
+                                        borderRadius: 1,
+                                        ml: 1
+                                    }}
+                                />
+                            )}
                         </ListItemButton>
                     </ListItem>
                 </List>

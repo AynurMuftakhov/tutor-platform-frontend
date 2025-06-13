@@ -212,8 +212,26 @@ export const fetchLiveKitToken = async (identity: string, roomName: string, user
 }
 
 export const getListeningTasks = async (lessonId: string) => {
-    const response = await api.get(`/lessons-service/api/lessons/${lessonId}/listening-tasks`);
-    return response.data;
+  const response = await api.get(`/lessons-service/api/lessons/${lessonId}/listening-tasks`);
+  return response.data;
+}
+
+export const getAllListeningTasks = async () => {
+  const response = await api.get(`/lessons-service/api/listening-tasks`);
+  return response.data;
+}
+
+export const createGlobalListeningTask = async (taskData: {
+  assetType: string;
+  sourceUrl: string;
+  startSec: number;
+  endSec: number;
+  wordLimit?: number;
+  timeLimitSec?: number;
+  title?: string;
+}) => {
+  const response = await api.post(`/lessons-service/api/listening-tasks`, taskData);
+  return response.data;
 }
 
 export const createListeningTask = async (lessonId: string, taskData: {
@@ -223,6 +241,7 @@ export const createListeningTask = async (lessonId: string, taskData: {
     endSec: number;
     wordLimit?: number;
     timeLimitSec?: number;
+    title?: string;
 }) => {
     const response = await api.post(`/lessons-service/api/lessons/${lessonId}/listening-tasks`, taskData);
     return response.data;
