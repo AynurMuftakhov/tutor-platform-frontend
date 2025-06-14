@@ -16,13 +16,14 @@ import {
     FormControl,
     InputLabel,
     Select,
-    MenuItem
+    MenuItem, alpha, useTheme
 } from '@mui/material';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import { useCreateWord, useUpdateWord } from '../../hooks/useVocabulary';
 import { useAuth } from '../../context/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { VocabularyWord } from '../../types';
+import VolumeUpIcon from "@mui/icons-material/VolumeUp";
 
 interface Props {
     open: boolean;
@@ -36,7 +37,7 @@ const GenerateWordDialog: React.FC<Props> = ({ open, onClose }) => {
     const qc = useQueryClient();
     const createWord = useCreateWord();
     const updateWord = useUpdateWord();
-
+    const theme = useTheme();
     const [step, setStep] = useState<Step>('INPUT');
     const [input, setInput] = useState('');
     const [draft, setDraft] = useState<VocabularyWord | null>(null);
@@ -294,6 +295,21 @@ const GenerateWordDialog: React.FC<Props> = ({ open, onClose }) => {
                                 {!draft.audioUrl && (
                                     <Typography variant="body2" color="text.secondary">
                                         No audio pronunciation available
+                                    </Typography>
+                                )}
+                            </Box>
+                        </Paper>
+                        <Paper elevation={0} sx={{ p: 1.5, bgcolor: '#f8f9fa', borderRadius: 2 }}>
+                            <Typography variant="subtitle1" fontWeight="600" gutterBottom color="primary">
+                                Example Pronunciation
+                            </Typography>
+                            <Box sx={{ display: 'grid', gap: 1.5 }}>
+                                {draft.exampleSentenceAudioUrl && (
+                                    <audio controls src={draft.exampleSentenceAudioUrl} style={{ width: '100%' }} />
+                                )}
+                                {!draft.exampleSentenceAudioUrl && (
+                                    <Typography variant="body2" color="text.secondary">
+                                        No Example pronunciation available
                                     </Typography>
                                 )}
                             </Box>

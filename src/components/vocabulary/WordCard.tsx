@@ -15,7 +15,12 @@ import {
     useTheme,
     alpha,
     Divider,
-    Badge
+    Badge,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    DialogContentText
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import VolumeUpIcon from '@mui/icons-material/VolumeUp';
@@ -88,6 +93,7 @@ const WordCard: React.FC<WordCardProps> = ({
     compact = false
 }) => {
     const [expanded, setExpanded] = useState(false);
+    const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
     const theme = useTheme();
     const { user } = useAuth();
 
@@ -104,11 +110,23 @@ const WordCard: React.FC<WordCardProps> = ({
         }
     };
 
+    const handlePlayExampleAudio = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (word.exampleSentenceAudioUrl) {
+            new Audio(word.exampleSentenceAudioUrl).play();
+        }
+    };
+
     const handleDelete = (e: React.MouseEvent) => {
         e.stopPropagation();
+        setConfirmDeleteOpen(true);
+    };
+
+    const confirmDelete = () => {
         if (onDelete) {
             onDelete(word.id);
         }
+        setConfirmDeleteOpen(false);
     };
 
     const handleEdit = (e: React.MouseEvent) => {
@@ -484,23 +502,44 @@ const WordCard: React.FC<WordCardProps> = ({
                                             border: `1px solid ${alpha(theme.palette.secondary.main, 0.2)}`
                                         }}
                                     >
-                                        <Typography
-                                            variant="subtitle2"
-                                            fontWeight={600}
-                                            color="secondary"
-                                            gutterBottom
-                                            sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
-                                        >
-                                            <Box
-                                                sx={{
-                                                    width: 4,
-                                                    height: 16,
-                                                    bgcolor: 'secondary.main',
-                                                    borderRadius: 1
-                                                }}
-                                            />
-                                            Example
-                                        </Typography>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                                            <Typography
+                                                variant="subtitle2"
+                                                fontWeight={600}
+                                                color="secondary"
+                                                sx={{ display: 'flex', alignItems: 'center' }}
+                                            >
+                                                <Box
+                                                    sx={{
+                                                        width: 4,
+                                                        height: 16,
+                                                        bgcolor: 'secondary.main',
+                                                        borderRadius: 1,
+                                                        mr: 1
+                                                    }}
+                                                />
+                                                Example
+                                            </Typography>
+                                            {word.exampleSentenceAudioUrl && (
+                                                <Tooltip title="Play pronunciation">
+                                                    <IconButton
+                                                        size="small"
+                                                        onClick={handlePlayExampleAudio}
+                                                        sx={{
+                                                            color: theme.palette.primary.main,
+                                                            bgcolor: alpha(theme.palette.primary.main, 0.1),
+                                                            width: 24,
+                                                            height: 24,
+                                                            '&:hover': {
+                                                                bgcolor: alpha(theme.palette.primary.main, 0.2)
+                                                            }
+                                                        }}
+                                                    >
+                                                        <VolumeUpIcon sx={{ fontSize: 14 }} />
+                                                    </IconButton>
+                                                </Tooltip>
+                                            )}
+                                        </Box>
                                         <Typography
                                             variant="body2"
                                             sx={{
@@ -575,10 +614,10 @@ const WordCard: React.FC<WordCardProps> = ({
                     <Box sx={{ display: 'flex', gap: 1 }}>
                         {onEdit && !readOnly && (
                             <Tooltip title="Edit word">
-                                <IconButton 
-                                    size="small" 
+                                <IconButton
+                                    size="small"
                                     onClick={handleEdit}
-                                    sx={{ 
+                                    sx={{
                                         color: theme.palette.primary.main,
                                         bgcolor: alpha(theme.palette.primary.main, 0.1),
                                         width: 32,
@@ -597,10 +636,10 @@ const WordCard: React.FC<WordCardProps> = ({
 
                         {onDelete && !readOnly && (
                             <Tooltip title="Delete word">
-                                <IconButton 
-                                    size="small" 
+                                <IconButton
+                                    size="small"
                                     onClick={handleDelete}
-                                    sx={{ 
+                                    sx={{
                                         color: theme.palette.error.main,
                                         bgcolor: alpha(theme.palette.error.main, 0.1),
                                         width: 32,
@@ -621,12 +660,12 @@ const WordCard: React.FC<WordCardProps> = ({
                     {/* Action buttons based on mode */}
                     <Box sx={{ display: 'flex', ml: 'auto', gap: 1 }}>
                         {onAddToMyVocabulary && readOnly && (
-                            <Button 
-                                size="small" 
+                            <Button
+                                size="small"
                                 onClick={handleAddToMyVocabulary}
                                 variant="outlined"
                                 startIcon={<BookmarkAddIcon />}
-                                sx={{ 
+                                sx={{
                                     borderRadius: 6,
                                     px: 2,
                                     py: 0.8,
@@ -646,12 +685,12 @@ const WordCard: React.FC<WordCardProps> = ({
                         )}
 
                         {onToggleLearned && !readOnly && !isTeacher && (
-                            <Button 
-                                size="small" 
+                            <Button
+                                size="small"
                                 onClick={handleToggleLearned}
                                 variant={isLearned ? "contained" : "outlined"}
                                 startIcon={<CheckCircleIcon />}
-                                sx={{ 
+                                sx={{
                                     borderRadius: 6,
                                     px: 2,
                                     py: 0.8,
@@ -661,13 +700,13 @@ const WordCard: React.FC<WordCardProps> = ({
                                     fontWeight: 600,
                                     transition: 'all 0.2s ease',
                                     '&:hover': {
-                                        bgcolor: isLearned 
-                                            ? theme.palette.success.dark 
+                                        bgcolor: isLearned
+                                            ? theme.palette.success.dark
                                             : alpha(theme.palette.success.main, 0.1),
                                         borderColor: theme.palette.success.main,
                                         color: isLearned ? 'white' : theme.palette.success.main,
                                         transform: 'translateY(-2px)',
-                                        boxShadow: isLearned 
+                                        boxShadow: isLearned
                                             ? `0 4px 8px ${alpha(theme.palette.success.main, 0.3)}`
                                             : 'none'
                                     }
@@ -683,7 +722,7 @@ const WordCard: React.FC<WordCardProps> = ({
                                 onClick={handleExpandClick}
                                 aria-expanded={expanded}
                                 aria-label="show more"
-                                sx={{ 
+                                sx={{
                                     color: theme.palette.primary.main,
                                     bgcolor: alpha(theme.palette.primary.main, 0.1),
                                     transition: 'all 0.2s ease',
@@ -699,6 +738,23 @@ const WordCard: React.FC<WordCardProps> = ({
                     </Box>
                 </CardActions>
             </Card>
+            {/* Confirm Delete Dialog */}
+            <Dialog open={confirmDeleteOpen} onClose={() => setConfirmDeleteOpen(false)}>
+                <DialogTitle>Confirm Deletion</DialogTitle>
+                <DialogContent>
+                    <DialogContentText>
+                        Are you sure you want to delete the word "{word.text}"? This action cannot be undone.
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setConfirmDeleteOpen(false)} color="primary">
+                        Cancel
+                    </Button>
+                    <Button onClick={confirmDelete} color="error" autoFocus>
+                        Delete
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </motion.div>
     );
 };
