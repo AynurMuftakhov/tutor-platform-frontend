@@ -5,7 +5,6 @@ export enum AssetType {
 
 export interface ListeningTask {
     id: string;
-    lessonId: string;
     assetType: AssetType;
     sourceUrl: string;
     startSec: number;
@@ -14,4 +13,11 @@ export interface ListeningTask {
     timeLimitSec?: number;
     createdAt: string;
     title?: string;
+}
+
+export interface LessonTask {
+    id: string;
+    lessonId: string;
+    taskId: string;
+    task?: ListeningTask; // The referenced global task
 }

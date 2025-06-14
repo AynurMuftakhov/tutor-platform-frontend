@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Box, Typography, Button, CircularProgress, Grid, Paper } from '@mui/material';
-import { fetchLiveKitToken, getListeningTasks } from '../services/api';
+import { fetchLiveKitToken, getLessonTasks } from '../services/api';
 import {
   LiveKitRoom,
   VideoConference,
@@ -156,7 +156,7 @@ const RoomContent: React.FC<{ onLeave: () => void }> = () => {
     const fetchTasks = async () => {
       try {
         setLoading(true);
-        const data = await getListeningTasks(lessonId);
+        const data = await getLessonTasks(lessonId);
         setTasks(data);
         setError(null);
       } catch (err) {

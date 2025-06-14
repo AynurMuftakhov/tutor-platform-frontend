@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Typography, Button, CircularProgress, Paper, Dialog, IconButton, Grid } from '@mui/material';
-import { Add as AddIcon, Close as CloseIcon, LibraryBooks as LibraryIcon } from '@mui/icons-material';
-import { ListeningTask } from '../../types/ListeningTask';
-import { getListeningTasks, getAllListeningTasks, createListeningTask } from '../../services/api';
+import { Box, Typography, Button, CircularProgress, Paper, Dialog, IconButton, Grid, Chip } from '@mui/material';
+import { Add as AddIcon, Close as CloseIcon, LibraryBooks as LibraryIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { ListeningTask, LessonTask } from '../../types/ListeningTask';
+import { getLessonTasks, getAllListeningTasks, assignTaskToLesson, removeTaskFromLesson, createGlobalListeningTask } from '../../services/api';
 import ListeningCard from './ListeningCard';
 import CreateListeningTaskModal from './CreateListeningTaskModal';
 import StandaloneMediaPlayer from './StandaloneMediaPlayer';
@@ -14,7 +14,7 @@ interface MaterialsTabProps {
 }
 
 const MaterialsTab: React.FC<MaterialsTabProps> = ({ lessonId, isTeacher }) => {
-  const [tasks, setTasks] = useState<ListeningTask[]>([]);
+  const [lessonTasks, setLessonTasks] = useState<ListeningTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -38,11 +38,11 @@ const MaterialsTab: React.FC<MaterialsTabProps> = ({ lessonId, isTeacher }) => {
   const fetchTasks = async () => {
     try {
       setLoading(true);
-      const data = await getListeningTasks(lessonId);
-      setTasks(data);
+      const data = await getLessonTasks(lessonId);
+      setLessonTasks(data);
       setError(null);
     } catch (err) {
-      console.error('Failed to fetch listening tasks', err);
+      console.error('Failed to fetch lesson tasks', err);
       setError('Failed to load listening tasks. Please try again later.');
     } finally {
       setLoading(false);
@@ -54,7 +54,12 @@ const MaterialsTab: React.FC<MaterialsTabProps> = ({ lessonId, isTeacher }) => {
     try {
       setLoadingGlobalTasks(true);
       const data = await getAllListeningTasks();
-      setGlobalTasks(data);
+
+      // Filter out tasks that are already assigned to this lesson
+      const assignedTaskIds = lessonTasks.map(lt => lt.id);
+      const availableTasks = data.filter((task: { id: string; }) => !assignedTaskIds.includes(task.id));
+
+      setGlobalTasks(availableTasks);
     } catch (err) {
       console.error('Failed to fetch global listening tasks', err);
     } finally {
@@ -65,19 +70,21 @@ const MaterialsTab: React.FC<MaterialsTabProps> = ({ lessonId, isTeacher }) => {
   // Add a global task to this lesson
   const addTaskToLesson = async (task: ListeningTask) => {
     try {
-      await createListeningTask(lessonId, {
-        assetType: task.assetType,
-        sourceUrl: task.sourceUrl,
-        startSec: task.startSec,
-        endSec: task.endSec,
-        wordLimit: task.wordLimit,
-        timeLimitSec: task.timeLimitSec,
-        title: task.title
-      });
+      await assignTaskToLesson(lessonId, task.id);
       fetchTasks(); // Refresh the task list
       setIsSelectDialogOpen(false);
     } catch (err) {
       console.error('Failed to add task to lesson', err);
+    }
+  };
+
+  // Remove a task from this lesson
+  const removeTaskFromLessonHandler = async (lessonTaskId: string) => {
+    try {
+      await removeTaskFromLesson(lessonId, lessonTaskId);
+      fetchTasks(); // Refresh the task list
+    } catch (err) {
+      console.error('Failed to remove task from lesson', err);
     }
   };
 
@@ -162,7 +169,7 @@ const MaterialsTab: React.FC<MaterialsTabProps> = ({ lessonId, isTeacher }) => {
     <Box sx={{ p: 2 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h5">Listening Tasks</Typography>
-        {isTeacher && tasks.length > 0 && (
+        {isTeacher && lessonTasks.length > 0 && (
           <Box sx={{ display: 'flex', gap: 2 }}>
             <Button 
               variant="outlined" 
@@ -185,18 +192,35 @@ const MaterialsTab: React.FC<MaterialsTabProps> = ({ lessonId, isTeacher }) => {
         )}
       </Box>
 
-      {tasks.length === 0 ? (
+      {lessonTasks.length === 0 ? (
         <EmptyState />
       ) : (
         <Box>
-          {tasks.map((task) => (
-            <ListeningCard 
-              key={task.id} 
-              task={task} 
-              isTutor={isTeacher}
-              onPlay={handlePlay}
-            />
+        <Grid container spacing={2}>
+          {lessonTasks.map((lessonTask) => (
+              <Grid
+                  item
+                  xs={12}
+                  sm={6}
+                  md={4}
+                  lg={3}
+                  key={lessonTask.id}
+              >
+              {lessonTask && (
+                <>
+                  <ListeningCard 
+                    task={lessonTask}
+                    isTutor={isTeacher}
+                    onPlay={handlePlay}
+                    isInLesson={false}
+                    viewMode={'grid'}
+                    onDelete={isTeacher ? (() => removeTaskFromLessonHandler(lessonTask.id)) : undefined}
+                  />
+                </>
+              )}
+            </Grid>
           ))}
+        </Grid>
         </Box>
       )}
 
@@ -248,7 +272,9 @@ const MaterialsTab: React.FC<MaterialsTabProps> = ({ lessonId, isTeacher }) => {
             </Box>
           ) : globalTasks.length === 0 ? (
             <Typography variant="body1" sx={{ textAlign: 'center', py: 4 }}>
-              No materials available. Create some in the Learning Materials section.
+              {lessonTasks.length > 0 
+                ? "All available materials are already assigned to this lesson."
+                : "No materials available. Create some in the Learning Materials section."}
             </Typography>
           ) : (
             <Grid container spacing={2}>
@@ -259,15 +285,25 @@ const MaterialsTab: React.FC<MaterialsTabProps> = ({ lessonId, isTeacher }) => {
                       task={task} 
                       isTutor={true}
                       onPlay={handlePlay}
+                      viewMode="grid"
                     />
                     <Button
                       variant="contained"
                       color="primary"
                       size="small"
-                      sx={{ position: 'absolute', bottom: 16, right: 16 }}
+                      sx={{ 
+                        position: 'absolute', 
+                        bottom: 16, 
+                        right: 16,
+                        zIndex: 1,
+                        '&:hover': {
+                          transform: 'translateY(-2px)',
+                          boxShadow: 2
+                        }
+                      }}
                       onClick={() => addTaskToLesson(task)}
                     >
-                      Add to Lesson
+                      Assign to Lesson
                     </Button>
                   </Box>
                 </Grid>

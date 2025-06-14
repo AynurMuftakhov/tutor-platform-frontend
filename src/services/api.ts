@@ -211,9 +211,14 @@ export const fetchLiveKitToken = async (identity: string, roomName: string, user
     return response.data;
 }
 
-export const getListeningTasks = async (lessonId: string) => {
-  const response = await api.get(`/lessons-service/api/lessons/${lessonId}/listening-tasks`);
+export const getLessonTasks = async (lessonId: string) => {
+  const response = await api.get(`/lessons-service/api/lessons/${lessonId}/tasks`);
   return response.data;
+}
+
+export const deleteGlobalListeningTask = async (taskId: string) => {
+    const response = await api.delete(`/lessons-service/api/listening-tasks/${taskId}`);
+    return response.data;
 }
 
 export const getAllListeningTasks = async () => {
@@ -234,17 +239,15 @@ export const createGlobalListeningTask = async (taskData: {
   return response.data;
 }
 
-export const createListeningTask = async (lessonId: string, taskData: {
-    assetType: string;
-    sourceUrl: string;
-    startSec: number;
-    endSec: number;
-    wordLimit?: number;
-    timeLimitSec?: number;
-    title?: string;
-}) => {
-    const response = await api.post(`/lessons-service/api/lessons/${lessonId}/listening-tasks`, taskData);
-    return response.data;
+// New methods for lesson task management
+export const assignTaskToLesson = async (lessonId: string, taskId: string) => {
+  const response = await api.post(`/lessons-service/api/lessons/${lessonId}/tasks?taskId=${taskId}`);
+  return response.data;
+}
+
+export const removeTaskFromLesson = async (lessonId: string, taskId: string) => {
+  const response = await api.delete(`/lessons-service/api/lessons/${lessonId}/tasks/${taskId}`);
+  return response.data;
 }
 
 // Request interceptor to add authorization token

@@ -17,7 +17,7 @@ import {
 } from '@mui/material';
 import ReactPlayer from 'react-player';
 import { AssetType } from '../../types';
-import { createListeningTask, createGlobalListeningTask } from '../../services/api';
+import { createGlobalListeningTask, assignTaskToLesson } from '../../services/api';
 
 interface CreateListeningTaskModalProps {
   open: boolean;
@@ -127,13 +127,14 @@ const CreateListeningTaskModal: React.FC<CreateListeningTaskModalProps> = ({
 
     setIsSubmitting(true);
     try {
-      if (isGlobal) {
-        await createGlobalListeningTask(taskData);
-      } else if (lessonId) {
-        await createListeningTask(lessonId, taskData);
-      } else {
-        throw new Error('Either lessonId or isGlobal must be provided');
+      // Always create a global task first
+      const createdTask = await createGlobalListeningTask(taskData);
+
+      // If this is for a specific lesson, assign the task to the lesson
+      if (!isGlobal && lessonId) {
+        await assignTaskToLesson(lessonId, createdTask.id);
       }
+
       onTaskCreated();
       onClose();
     } catch (error) {

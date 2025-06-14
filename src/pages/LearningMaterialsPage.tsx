@@ -1,8 +1,26 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Typography, Button, CircularProgress, Paper, Grid, Tabs, Tab } from '@mui/material';
-import { Add as AddIcon } from '@mui/icons-material';
-import { ListeningTask } from '../types/ListeningTask';
-import { getAllListeningTasks } from '../services/api';
+import { 
+  Box, 
+  Typography, 
+  Button, 
+  CircularProgress, 
+  Paper, 
+  Grid, 
+  Tabs, 
+  Tab, 
+  TextField, 
+  InputAdornment,
+  ToggleButtonGroup,
+  ToggleButton,
+} from '@mui/material';
+import { 
+  Add as AddIcon, 
+  Search as SearchIcon, 
+  ViewList as ListIcon, 
+  ViewModule as GridIcon 
+} from '@mui/icons-material';
+import { ListeningTask } from '../types';
+import {deleteGlobalListeningTask, getAllListeningTasks} from '../services/api';
 import ListeningCard from '../components/lessonDetail/ListeningCard';
 import CreateListeningTaskModal from '../components/lessonDetail/CreateListeningTaskModal';
 import StandaloneMediaPlayer from '../components/lessonDetail/StandaloneMediaPlayer';
@@ -42,10 +60,25 @@ const LearningMaterialsPage: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentTask, setCurrentTask] = useState<ListeningTask | null>(null);
   const [tabValue, setTabValue] = useState(0);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid');
 
   // Handle play button click
   const handlePlay = (task: ListeningTask) => {
     setCurrentTask(task);
+  };
+
+  // Handle play button click
+  const handleDelete = async(task: ListeningTask) => {
+      await deleteGlobalListeningTask(task.id)
+      .then(() => {
+        fetchTasks();
+      })
+      .catch(err => {
+        console.error('Failed to delete listening task', err);
+        setError('Failed to delete listening task. Please try again later.');
+      }
+      )
   };
 
   // Close the player
@@ -74,6 +107,25 @@ const LearningMaterialsPage: React.FC = () => {
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
   };
+
+  const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(event.target.value);
+  };
+
+  const handleViewModeChange = (
+    event: React.MouseEvent<HTMLElement>,
+    newViewMode: 'list' | 'grid' | null
+  ) => {
+    if (newViewMode !== null) {
+      setViewMode(newViewMode);
+    }
+  };
+
+  // Filter tasks based on search term
+  const filteredTasks = tasks.filter(task => {
+    const title = task.title || '';
+    return title.toLowerCase().includes(searchTerm.toLowerCase());
+  });
 
   // Empty state component
   const EmptyState = () => (
@@ -157,17 +209,77 @@ const LearningMaterialsPage: React.FC = () => {
         {tasks.length === 0 ? (
           <EmptyState />
         ) : (
-          <Grid container spacing={2}>
-            {tasks.map((task) => (
-              <Grid item xs={12} sm={6} md={4} key={task.id}>
-                <ListeningCard 
-                  task={task} 
-                  isTutor={true}
-                  onPlay={handlePlay}
-                />
+          <Box>
+            <Box sx={{ 
+              display: 'flex', 
+              flexDirection: { xs: 'column', sm: 'row' }, 
+              justifyContent: 'space-between',
+              alignItems: { xs: 'stretch', sm: 'center' },
+              mb: 3,
+              gap: 2
+            }}>
+              {/* Search Bar */}
+              <TextField
+                placeholder="Search by title"
+                variant="outlined"
+                fullWidth
+                size="small"
+                value={searchTerm}
+                onChange={handleSearchChange}
+                sx={{ flexGrow: 1, maxWidth: { sm: '300px' } }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+
+              {/* View Toggle */}
+              <ToggleButtonGroup
+                value={viewMode}
+                exclusive
+                onChange={handleViewModeChange}
+                aria-label="view mode"
+                size="small"
+              >
+                <ToggleButton value="list" aria-label="list view">
+                  <ListIcon />
+                </ToggleButton>
+                <ToggleButton value="grid" aria-label="grid view">
+                  <GridIcon />
+                </ToggleButton>
+              </ToggleButtonGroup>
+            </Box>
+
+            {filteredTasks.length === 0 ? (
+              <Typography variant="body1" sx={{ textAlign: 'center', py: 4 }}>
+                No tasks match your search. Try a different search term.
+              </Typography>
+            ) : (
+              <Grid container spacing={2}>
+                {filteredTasks.map((task) => (
+                  <Grid 
+                    item 
+                    xs={12} 
+                    sm={viewMode === 'list' ? 12 : 6} 
+                    md={viewMode === 'list' ? 12 : 4}
+                    lg={viewMode === 'list' ? 12 : 3}
+                    key={task.id}
+                  >
+                    <ListeningCard 
+                      task={task} 
+                      isTutor={true}
+                      onPlay={handlePlay}
+                      viewMode={viewMode}
+                      onDelete={handleDelete}
+                    />
+                  </Grid>
+                ))}
               </Grid>
-            ))}
-          </Grid>
+            )}
+          </Box>
         )}
       </TabPanel>
 
