@@ -65,6 +65,7 @@ interface WordCardProps {
     onToggleSelection?: (id: string) => void;
     readOnly?: boolean;
     compact?: boolean;
+    initialExpanded?: boolean;
 }
 
 // Helper function to get color based on difficulty level
@@ -90,9 +91,10 @@ const WordCard: React.FC<WordCardProps> = ({
     isSelected = false,
     onToggleSelection,
     readOnly = false,
-    compact = false
+    compact = false,
+    initialExpanded = false
 }) => {
-    const [expanded, setExpanded] = useState(false);
+    const [expanded, setExpanded] = useState(initialExpanded);
     const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
     const theme = useTheme();
     const { user } = useAuth();

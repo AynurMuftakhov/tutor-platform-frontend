@@ -14,7 +14,11 @@ import {
     Tabs,
     Tab,
     Snackbar,
-    Alert
+    Alert,
+    ToggleButtonGroup,
+    ToggleButton,
+    Tooltip,
+    alpha
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import AddIcon from '@mui/icons-material/Add';
@@ -23,6 +27,8 @@ import FilterListIcon from '@mui/icons-material/FilterList';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
 import BookmarkIcon from '@mui/icons-material/Bookmark';
+import ViewModuleIcon from '@mui/icons-material/ViewModule';
+import ViewListIcon from '@mui/icons-material/ViewList';
 import {
     useDictionary,
     useDeleteWord,
@@ -31,6 +37,7 @@ import {
 } from '../hooks/useVocabulary';
 import {useAssignments, useAssignWords, useUpdateAssignment} from '../hooks/useAssignments';
 import WordGrid from '../components/vocabulary/WordGrid';
+import VocabularyList from '../components/vocabulary/VocabularyList';
 import CategoryTabs from '../components/vocabulary/CategoryTabs';
 import GenerateWordDialog from '../components/vocabulary/GenerateWordDialog';
 import ReviewWordDialog from '../components/vocabulary/ReviewWordDialog';
@@ -60,12 +67,20 @@ const DictionaryPage: React.FC = () => {
     // Hook for assigning words to students
     const assignWords = useAssignWords();
 
+    // State to track assigned word IDs for quick lookup
+    const [assignedWordIdsState, setAssignedWordIdsState] = useState(new Set<string>());
+
     // Create a map of assigned word IDs for quick lookup
     const assignedWordIds = useMemo(() => {
         const ids = new Set<string>();
         assignedWords.forEach(assignment => ids.add(assignment.vocabularyWordId));
         return ids;
     }, [assignedWords]);
+
+    // Update the state when assignedWordIds changes
+    useEffect(() => {
+        setAssignedWordIdsState(new Set(assignedWordIds));
+    }, [assignedWordIds]);
 
     // Create a map of vocabulary word IDs to assignment IDs and statuses
     const assignmentMap = useMemo(() => {
@@ -99,13 +114,13 @@ const DictionaryPage: React.FC = () => {
             // Students see either assigned words or library words based on active tab
             if (activeTab === 'my-vocabulary') {
                 // Filter words that are assigned to the student
-                return words.filter(word => assignedWordIds.has(word.id));
+                return words.filter(word => assignedWordIdsState.has(word.id));
             } else {
                 // Show all words for the library view EXCEPT those already assigned to the student
-                return words.filter(word => !assignedWordIds.has(word.id));
+                return words.filter(word => !assignedWordIdsState.has(word.id));
             }
         }
-    }, [isTeacher, words, activeTab, assignedWordIds]);
+    }, [isTeacher, words, activeTab, assignedWordIdsState]);
 
     // Get words for quiz - for students, always use only assigned words
     const quizWords = useMemo(() => {
@@ -114,9 +129,9 @@ const DictionaryPage: React.FC = () => {
             return words;
         } else {
             // Students always see only assigned words in quiz
-            return words.filter(word => assignedWordIds.has(word.id));
+            return words.filter(word => assignedWordIdsState.has(word.id));
         }
-    }, [isTeacher, words, assignedWordIds]);
+    }, [isTeacher, words, assignedWordIdsState]);
 
     const deleteWord = useDeleteWord();
     useCreateWord();
@@ -132,6 +147,7 @@ const DictionaryPage: React.FC = () => {
     const [page, setPage] = useState(1); // 1-based for Pagination component
     const [filterState, setFilterState] = useState<'all' | 'learned' | 'not-learned'>('all');
     const [learnedWords, setLearnedWords] = useState<Set<string>>(new Set());
+    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
     // State for word selection (for assigning to students)
     const [selectedWords, setSelectedWords] = useState<string[]>([]);
@@ -232,9 +248,13 @@ const DictionaryPage: React.FC = () => {
         // Use the assignWords hook to assign the word to the student
         assignWords.mutate(dto, {
             onSuccess: () => {
-                // Update the assignedWordIds set to include the newly assigned word
-                // This ensures the word appears in "My Vocabulary" without requiring a reload
-                assignedWordIds.add(id);
+                // Update the assignedWordIdsState to include the newly assigned word
+                // This ensures the word appears in "My Vocabulary" and disappears from Library
+                setAssignedWordIdsState(prev => {
+                    const newSet = new Set(prev);
+                    newSet.add(id);
+                    return newSet;
+                });
 
                 // Show success message with Snackbar
                 setSnackbarMessage('Word added to your vocabulary!');
@@ -482,6 +502,44 @@ const DictionaryPage: React.FC = () => {
                             }}
                         />
 
+                        <ToggleButtonGroup
+                            value={viewMode}
+                            exclusive
+                            onChange={(_, newMode) => {
+                                if (newMode !== null) {
+                                    setViewMode(newMode);
+                                }
+                            }}
+                            aria-label="view mode"
+                            size="small"
+                            sx={{ 
+                                border: '1px solid rgba(0,0,0,0.12)',
+                                borderRadius: 2,
+                                '& .MuiToggleButton-root': {
+                                    border: 'none',
+                                    px: 1.5,
+                                    '&.Mui-selected': {
+                                        bgcolor: alpha(theme.palette.primary.main, 0.1),
+                                        color: theme.palette.primary.main,
+                                        '&:hover': {
+                                            bgcolor: alpha(theme.palette.primary.main, 0.15)
+                                        }
+                                    }
+                                }
+                            }}
+                        >
+                            <ToggleButton value="grid" aria-label="grid view">
+                                <Tooltip title="Card View">
+                                    <ViewModuleIcon fontSize="small" />
+                                </Tooltip>
+                            </ToggleButton>
+                            <ToggleButton value="list" aria-label="list view">
+                                <Tooltip title="List View">
+                                    <ViewListIcon fontSize="small" />
+                                </Tooltip>
+                            </ToggleButton>
+                        </ToggleButtonGroup>
+
                         <Chip
                             icon={<FilterListIcon />}
                             label={
@@ -538,19 +596,34 @@ const DictionaryPage: React.FC = () => {
                     <CategoryTabs value={category} onChange={(v) => setCategory(v as '0' | '1' | '2' | '3' | '4' | '5')} />
                 </Box>
 
-                {/* Word Grid */}
-                <WordGrid
-                    data={paginated}
-                    onDelete={isTeacher && !selectionMode ? id => deleteWord.mutate(id) : undefined}
-                    onEdit={isTeacher && !selectionMode ? handleWordEdit : undefined}
-                    onToggleLearned={!selectionMode ? handleToggleLearned : undefined}
-                    onAddToMyVocabulary={!isTeacher && activeTab === 'library' && !selectionMode ? handleAddToMyVocabulary : undefined}
-                    learnedWords={learnedWords}
-                    readOnly={!isTeacher && activeTab === 'library'}
-                    selectionMode={selectionMode}
-                    selectedWords={selectedWords}
-                    onToggleSelection={handleToggleSelection}
-                />
+                {/* Vocabulary Display - Grid or List */}
+                {viewMode === 'grid' ? (
+                    <WordGrid
+                        data={paginated}
+                        onDelete={isTeacher && !selectionMode ? id => deleteWord.mutate(id) : undefined}
+                        onEdit={isTeacher && !selectionMode ? handleWordEdit : undefined}
+                        onToggleLearned={!selectionMode ? handleToggleLearned : undefined}
+                        onAddToMyVocabulary={!isTeacher && activeTab === 'library' && !selectionMode ? handleAddToMyVocabulary : undefined}
+                        learnedWords={learnedWords}
+                        readOnly={!isTeacher && activeTab === 'library'}
+                        selectionMode={selectionMode}
+                        selectedWords={selectedWords}
+                        onToggleSelection={handleToggleSelection}
+                    />
+                ) : (
+                    <VocabularyList
+                        data={paginated}
+                        onDelete={isTeacher && !selectionMode ? id => deleteWord.mutate(id) : undefined}
+                        onEdit={isTeacher && !selectionMode ? handleWordEdit : undefined}
+                        onToggleLearned={!selectionMode ? handleToggleLearned : undefined}
+                        onAddToMyVocabulary={!isTeacher && activeTab === 'library' && !selectionMode ? handleAddToMyVocabulary : undefined}
+                        learnedWords={learnedWords}
+                        readOnly={!isTeacher && activeTab === 'library'}
+                        selectionMode={selectionMode}
+                        selectedWords={selectedWords}
+                        onToggleSelection={handleToggleSelection}
+                    />
+                )}
 
                 {/* Pagination */}
                 {filtered.length > 0 && (
