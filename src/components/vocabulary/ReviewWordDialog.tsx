@@ -41,6 +41,16 @@ const ReviewWordDialog: React.FC<{
                     </Typography>
                     <Box sx={{ display: 'grid', gap: 2 }}>
                         <TextField
+                            label="Text"
+                            multiline
+                            rows={1}
+                            value={values.text ?? data.text}
+                            onChange={e => setValues({...values, text: e.target.value})}
+                            variant="outlined"
+                            fullWidth
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: 1.5 } }}
+                        />
+                        <TextField
                             label="Definition"
                             multiline
                             rows={2}
