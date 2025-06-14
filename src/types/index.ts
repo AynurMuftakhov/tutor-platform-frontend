@@ -4,6 +4,11 @@ export interface AssignWordsRequest { studentId: string; vocabularyWordIds: stri
 
 export * from './ListeningTask';
 
+export enum AudioPart {
+    TEXT = 'TEXT',
+    EXAMPLE_SENTENCE = 'EXAMPLE_SENTENCE'
+}
+
 export interface CreateWordRequest {
     text: string;
     teacherId: string;

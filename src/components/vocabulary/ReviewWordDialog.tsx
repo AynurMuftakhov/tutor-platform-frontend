@@ -14,9 +14,15 @@ import {
     InputLabel,
     Select,
     MenuItem,
-    Paper
+    Paper,
+    IconButton,
+    Tooltip,
+    alpha,
+    useTheme
 } from '@mui/material';
-import {VocabularyWord} from '../../types';
+import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import {AudioPart, VocabularyWord} from '../../types';
+import {useRegenerateAudio} from '../../hooks/useVocabulary';
 
 const ReviewWordDialog: React.FC<{
     open: boolean;
@@ -25,7 +31,32 @@ const ReviewWordDialog: React.FC<{
     onClose: () => void;
 }> = ({open, data, onSave, onClose}) => {
     const [values, setValues] = useState<Partial<VocabularyWord>>({});
+    const regenerateAudio = useRegenerateAudio();
+    const theme = useTheme();
     useEffect(() => setValues(data ?? {}), [data]);
+
+    const handleRegenerateAudio = (part: AudioPart) => {
+        if (!data) return;
+        regenerateAudio.mutate({ id: data.id, part }, {
+            onSuccess: (updatedWord) => {
+                // Update the data with the new audio URLs
+                // Since we can't modify the data prop directly, we'll update the values state
+                setValues(prev => ({
+                    ...prev,
+                    audioUrl: updatedWord.audioUrl,
+                    exampleSentenceAudioUrl: updatedWord.exampleSentenceAudioUrl
+                }));
+            }
+        });
+    };
+
+    const handleRegenerateTextAudio = () => {
+        handleRegenerateAudio(AudioPart.TEXT);
+    };
+
+    const handleRegenerateExampleAudio = () => {
+        handleRegenerateAudio(AudioPart.EXAMPLE_SENTENCE);
+    };
 
     if (!data) return null;
 
@@ -165,15 +196,71 @@ const ReviewWordDialog: React.FC<{
                 </Paper>
 
                 <Paper elevation={0} sx={{ p: 2, bgcolor: '#f8f9fa', borderRadius: 2 }}>
-                    <Typography variant="subtitle1" fontWeight="600" gutterBottom color="primary">
-                        Additional Information
-                    </Typography>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                        <Typography variant="subtitle1" fontWeight="600" color="primary">
+                            Pronunciation
+                        </Typography>
+                        <Tooltip title="Regenerate audio">
+                            <IconButton
+                                size="small"
+                                onClick={handleRegenerateTextAudio}
+                                disabled={regenerateAudio.isPending}
+                                sx={{
+                                    color: theme.palette.primary.main,
+                                    bgcolor: alpha(theme.palette.primary.main, 0.1),
+                                    width: 28,
+                                    height: 28,
+                                    '&:hover': {
+                                        bgcolor: alpha(theme.palette.primary.main, 0.2)
+                                    }
+                                }}
+                            >
+                                <RestartAltIcon sx={{ fontSize: 16 }} />
+                            </IconButton>
+                        </Tooltip>
+                    </Box>
                     <Box sx={{ display: 'grid', gap: 2 }}>
                         <Typography variant="body2">
                             Phonetic: <b>{data.phonetic ?? '—'}</b>
                         </Typography>
-                        {data.audioUrl && (
-                            <audio controls src={data.audioUrl} style={{width: '100%'}} />
+                        {(values.audioUrl || data.audioUrl) && (
+                            <audio controls src={values.audioUrl || data.audioUrl} style={{width: '100%'}} />
+                        )}
+                    </Box>
+                </Paper>
+
+                <Paper elevation={0} sx={{ p: 2, bgcolor: '#f8f9fa', borderRadius: 2 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                        <Typography variant="subtitle1" fontWeight="600" color="primary">
+                            Example Pronunciation
+                        </Typography>
+                        <Tooltip title="Regenerate example audio">
+                            <IconButton
+                                size="small"
+                                onClick={handleRegenerateExampleAudio}
+                                disabled={regenerateAudio.isPending}
+                                sx={{
+                                    color: theme.palette.primary.main,
+                                    bgcolor: alpha(theme.palette.primary.main, 0.1),
+                                    width: 28,
+                                    height: 28,
+                                    '&:hover': {
+                                        bgcolor: alpha(theme.palette.primary.main, 0.2)
+                                    }
+                                }}
+                            >
+                                <RestartAltIcon sx={{ fontSize: 16 }} />
+                            </IconButton>
+                        </Tooltip>
+                    </Box>
+                    <Box sx={{ display: 'grid', gap: 1.5 }}>
+                        {(values.exampleSentenceAudioUrl || data.exampleSentenceAudioUrl) && (
+                            <audio controls src={values.exampleSentenceAudioUrl || data.exampleSentenceAudioUrl} style={{width: '100%'}} />
+                        )}
+                        {!values.exampleSentenceAudioUrl && !data.exampleSentenceAudioUrl && (
+                            <Typography variant="body2" color="text.secondary">
+                                No Example pronunciation available
+                            </Typography>
                         )}
                     </Box>
                 </Paper>

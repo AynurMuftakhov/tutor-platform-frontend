@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { vocabApi } from '../services/vocabulary.api';
-import {CreateWordRequest, VocabularyWord } from '../types';
+import {AudioPart, CreateWordRequest, VocabularyWord } from '../types';
 
 const QUERY_KEY = ['vocabulary', 'words'];
 
@@ -39,6 +39,18 @@ export const useDeleteWord = () => {
         mutationFn: (id: string) => vocabApi.deleteWord(id),
         onSuccess: (_, id) => {
             qc.setQueryData<VocabularyWord[]>(QUERY_KEY, old => old?.filter(w => w.id !== id) || []);
+        }
+    });
+};
+
+export const useRegenerateAudio = () => {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: ({ id, part }: { id: string; part?: AudioPart }) => vocabApi.regenerateAudio(id, part),
+        onSuccess: (updated) => {
+            qc.setQueryData<VocabularyWord[]>(QUERY_KEY, old =>
+                old ? old.map(w => (w.id === updated.id ? updated : w)) : old
+            );
         }
     });
 };
