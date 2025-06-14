@@ -223,8 +223,8 @@ const ReviewWordDialog: React.FC<{
                         <Typography variant="body2">
                             Phonetic: <b>{data.phonetic ?? '—'}</b>
                         </Typography>
-                        {(values.audioUrl || data.audioUrl) && (
-                            <audio controls src={values.audioUrl || data.audioUrl} style={{width: '100%'}} />
+                        {(values.audioUrl ?? data.audioUrl) && (
+                            <audio controls src={(values.audioUrl ?? data.audioUrl) ?? undefined} style={{width: '100%'}} />
                         )}
                     </Box>
                 </Paper>
@@ -254,8 +254,8 @@ const ReviewWordDialog: React.FC<{
                         </Tooltip>
                     </Box>
                     <Box sx={{ display: 'grid', gap: 1.5 }}>
-                        {(values.exampleSentenceAudioUrl || data.exampleSentenceAudioUrl) && (
-                            <audio controls src={values.exampleSentenceAudioUrl || data.exampleSentenceAudioUrl} style={{width: '100%'}} />
+                        {(values.exampleSentenceAudioUrl ?? data.exampleSentenceAudioUrl) && (
+                            <audio controls src={(values.exampleSentenceAudioUrl ?? data.exampleSentenceAudioUrl) ?? undefined} style={{width: '100%'}} />
                         )}
                         {!values.exampleSentenceAudioUrl && !data.exampleSentenceAudioUrl && (
                             <Typography variant="body2" color="text.secondary">
