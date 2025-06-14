@@ -2,7 +2,7 @@ import ky from 'ky';
 import {
     AssignWordsRequest,
     AssignedWordResponse,
-    VocabularyWord, CreateWordRequest
+    VocabularyWord, CreateWordRequest, AudioPart
 } from '../types';
 
 const api = ky.create({
@@ -28,6 +28,10 @@ export const vocabApi = {
     updateWord: (id: string, dto: Partial<VocabularyWord>) =>
         api.patch(`words/${id}`, { json: dto }).json<VocabularyWord>(),
     deleteWord: (id: string) => api.delete(`words/${id}`),
+    regenerateAudio: (id: string, part?: AudioPart) =>
+        api.patch(`words/${id}/audio/regenerate`, { 
+            searchParams: part ? { part } : undefined 
+        }).json<VocabularyWord>(),
 
     assign: (dto: AssignWordsRequest) =>
         api.post('assignments', { json: dto }).json<AssignedWordResponse[]>(),

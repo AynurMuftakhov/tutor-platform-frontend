@@ -19,10 +19,10 @@ import {
     MenuItem, alpha, useTheme
 } from '@mui/material';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
-import { useCreateWord, useUpdateWord } from '../../hooks/useVocabulary';
+import { useCreateWord, useUpdateWord, useRegenerateAudio } from '../../hooks/useVocabulary';
 import { useAuth } from '../../context/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
-import { VocabularyWord } from '../../types';
+import { AudioPart, VocabularyWord } from '../../types';
 import VolumeUpIcon from "@mui/icons-material/VolumeUp";
 
 interface Props {
@@ -37,6 +37,7 @@ const GenerateWordDialog: React.FC<Props> = ({ open, onClose }) => {
     const qc = useQueryClient();
     const createWord = useCreateWord();
     const updateWord = useUpdateWord();
+    const regenerateAudio = useRegenerateAudio();
     const theme = useTheme();
     const [step, setStep] = useState<Step>('INPUT');
     const [input, setInput] = useState('');
@@ -91,6 +92,24 @@ const GenerateWordDialog: React.FC<Props> = ({ open, onClose }) => {
                 qc.invalidateQueries({ queryKey: ['vocabulary', 'words'] });
             }
         });
+    };
+
+    const handleRegenerateAudio = (part: AudioPart) => {
+        if (!draft) return;
+        regenerateAudio.mutate({ id: draft.id, part }, {
+            onSuccess: (updatedWord) => {
+                // Update the draft with the new audio URLs
+                setDraft(updatedWord);
+            }
+        });
+    };
+
+    const handleRegenerateTextAudio = () => {
+        handleRegenerateAudio(AudioPart.TEXT);
+    };
+
+    const handleRegenerateExampleAudio = () => {
+        handleRegenerateAudio(AudioPart.EXAMPLE_SENTENCE);
     };
 
     return (
@@ -285,9 +304,29 @@ const GenerateWordDialog: React.FC<Props> = ({ open, onClose }) => {
                         </Paper>
 
                         <Paper elevation={0} sx={{ p: 1.5, bgcolor: '#f8f9fa', borderRadius: 2 }}>
-                            <Typography variant="subtitle1" fontWeight="600" gutterBottom color="primary">
-                                Pronunciation
-                            </Typography>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                                <Typography variant="subtitle1" fontWeight="600" color="primary">
+                                    Pronunciation
+                                </Typography>
+                                <Tooltip title="Regenerate audio">
+                                    <IconButton
+                                        size="small"
+                                        onClick={handleRegenerateTextAudio}
+                                        disabled={regenerateAudio.isPending}
+                                        sx={{
+                                            color: theme.palette.primary.main,
+                                            bgcolor: alpha(theme.palette.primary.main, 0.1),
+                                            width: 28,
+                                            height: 28,
+                                            '&:hover': {
+                                                bgcolor: alpha(theme.palette.primary.main, 0.2)
+                                            }
+                                        }}
+                                    >
+                                        <RestartAltIcon sx={{ fontSize: 16 }} />
+                                    </IconButton>
+                                </Tooltip>
+                            </Box>
                             <Box sx={{ display: 'grid', gap: 1.5 }}>
                                 {draft.audioUrl && (
                                     <audio controls src={draft.audioUrl} style={{ width: '100%' }} />
@@ -300,9 +339,29 @@ const GenerateWordDialog: React.FC<Props> = ({ open, onClose }) => {
                             </Box>
                         </Paper>
                         <Paper elevation={0} sx={{ p: 1.5, bgcolor: '#f8f9fa', borderRadius: 2 }}>
-                            <Typography variant="subtitle1" fontWeight="600" gutterBottom color="primary">
-                                Example Pronunciation
-                            </Typography>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                                <Typography variant="subtitle1" fontWeight="600" color="primary">
+                                    Example Pronunciation
+                                </Typography>
+                                <Tooltip title="Regenerate example audio">
+                                    <IconButton
+                                        size="small"
+                                        onClick={handleRegenerateExampleAudio}
+                                        disabled={regenerateAudio.isPending}
+                                        sx={{
+                                            color: theme.palette.primary.main,
+                                            bgcolor: alpha(theme.palette.primary.main, 0.1),
+                                            width: 28,
+                                            height: 28,
+                                            '&:hover': {
+                                                bgcolor: alpha(theme.palette.primary.main, 0.2)
+                                            }
+                                        }}
+                                    >
+                                        <RestartAltIcon sx={{ fontSize: 16 }} />
+                                    </IconButton>
+                                </Tooltip>
+                            </Box>
                             <Box sx={{ display: 'grid', gap: 1.5 }}>
                                 {draft.exampleSentenceAudioUrl && (
                                     <audio controls src={draft.exampleSentenceAudioUrl} style={{ width: '100%' }} />
