@@ -1,4 +1,4 @@
-import React, {useMemo, useState} from 'react';
+import React, {useEffect, useMemo, useState} from 'react';
 import {
     Box,
     Typography,
@@ -29,7 +29,7 @@ import {
     useCreateWord,
     useUpdateWord
 } from '../hooks/useVocabulary';
-import {useAssignments, useAssignWords} from '../hooks/useAssignments';
+import {useAssignments, useAssignWords, useUpdateAssignment} from '../hooks/useAssignments';
 import WordGrid from '../components/vocabulary/WordGrid';
 import CategoryTabs from '../components/vocabulary/CategoryTabs';
 import GenerateWordDialog from '../components/vocabulary/GenerateWordDialog';
@@ -67,6 +67,29 @@ const DictionaryPage: React.FC = () => {
         return ids;
     }, [assignedWords]);
 
+    // Create a map of vocabulary word IDs to assignment IDs and statuses
+    const assignmentMap = useMemo(() => {
+        const map = new Map<string, { id: string, status: string }>();
+        assignedWords.forEach(assignment => {
+            map.set(assignment.vocabularyWordId, { 
+                id: assignment.id, 
+                status: assignment.status 
+            });
+        });
+        return map;
+    }, [assignedWords]);
+
+    // Initialize learnedWords based on assignment status
+    useEffect(() => {
+        const learned = new Set<string>();
+        assignedWords.forEach(assignment => {
+            if (assignment.status === 'COMPLETED') {
+                learned.add(assignment.vocabularyWordId);
+            }
+        });
+        setLearnedWords(learned);
+    }, [assignedWords]);
+
     // Get words for the current view based on user role and active tab
     const displayWords = useMemo(() => {
         if (isTeacher) {
@@ -98,6 +121,7 @@ const DictionaryPage: React.FC = () => {
     const deleteWord = useDeleteWord();
     useCreateWord();
     const updateWord = useUpdateWord();
+    const updateAssignment = useUpdateAssignment();
     const [genOpen, setGenOpen] = useState(false);
     const [reviewOpen, setReviewOpen] = useState(false);
     const [quizOpen, setQuizOpen] = useState(false);
@@ -106,7 +130,7 @@ const DictionaryPage: React.FC = () => {
     const [search, setSearch] = useState('');
     const [category, setCategory] = useState<'0' | '1' | '2' | '3' | '4' | '5'>('0');
     const [page, setPage] = useState(1); // 1-based for Pagination component
-    const [showOnlyLearned, setShowOnlyLearned] = useState(false);
+    const [filterState, setFilterState] = useState<'all' | 'learned' | 'not-learned'>('all');
     const [learnedWords, setLearnedWords] = useState<Set<string>>(new Set());
 
     // State for word selection (for assigning to students)
@@ -124,10 +148,15 @@ const DictionaryPage: React.FC = () => {
             displayWords.filter(w => {
                 const matchSearch = w.text.toLowerCase().includes(search.toLowerCase());
                 const matchCat = category === '0' ? true : w.difficulty?.toString() === category;
-                const matchLearned = showOnlyLearned ? learnedWords.has(w.id) : true;
-                return matchSearch && matchCat && matchLearned;
+                let matchFilter = true;
+                if (filterState === 'learned') {
+                    matchFilter = learnedWords.has(w.id);
+                } else if (filterState === 'not-learned') {
+                    matchFilter = !learnedWords.has(w.id);
+                }
+                return matchSearch && matchCat && matchFilter;
             }),
-        [displayWords, search, category, showOnlyLearned, learnedWords]
+        [displayWords, search, category, filterState, learnedWords]
     );
 
     const paginated = useMemo(
@@ -147,15 +176,47 @@ const DictionaryPage: React.FC = () => {
     };
 
     const handleToggleLearned = (id: string) => {
-        setLearnedWords(prev => {
-            const newSet = new Set(prev);
-            if (newSet.has(id)) {
-                newSet.delete(id);
-            } else {
-                newSet.add(id);
+        if (!user) return;
+
+        // Get the assignment for this word
+        const assignment = assignmentMap.get(id);
+        if (!assignment) {
+            console.error(`No assignment found for word ID: ${id}`);
+            return;
+        }
+
+        // Determine the new status
+        const isCurrentlyLearned = learnedWords.has(id);
+        const newStatus = isCurrentlyLearned ? 'IN_PROGRESS' : 'COMPLETED';
+
+        // Update the assignment status
+        updateAssignment.mutate(
+            { 
+                id: assignment.id, 
+                status: newStatus, 
+                studentId: user.id 
+            },
+            {
+                onSuccess: () => {
+                    // Update the local state to reflect the change immediately
+                    setLearnedWords(prev => {
+                        const newSet = new Set(prev);
+                        if (isCurrentlyLearned) {
+                            newSet.delete(id);
+                        } else {
+                            newSet.add(id);
+                        }
+                        return newSet;
+                    });
+                },
+                onError: (error) => {
+                    console.error('Failed to update assignment status:', error);
+                    setSnackbarMessage('Failed to update word status. Please try again.');
+                    setSnackbarSeverity('error');
+                    setSnackbarOpen(true);
+                }
             }
-            return newSet;
-        });
+        );
     };
 
     // Function to add a word from the library to the student's personal vocabulary
@@ -423,16 +484,50 @@ const DictionaryPage: React.FC = () => {
 
                         <Chip
                             icon={<FilterListIcon />}
-                            label={showOnlyLearned ? "Learned words" : "All words"}
+                            label={
+                                filterState === 'all' 
+                                    ? "All words" 
+                                    : filterState === 'learned' 
+                                        ? "Learned words" 
+                                        : "Words to learn"
+                            }
                             clickable
-                            color={showOnlyLearned ? "success" : "default"}
-                            onClick={() => setShowOnlyLearned(!showOnlyLearned)}
+                            color={
+                                filterState === 'all' 
+                                    ? "default" 
+                                    : filterState === 'learned' 
+                                        ? "success" 
+                                        : "primary"
+                            }
+                            onClick={() => {
+                                // Cycle through filter states: all -> learned -> not-learned -> all
+                                setFilterState(prev => {
+                                    if (prev === 'all') return 'learned';
+                                    if (prev === 'learned') return 'not-learned';
+                                    return 'all';
+                                });
+                            }}
                             sx={{ 
                                 borderRadius: 2,
-                                bgcolor: showOnlyLearned ? 'rgba(0, 215, 194, 0.1)' : 'transparent',
-                                border: showOnlyLearned ? '1px solid #00d7c2' : '1px solid rgba(0,0,0,0.12)',
+                                bgcolor: 
+                                    filterState === 'all' 
+                                        ? 'transparent' 
+                                        : filterState === 'learned' 
+                                            ? 'rgba(0, 215, 194, 0.1)' 
+                                            : 'rgba(37, 115, 255, 0.1)',
+                                border: 
+                                    filterState === 'all' 
+                                        ? '1px solid rgba(0,0,0,0.12)' 
+                                        : filterState === 'learned' 
+                                            ? '1px solid #00d7c2' 
+                                            : '1px solid #2573ff',
                                 '& .MuiChip-icon': {
-                                    color: showOnlyLearned ? '#00d7c2' : 'inherit'
+                                    color: 
+                                        filterState === 'all' 
+                                            ? 'inherit' 
+                                            : filterState === 'learned' 
+                                                ? '#00d7c2' 
+                                                : '#2573ff'
                                 }
                             }}
                         />
