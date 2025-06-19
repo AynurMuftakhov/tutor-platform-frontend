@@ -11,7 +11,7 @@ const api = ky.create({
         beforeRequest: [
             request => {
                 // grab your token however you store it
-                const token = localStorage.getItem('token');
+                const token = sessionStorage.getItem('token');
                 if (token) {
                     request.headers.set('Authorization', `Bearer ${token}`);
                 }

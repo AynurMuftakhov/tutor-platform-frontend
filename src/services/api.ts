@@ -1,4 +1,3 @@
-import { keycloak } from './keycloak';
 import axios from 'axios';
 import {Student} from "../pages/MyStudentsPage";
 import { NotificationMessage} from "../context/NotificationsSocketContext";
