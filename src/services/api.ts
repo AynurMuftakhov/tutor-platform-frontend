@@ -1,4 +1,3 @@
-import { keycloak } from './keycloak';
 import axios from 'axios';
 import {Student} from "../pages/MyStudentsPage";
 import { NotificationMessage} from "../context/NotificationsSocketContext";
@@ -212,25 +211,11 @@ export const fetchLiveKitToken = async (identity: string, roomName: string, user
     return response.data;
 }
 
-// Request interceptor to add authorization token and refresh Keycloak token if needed
-api.interceptors.request.use(async (config) => {
-    if (keycloak?.isTokenExpired?.()) {
-        try {
-            const refreshed = await keycloak.updateToken(10); // refresh if expiring within 10s
-            if (refreshed && keycloak.token) {
-                config.headers.Authorization = `Bearer ${keycloak.token}`;
-            } else {
-                console.warn('Keycloak token refresh failed. Logging out.');
-                localStorage.removeItem('token');
-                localStorage.removeItem('user');
-            }
-        } catch (e) {
-            console.error('Token refresh error:', e);
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
-        }
-    } else if (keycloak?.token) {
-        config.headers.Authorization = `Bearer ${keycloak.token}`;
+// Request interceptor to add authorization token
+api.interceptors.request.use((config) => {
+    const token = sessionStorage.getItem("token");
+    if(token){
+        config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
 });

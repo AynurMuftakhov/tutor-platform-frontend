@@ -1,6 +1,13 @@
-import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
-import {getInitialToken, initKeycloak, keycloak} from "../services/keycloak";
-import { fetchCurrentUser } from "../services/api";
+import React, {
+    createContext,
+    useCallback,
+    useContext,
+    useEffect,
+    useRef,
+    useState,
+} from 'react';
+import { initKeycloak, keycloak } from '../services/keycloak';
+import { fetchCurrentUser } from '../services/api';
 
 interface User {
     id: string;
@@ -15,144 +22,162 @@ interface User {
 interface AuthContextType {
     token: string | null;
     user: User | null;
-    setToken: (token: string | null) => void;
-    logout: () => void;
-    updateUser: (updatedUser: Partial<User>) => void;
     authenticated: boolean;
     isLoading: boolean;
+    setToken: (t: string | null) => void;
+    logout: () => void;
+    updateUser: (u: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const initialToken = getInitialToken();
-    const initialUser = initialToken && localStorage.getItem('user')
-        ? JSON.parse(localStorage.getItem('user') as string)
-        : null;
-
-    const [token, setToken] = useState<string | null>(initialToken);
-    const [user, setUser] = useState<User | null>(initialUser);
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
+                                                                          children,
+                                                                      }) => {
+    /** keep the token only for the lifetime of the tab */
+    const [token, setTokenState] = useState<string | null>(
+        sessionStorage.getItem('token'),
+    );
+    const [user, setUser] = useState<User | null>(
+        sessionStorage.getItem('user')
+            ? JSON.parse(sessionStorage.getItem('user')!)
+            : null,
+    );
     const [authenticated, setAuthenticated] = useState<boolean>(!!token);
-    const [isLoading, setIsLoading] = useState<boolean>(true);
+    const [isLoading, setIsLoading] = useState(true);
 
-    const saveToken = async (newToken: string | null) => {
-        if (newToken) {
-            localStorage.setItem('token', newToken);
-            setToken(newToken);
-            setAuthenticated(true);
+    /** single timeout id for scheduled refresh */
+    const refreshTimeout = useRef<number>(null);
 
-            try {
-                const me = await fetchCurrentUser();
-                setUser(me);
-                localStorage.setItem('user', JSON.stringify(me));
-            } catch (error) {
-                console.error("Failed to fetch current user:", error);
+    const saveToken = useCallback(
+        async (newToken: string | null) => {
+            if (newToken) {
+                sessionStorage.setItem('token', newToken);
+                setTokenState(newToken);
+                setAuthenticated(true);
+
+                try {
+                    const me = await fetchCurrentUser();
+                    setUser(me);
+                    sessionStorage.setItem('user', JSON.stringify(me));
+                } catch (err) {
+                    console.error('fetchCurrentUser failed', err);
+                }
+            } else {
+                sessionStorage.clear();
+                setTokenState(null);
+                setUser(null);
+                setAuthenticated(false);
             }
-        } else {
-            localStorage.clear();
-            setToken(null);
-            setUser(null);
-            setAuthenticated(false);
-        }
-    };
+        },
+        [setTokenState],
+    );
 
     const logout = useCallback(() => {
-        saveToken(null).finally(() => {
-            if (keycloak.authenticated) {
-                keycloak.logout({ redirectUri: window.location.origin + '/' });
-            } else {
-                window.location.href = '/';
-            }
-        });
-    }, []);
+        // mark explicit logout for next app load
+        localStorage.setItem('user-initiated-logout', 'true');
 
-    const updateUser = (updatedUser: Partial<User>) => {
-        if (!user) return;
-        const newUser = { ...user, ...updatedUser } as User;
-        setUser(newUser);
-        localStorage.setItem('user', JSON.stringify(newUser));
-    };
+        saveToken(null);
+
+        // server-side SSO logout
+        keycloak.logout({
+            redirectUri: window.location.origin + '/',
+            idTokenHint: keycloak.idToken,
+        });
+    }, [saveToken]);
+
+
+    const scheduleRefresh = useCallback(() => {
+        // clear previous timer
+        if (refreshTimeout.current) clearTimeout(refreshTimeout.current);
+
+        const exp = keycloak.tokenParsed?.exp;
+        if (!exp) return;
+
+        // time until expiry minus 60 s safety buffer
+        const delay = Math.max(exp * 1000 - Date.now() - 60_000, 10_000);
+
+        refreshTimeout.current = window.setTimeout(async () => {
+            try {
+                const refreshed = await keycloak.updateToken(0);
+                if (refreshed && keycloak.token) saveToken(keycloak.token);
+                scheduleRefresh(); // recurse for the next cycle
+            } catch (err) {
+                console.error('token refresh failed', err);
+                saveToken(null);
+            }
+        }, delay);
+    }, [saveToken]);
 
     useEffect(() => {
-        const initializeAuth = async () => {
+        let cancelled = false;
+
+        const bootstrap = async () => {
             try {
-                const { authenticated, keycloak } = await initKeycloak();
-                if (authenticated && keycloak.token) {
+                const ok = await initKeycloak();
+                if (cancelled) return;
+
+                setAuthenticated(ok);
+                if (ok && keycloak.token) {
                     await saveToken(keycloak.token);
+                    scheduleRefresh();
                 }
 
+                // Keycloak events
                 keycloak.onAuthSuccess = () => {
                     saveToken(keycloak.token);
+                    scheduleRefresh();
                 };
-
-                keycloak.onTokenExpired = () => {
-                    keycloak.updateToken(0).then((refreshed: boolean) => {
-                        if (refreshed) {
-                            saveToken(keycloak.token);
-                        } else {
-                            logout();
-                        }
-                    }).catch(() => {
-                        logout();
-                    });
-                };
-
-                console.log('Keycloak authenticated:', authenticated);
-            } catch (error) {
-                console.error('Keycloak initialization failed', error);
+                keycloak.onTokenExpired = () => scheduleRefresh();
+            } catch (err) {
+                console.error('Keycloak init failed', err);
+                saveToken(null);
+                setAuthenticated(false);
             } finally {
-                setIsLoading(false);
+                if (!cancelled) setIsLoading(false);
             }
         };
-        initializeAuth();
-    }, []);
 
-    useEffect(() => {
-        if (!keycloak || !keycloak.tokenParsed?.exp) return;
+        bootstrap();
+        return () => {
+            cancelled = true;
+            if (refreshTimeout.current) clearTimeout(refreshTimeout.current);
+            // detach listeners
+            keycloak.onAuthSuccess = undefined;
+            keycloak.onTokenExpired = undefined;
+        };
+    }, [saveToken, scheduleRefresh]);
 
-        const refreshBuffer = 60; // seconds before expiry to refresh
-        const expiresIn = keycloak.tokenParsed.exp * 1000 - Date.now();
-        const refreshTime = expiresIn - refreshBuffer * 1000;
+    /* ---------------- update user helper ---------------- */
 
-        if (refreshTime <= 0) {
-            // Token already expired or about to — try refreshing immediately
-            keycloak.updateToken(0).then((refreshed:boolean) => {
-                if (refreshed) {
-                    saveToken(keycloak.token);
-                }
-            }).catch(() => {
-                logout();
-            });
-            return;
-        }
+    const updateUser = (partial: Partial<User>) => {
+        if (!user) return;
+        const merged = { ...user, ...partial };
+        setUser(merged);
+        sessionStorage.setItem('user', JSON.stringify(merged));
+    };
 
-        const timeout = setTimeout(() => {
-            keycloak.updateToken(refreshBuffer).then((refreshed: boolean) => {
-                if (refreshed) {
-                    saveToken(keycloak.token);
-                }
-            }).catch(() => {
-                logout();
-            });
-        }, refreshTime);
-
-        return () => clearTimeout(timeout);
-    }, [token, logout]);
+    /* ---------------- provider ---------------- */
 
     return (
         <AuthContext.Provider
-            value={{ token, user, authenticated, setToken: saveToken, logout, updateUser, isLoading }}
+            value={{
+                token,
+                user,
+                authenticated,
+                isLoading,
+                setToken: saveToken,
+                logout,
+                updateUser,
+            }}
         >
-            {/* De‑fer rendering children until auth is resolved so no requests use an expired token */}
-            {!isLoading && children}
+            {children}
         </AuthContext.Provider>
     );
 };
 
-export const useAuth = (): AuthContextType => {
-    const context = useContext(AuthContext);
-    if (!context) {
-        throw new Error('useAuth must be used within an AuthProvider');
-    }
-    return context;
+export const useAuth = () => {
+    const ctx = useContext(AuthContext);
+    if (!ctx) throw new Error('useAuth must be inside <AuthProvider>');
+    return ctx;
 };

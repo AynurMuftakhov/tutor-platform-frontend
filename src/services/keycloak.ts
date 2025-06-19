@@ -1,59 +1,38 @@
-//@ts-expect-error - Keycloak types may not be fully compatible with TypeScript
+// @ts-expect-error – keycloak-js v23 has no shipped types yet
 import Keycloak from 'keycloak-js';
 
-const keycloak = new Keycloak({
+/** Singleton Keycloak instance */
+export const keycloak = new Keycloak({
     url: import.meta.env.VITE_KEYCLOAK_URL,
     realm: import.meta.env.VITE_KEYCLOAK_REALM,
     clientId: import.meta.env.VITE_KEYCLOAK_CLIENT_ID,
 });
 
-let hasInit = false;
+/**
+ * Initialise Keycloak once and memoise the promise.
+ * If the user explicitly logged out (flag in localStorage)
+ * we force an interactive login (`login-required`) exactly once.
+ */
+export const initKeycloak = (() => {
+    let once: Promise<boolean> | null = null;
 
-export async function initKeycloak() {
-    if (!hasInit) {
-        hasInit = true;
+    return (): Promise<boolean> => {
+        const forceLogin = localStorage.getItem('user-initiated-logout') === 'true';
 
-        const authenticated = await keycloak.init({
-            onLoad: 'check-sso',
-            pkceMethod: 'S256'
+        // Re-use the existing promise unless we require a fresh interactive login
+        if (once && !forceLogin) return once;
+
+        if (forceLogin) {
+            // remove the flag so next visits go back to silent mode
+            localStorage.removeItem('user-initiated-logout');
+        }
+
+        return once = keycloak.init({
+            onLoad: forceLogin ? 'login-required' : 'check-sso',
+            silentCheckSsoRedirectUri: `${window.location.origin}/silent-check-sso.html`,
+            pkceMethod: 'S256',
+            checkLoginIframe: true,  // light 5-s heartbeat
+            flow: 'standard',
         });
-
-        return { authenticated, keycloak };
-    } else {
-        return { authenticated: keycloak.authenticated || false, keycloak };
-    }
-}
-
-/**
- * Decodes the JWT and returns `true` if the token is already expired.
- * Any parsing error is treated as an expired token for safety.
- */
-export function isTokenExpired(token: string): boolean {
-    try {
-        const [, payload] = token.split('.');
-        const { exp } = JSON.parse(atob(payload));
-        return Date.now() >= exp * 1000;
-    } catch {
-        return true;
-    }
-}
-
-/**
- * Reads the token from localStorage and validates its expiry.
- * If the token is missing or expired, local storage is cleared and `null`
- * is returned.
- */
-export function getInitialToken(): string | null {
-    const stored = localStorage.getItem('token');
-    if (!stored) return null;
-
-    if (isTokenExpired(stored)) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        return null;
-    }
-    return stored;
-}
-
-
-export { keycloak };
+    };
+})();
