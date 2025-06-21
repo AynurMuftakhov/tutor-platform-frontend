@@ -17,7 +17,7 @@ import {
     DialogContentText,
     DialogTitle
 } from '@mui/material';
-import { ListeningTask, AssetType } from '../../types/ListeningTask';
+import { ListeningTask, AssetType } from '../../types';
 import { MusicNote as AudioIcon, Videocam as VideoIcon, PlayArrow as PlayIcon } from '@mui/icons-material';
 import DeleteIcon from "@mui/icons-material/Delete";
 
@@ -31,7 +31,7 @@ interface ListeningCardProps {
   viewMode?: 'list' | 'grid';
 }
 
-const ListeningCard: React.FC<ListeningCardProps> = ({ 
+export const ListeningCard: React.FC<ListeningCardProps> = ({
   task, 
   isInLesson = false,
   isTutor = false, 
@@ -269,5 +269,3 @@ const ListeningCard: React.FC<ListeningCardProps> = ({
     </>
   );
 };
-
-export default ListeningCard;

@@ -21,7 +21,7 @@ import {
 } from '@mui/icons-material';
 import { ListeningTask } from '../types';
 import {deleteGlobalListeningTask, getAllListeningTasks} from '../services/api';
-import ListeningCard from '../components/lessonDetail/ListeningCard';
+import {ListeningCard} from '../components/lessonDetail/ListeningCard';
 import CreateListeningTaskModal from '../components/lessonDetail/CreateListeningTaskModal';
 import StandaloneMediaPlayer from '../components/lessonDetail/StandaloneMediaPlayer';
 import { extractVideoId } from '../utils/videoUtils';

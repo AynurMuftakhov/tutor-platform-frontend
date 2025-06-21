@@ -3,7 +3,7 @@ import { Box, Typography, Button, CircularProgress, Paper, Dialog, IconButton, G
 import { Add as AddIcon, Close as CloseIcon, LibraryBooks as LibraryIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { ListeningTask, LessonTask } from '../../types/ListeningTask';
 import { getLessonTasks, getAllListeningTasks, assignTaskToLesson, removeTaskFromLesson, createGlobalListeningTask } from '../../services/api';
-import ListeningCard from './ListeningCard';
+import {ListeningCard} from './ListeningCard';
 import CreateListeningTaskModal from './CreateListeningTaskModal';
 import StandaloneMediaPlayer from './StandaloneMediaPlayer';
 import { extractVideoId } from '../../utils/videoUtils';
