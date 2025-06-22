@@ -229,6 +229,7 @@ export const getAllListeningTasks = async () => {
 export const createGlobalListeningTask = async (taskData: {
   assetType: string;
   sourceUrl: string;
+  folderId?: string;
   startSec: number;
   endSec: number;
   wordLimit?: number;
@@ -238,6 +239,16 @@ export const createGlobalListeningTask = async (taskData: {
   const response = await api.post(`/lessons-service/api/listening-tasks`, taskData);
   return response.data;
 }
+
+export const getMaterialFolders = async () => {
+  const response = await api.get(`/lessons-service/api/material-folders`);
+  return response.data;
+};
+
+export const createMaterialFolder = async (folderData: { name: string }) => {
+  const response = await api.post(`/lessons-service/api/material-folders`, folderData);
+  return response.data;
+};
 
 // New methods for lesson task management
 export const assignTaskToLesson = async (lessonId: string, taskId: string) => {

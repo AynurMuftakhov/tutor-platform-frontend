@@ -7,6 +7,7 @@ export interface ListeningTask {
     id: string;
     assetType: AssetType;
     sourceUrl: string;
+    folderId?: string;
     startSec: number;
     endSec: number;
     wordLimit?: number;

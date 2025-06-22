@@ -16,8 +16,8 @@ import {
   Grid
 } from '@mui/material';
 import ReactPlayer from 'react-player';
-import { AssetType } from '../../types';
-import { createGlobalListeningTask, assignTaskToLesson } from '../../services/api';
+import { AssetType, MaterialFolder } from '../../types';
+import { createGlobalListeningTask, assignTaskToLesson, getMaterialFolders } from '../../services/api';
 
 interface CreateListeningTaskModalProps {
   open: boolean;
@@ -38,6 +38,8 @@ const CreateListeningTaskModal: React.FC<CreateListeningTaskModalProps> = ({
   const [assetType, setAssetType] = useState<AssetType>(AssetType.VIDEO);
   const [sourceUrl, setSourceUrl] = useState('');
   const [title, setTitle] = useState('');
+  const [folders, setFolders] = useState<MaterialFolder[]>([]);
+  const [folderId, setFolderId] = useState('');
   const [startSec, setStartSec] = useState(0);
   const [endSec, setEndSec] = useState(60); // Default 1 minute
   const [wordLimit, setWordLimit] = useState(100); // Default 100 words
@@ -58,6 +60,7 @@ const CreateListeningTaskModal: React.FC<CreateListeningTaskModalProps> = ({
       setAssetType(AssetType.VIDEO);
       setSourceUrl('');
       setTitle('');
+      setFolderId('');
       setStartSec(0);
       setEndSec(60);
       setWordLimit(100);
@@ -65,6 +68,8 @@ const CreateListeningTaskModal: React.FC<CreateListeningTaskModalProps> = ({
       setUrlError('');
       setIsReady(false);
       setDuration(0);
+      // Fetch available folders
+      getMaterialFolders().then(setFolders).catch(() => setFolders([]));
     }
   }, [open]);
 
@@ -118,6 +123,7 @@ const CreateListeningTaskModal: React.FC<CreateListeningTaskModalProps> = ({
     const taskData = {
       assetType,
       sourceUrl,
+      folderId: folderId || undefined,
       startSec,
       endSec,
       wordLimit,
@@ -184,6 +190,21 @@ const CreateListeningTaskModal: React.FC<CreateListeningTaskModalProps> = ({
             placeholder="Enter a descriptive title for this listening task"
             sx={{ mb: 3 }}
           />
+
+          <FormControl fullWidth sx={{ mb: 3 }}>
+            <InputLabel id="folder-label">Folder</InputLabel>
+            <Select
+              labelId="folder-label"
+              value={folderId}
+              label="Folder"
+              onChange={(e) => setFolderId(e.target.value as string)}
+            >
+              <MenuItem value="">Uncategorized</MenuItem>
+              {folders.map((f) => (
+                <MenuItem key={f.id} value={f.id}>{f.name}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
 
           {sourceUrl && !urlError && (
             <Box sx={{ mb: 3 }}>

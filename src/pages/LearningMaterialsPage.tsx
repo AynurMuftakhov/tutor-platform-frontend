@@ -10,6 +10,10 @@ import {
   Tab, 
   TextField, 
   InputAdornment,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
   ToggleButtonGroup,
   ToggleButton,
 } from '@mui/material';
@@ -19,8 +23,8 @@ import {
   ViewList as ListIcon, 
   ViewModule as GridIcon 
 } from '@mui/icons-material';
-import { ListeningTask } from '../types';
-import {deleteGlobalListeningTask, getAllListeningTasks} from '../services/api';
+import { ListeningTask, MaterialFolder } from '../types';
+import {deleteGlobalListeningTask, getAllListeningTasks, getMaterialFolders, createMaterialFolder} from '../services/api';
 import {ListeningCard} from '../components/lessonDetail/ListeningCard';
 import CreateListeningTaskModal from '../components/lessonDetail/CreateListeningTaskModal';
 import StandaloneMediaPlayer from '../components/lessonDetail/StandaloneMediaPlayer';
@@ -62,6 +66,10 @@ const LearningMaterialsPage: React.FC = () => {
   const [tabValue, setTabValue] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid');
+  const [folders, setFolders] = useState<MaterialFolder[]>([]);
+  const [selectedFolder, setSelectedFolder] = useState('all');
+  const [isFolderDialogOpen, setIsFolderDialogOpen] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
 
   // Handle play button click
   const handlePlay = (task: ListeningTask) => {
@@ -100,8 +108,18 @@ const LearningMaterialsPage: React.FC = () => {
     }
   };
 
+  const fetchFolders = async () => {
+    try {
+      const data = await getMaterialFolders();
+      setFolders(data);
+    } catch (err) {
+      console.error('Failed to fetch folders', err);
+    }
+  };
+
   useEffect(() => {
     fetchTasks();
+    fetchFolders();
   }, []);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
@@ -124,7 +142,9 @@ const LearningMaterialsPage: React.FC = () => {
   // Filter tasks based on search term
   const filteredTasks = tasks.filter(task => {
     const title = task.title || '';
-    return title.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = title.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesFolder = selectedFolder === 'all' || (selectedFolder === '' ? !task.folderId : task.folderId === selectedFolder);
+    return matchesSearch && matchesFolder;
   });
 
   // Empty state component
@@ -236,6 +256,26 @@ const LearningMaterialsPage: React.FC = () => {
                 }}
               />
 
+              <FormControl size="small" sx={{ minWidth: 160 }}>
+                <InputLabel id="folder-filter-label">Folder</InputLabel>
+                <Select
+                  labelId="folder-filter-label"
+                  value={selectedFolder}
+                  label="Folder"
+                  onChange={(e) => setSelectedFolder(e.target.value)}
+                >
+                  <MenuItem value="all">All</MenuItem>
+                  <MenuItem value="">Uncategorized</MenuItem>
+                  {folders.map(f => (
+                    <MenuItem key={f.id} value={f.id}>{f.name}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              <Button variant="outlined" onClick={() => setIsFolderDialogOpen(true)}>
+                Add Folder
+              </Button>
+
               {/* View Toggle */}
               <ToggleButtonGroup
                 value={viewMode}
@@ -316,6 +356,34 @@ const LearningMaterialsPage: React.FC = () => {
             />
           </Box>
         )}
+      </Dialog>
+
+      <Dialog open={isFolderDialogOpen} onClose={() => setIsFolderDialogOpen(false)}>
+        <Box sx={{ p: 3, minWidth: 300 }}>
+          <Typography variant="h6" sx={{ mb: 2 }}>Add Folder</Typography>
+          <TextField
+            fullWidth
+            label="Folder Name"
+            value={newFolderName}
+            onChange={(e) => setNewFolderName(e.target.value)}
+            sx={{ mb: 2 }}
+          />
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+            <Button onClick={() => setIsFolderDialogOpen(false)}>Cancel</Button>
+            <Button
+              variant="contained"
+              onClick={async () => {
+                await createMaterialFolder({ name: newFolderName });
+                setNewFolderName('');
+                setIsFolderDialogOpen(false);
+                fetchFolders();
+              }}
+              disabled={!newFolderName.trim()}
+            >
+              Create
+            </Button>
+          </Box>
+        </Box>
       </Dialog>
     </Box>
   );

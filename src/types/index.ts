@@ -2,14 +2,14 @@ export interface VocabularyWordRequest { text: string; translation: string; part
 export interface AssignedWordResponse { id: string; vocabularyWordId: string; text: string; translation: string; status: string; repetitionCount: number; lastCheckedDate?: string; }
 export interface AssignWordsRequest { studentId: string; vocabularyWordIds: string[]; }
 
-export * from './ListeningTask';
-
 export enum AudioPart {
     TEXT = 'TEXT',
     EXAMPLE_SENTENCE = 'EXAMPLE_SENTENCE'
 }
 
 export * from './ListeningTask';
+
+export * from './MaterialFolder';
 
 export interface CreateWordRequest {
     text: string;
