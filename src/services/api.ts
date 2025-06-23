@@ -221,8 +221,9 @@ export const deleteGlobalListeningTask = async (taskId: string) => {
     return response.data;
 }
 
-export const getAllListeningTasks = async () => {
-  const response = await api.get(`/lessons-service/api/listening-tasks`);
+export const getAllListeningTasks = async (folderId: string = 'all') => {
+  const query = folderId ? `?folderId=${folderId}` : '';
+  const response = await api.get(`/lessons-service/api/listening-tasks${query}`);
   return response.data;
 }
 
@@ -242,6 +243,11 @@ export const createGlobalListeningTask = async (taskData: {
 
 export const getMaterialFolders = async () => {
   const response = await api.get(`/lessons-service/api/material-folders`);
+  return response.data;
+};
+
+export const getMaterialFolderTree = async () => {
+  const response = await api.get(`/lessons-service/api/material-folders/tree`);
   return response.data;
 };
 

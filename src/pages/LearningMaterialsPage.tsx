@@ -10,10 +10,6 @@ import {
   Tab, 
   TextField, 
   InputAdornment,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   ToggleButtonGroup,
   ToggleButton,
 } from '@mui/material';
@@ -23,8 +19,11 @@ import {
   ViewList as ListIcon, 
   ViewModule as GridIcon 
 } from '@mui/icons-material';
-import { ListeningTask, MaterialFolder } from '../types';
-import {deleteGlobalListeningTask, getAllListeningTasks, getMaterialFolders, createMaterialFolder} from '../services/api';
+import { ListeningTask, MaterialFolderTree } from '../types';
+import {deleteGlobalListeningTask, getAllListeningTasks, createMaterialFolder, getMaterialFolderTree} from '../services/api';
+import FolderTree from '../components/folders/FolderTree';
+import BreadcrumbNav from '../components/folders/BreadcrumbNav';
+import { motion, AnimatePresence } from 'framer-motion';
 import {ListeningCard} from '../components/lessonDetail/ListeningCard';
 import CreateListeningTaskModal from '../components/lessonDetail/CreateListeningTaskModal';
 import StandaloneMediaPlayer from '../components/lessonDetail/StandaloneMediaPlayer';
@@ -66,10 +65,23 @@ const LearningMaterialsPage: React.FC = () => {
   const [tabValue, setTabValue] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid');
-  const [folders, setFolders] = useState<MaterialFolder[]>([]);
-  const [selectedFolder, setSelectedFolder] = useState('all');
+  const [folderTree, setFolderTree] = useState<MaterialFolderTree[]>([]);
+  const [folderMap, setFolderMap] = useState<Record<string, { id: string; name: string; parentId?: string }>>({});
+  const [selectedFolderId, setSelectedFolderId] = useState('all');
   const [isFolderDialogOpen, setIsFolderDialogOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
+
+  const buildMap = (tree: MaterialFolderTree[]) => {
+    const map: Record<string, { id: string; name: string; parentId?: string }> = {};
+    const walk = (nodes: MaterialFolderTree[], parentId?: string) => {
+      nodes.forEach((n) => {
+        map[n.id] = { id: n.id, name: n.name, parentId };
+        if (n.children) walk(n.children, n.id);
+      });
+    };
+    walk(tree);
+    return map;
+  };
 
   // Handle play button click
   const handlePlay = (task: ListeningTask) => {
@@ -80,7 +92,7 @@ const LearningMaterialsPage: React.FC = () => {
   const handleDelete = async(task: ListeningTask) => {
       await deleteGlobalListeningTask(task.id)
       .then(() => {
-        fetchTasks();
+        fetchTasks(selectedFolderId);
       })
       .catch(err => {
         console.error('Failed to delete listening task', err);
@@ -94,10 +106,10 @@ const LearningMaterialsPage: React.FC = () => {
     setCurrentTask(null);
   };
 
-  const fetchTasks = async () => {
+  const fetchTasks = async (folderId: string) => {
     try {
       setLoading(true);
-      const data = await getAllListeningTasks();
+      const data = await getAllListeningTasks(folderId);
       setTasks(data);
       setError(null);
     } catch (err) {
@@ -108,19 +120,18 @@ const LearningMaterialsPage: React.FC = () => {
     }
   };
 
-  const fetchFolders = async () => {
-    try {
-      const data = await getMaterialFolders();
-      setFolders(data);
-    } catch (err) {
-      console.error('Failed to fetch folders', err);
-    }
-  };
+  useEffect(() => {
+    const loadTree = async () => {
+      const tree = await getMaterialFolderTree();
+      setFolderTree(tree);
+      setFolderMap(buildMap(tree));
+    };
+    loadTree();
+  }, []);
 
   useEffect(() => {
-    fetchTasks();
-    fetchFolders();
-  }, []);
+    fetchTasks(selectedFolderId);
+  }, [selectedFolderId]);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -142,9 +153,7 @@ const LearningMaterialsPage: React.FC = () => {
   // Filter tasks based on search term
   const filteredTasks = tasks.filter(task => {
     const title = task.title || '';
-    const matchesSearch = title.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesFolder = selectedFolder === 'all' || (selectedFolder === '' ? !task.folderId : task.folderId === selectedFolder);
-    return matchesSearch && matchesFolder;
+    return title.toLowerCase().includes(searchTerm.toLowerCase());
   });
 
   // Empty state component
@@ -205,19 +214,15 @@ const LearningMaterialsPage: React.FC = () => {
   }
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ p: 3, height: '100%' }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h4">Learning Materials</Typography>
-        <Button 
-          variant="contained" 
-          startIcon={<AddIcon />}
-          onClick={() => setIsModalOpen(true)}
-        >
+        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setIsModalOpen(true)}>
           Add New Material
         </Button>
       </Box>
 
-      <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
         <Tabs value={tabValue} onChange={handleTabChange} aria-label="material types">
           <Tab label="Listening Tasks" />
           <Tab label="Reading Materials" disabled />
@@ -225,127 +230,83 @@ const LearningMaterialsPage: React.FC = () => {
         </Tabs>
       </Box>
 
-      <TabPanel value={tabValue} index={0}>
-        {tasks.length === 0 ? (
-          <EmptyState />
-        ) : (
-          <Box>
-            <Box sx={{ 
-              display: 'flex', 
-              flexDirection: { xs: 'column', sm: 'row' }, 
-              justifyContent: 'space-between',
-              alignItems: { xs: 'stretch', sm: 'center' },
-              mb: 3,
-              gap: 2
-            }}>
-              {/* Search Bar */}
-              <TextField
-                placeholder="Search by title"
-                variant="outlined"
-                fullWidth
-                size="small"
-                value={searchTerm}
-                onChange={handleSearchChange}
-                sx={{ flexGrow: 1, maxWidth: { sm: '300px' } }}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-
-              <FormControl size="small" sx={{ minWidth: 160 }}>
-                <InputLabel id="folder-filter-label">Folder</InputLabel>
-                <Select
-                  labelId="folder-filter-label"
-                  value={selectedFolder}
-                  label="Folder"
-                  onChange={(e) => setSelectedFolder(e.target.value)}
-                >
-                  <MenuItem value="all">All</MenuItem>
-                  <MenuItem value="">Uncategorized</MenuItem>
-                  {folders.map(f => (
-                    <MenuItem key={f.id} value={f.id}>{f.name}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
-              <Button variant="outlined" onClick={() => setIsFolderDialogOpen(true)}>
-                Add Folder
-              </Button>
-
-              {/* View Toggle */}
-              <ToggleButtonGroup
-                value={viewMode}
-                exclusive
-                onChange={handleViewModeChange}
-                aria-label="view mode"
-                size="small"
-              >
-                <ToggleButton value="list" aria-label="list view">
-                  <ListIcon />
-                </ToggleButton>
-                <ToggleButton value="grid" aria-label="grid view">
-                  <GridIcon />
-                </ToggleButton>
-              </ToggleButtonGroup>
-            </Box>
-
-            {filteredTasks.length === 0 ? (
-              <Typography variant="body1" sx={{ textAlign: 'center', py: 4 }}>
-                No tasks match your search. Try a different search term.
-              </Typography>
-            ) : (
-              <Grid container spacing={2}>
-                {filteredTasks.map((task) => (
-                  <Grid 
-                    item 
-                    xs={12} 
-                    sm={viewMode === 'list' ? 12 : 6} 
-                    md={viewMode === 'list' ? 12 : 4}
-                    lg={viewMode === 'list' ? 12 : 3}
-                    key={task.id}
-                  >
-                    <ListeningCard 
-                      task={task} 
-                      isTutor={true}
-                      onPlay={handlePlay}
-                      viewMode={viewMode}
-                      onDelete={handleDelete}
-                    />
-                  </Grid>
-                ))}
-              </Grid>
-            )}
+      <Grid container sx={{ height: 'calc(100% - 100px)' }}>
+        <Grid item xs={12} md={3} lg={2} sx={{ borderRight: 1, borderColor: 'divider', overflowY: 'auto' }}>
+          <FolderTree tree={folderTree} selectedId={selectedFolderId} onSelect={setSelectedFolderId} />
+        </Grid>
+        <Grid item xs={12} md={9} lg={10} sx={{ p: 3, overflowY: 'auto' }}>
+          <BreadcrumbNav selectedFolderId={selectedFolderId} folderMap={folderMap} onSelect={setSelectedFolderId} />
+          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'stretch', sm: 'center' }, mb: 3, gap: 2 }}>
+            <TextField
+              placeholder="Search by title"
+              variant="outlined"
+              fullWidth
+              size="small"
+              value={searchTerm}
+              onChange={handleSearchChange}
+              sx={{ flexGrow: 1, maxWidth: { sm: '300px' } }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon />
+                  </InputAdornment>
+                ),
+              }}
+            />
+            <Button variant="outlined" onClick={() => setIsFolderDialogOpen(true)}>Add Folder</Button>
+            <ToggleButtonGroup value={viewMode} exclusive onChange={handleViewModeChange} aria-label="view mode" size="small">
+              <ToggleButton value="list" aria-label="list view">
+                <ListIcon />
+              </ToggleButton>
+              <ToggleButton value="grid" aria-label="grid view">
+                <GridIcon />
+              </ToggleButton>
+            </ToggleButtonGroup>
           </Box>
-        )}
-      </TabPanel>
 
-      <TabPanel value={tabValue} index={1}>
-        <Typography variant="body1">Reading materials will be available soon.</Typography>
-      </TabPanel>
+          {filteredTasks.length === 0 ? (
+            <Typography variant="body1" sx={{ textAlign: 'center', py: 4 }}>
+              No tasks match your search.
+            </Typography>
+          ) : (
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={selectedFolderId + viewMode}
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 8 }}
+                transition={{ duration: 0.2 }}
+              >
+                <Grid container spacing={2}>
+                  {filteredTasks.map((task) => (
+                    <Grid
+                      item
+                      xs={12}
+                      sm={viewMode === 'list' ? 12 : 6}
+                      md={viewMode === 'list' ? 12 : 4}
+                      lg={viewMode === 'list' ? 12 : 3}
+                      key={task.id}
+                    >
+                      <motion.div whileHover={{ scale: 1.02 }} transition={{ duration: 0.15 }}>
+                        <ListeningCard task={task} isTutor={true} onPlay={handlePlay} viewMode={viewMode} onDelete={handleDelete} />
+                      </motion.div>
+                    </Grid>
+                  ))}
+                </Grid>
+              </motion.div>
+            </AnimatePresence>
+          )}
+        </Grid>
+      </Grid>
 
-      <TabPanel value={tabValue} index={2}>
-        <Typography variant="body1">Grammar exercises will be available soon.</Typography>
-      </TabPanel>
-
-      {/* Create Listening Task Modal */}
       <CreateListeningTaskModal
         open={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        onTaskCreated={fetchTasks}
+        onTaskCreated={() => fetchTasks(selectedFolderId)}
         isGlobal={true}
       />
 
-      {/* Media Player Dialog */}
-      <Dialog
-        open={!!currentTask}
-        onClose={handleClosePlayer}
-        maxWidth="md"
-        fullWidth
-      >
+      <Dialog open={!!currentTask} onClose={handleClosePlayer} maxWidth="md" fullWidth>
         {currentTask && (
           <Box sx={{ position: 'relative', height: 500 }}>
             <StandaloneMediaPlayer
@@ -361,13 +322,7 @@ const LearningMaterialsPage: React.FC = () => {
       <Dialog open={isFolderDialogOpen} onClose={() => setIsFolderDialogOpen(false)}>
         <Box sx={{ p: 3, minWidth: 300 }}>
           <Typography variant="h6" sx={{ mb: 2 }}>Add Folder</Typography>
-          <TextField
-            fullWidth
-            label="Folder Name"
-            value={newFolderName}
-            onChange={(e) => setNewFolderName(e.target.value)}
-            sx={{ mb: 2 }}
-          />
+          <TextField fullWidth label="Folder Name" value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} sx={{ mb: 2 }} />
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
             <Button onClick={() => setIsFolderDialogOpen(false)}>Cancel</Button>
             <Button
@@ -376,7 +331,9 @@ const LearningMaterialsPage: React.FC = () => {
                 await createMaterialFolder({ name: newFolderName });
                 setNewFolderName('');
                 setIsFolderDialogOpen(false);
-                fetchFolders();
+                const tree = await getMaterialFolderTree();
+                setFolderTree(tree);
+                setFolderMap(buildMap(tree));
               }}
               disabled={!newFolderName.trim()}
             >
