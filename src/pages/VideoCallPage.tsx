@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { Box, Typography, Button, CircularProgress } from '@mui/material';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Box, Typography, Button, CircularProgress, Tooltip, IconButton, Snackbar } from '@mui/material';
 import { fetchLiveKitToken } from '../services/api';
 import {
   LiveKitRoom,
@@ -8,6 +8,7 @@ import {
 } from '@livekit/components-react';
 import '@livekit/components-styles';
 import {useAuth} from "../context/AuthContext";
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 
 interface VideoCallPageProps {
   identity?: string;
@@ -17,10 +18,18 @@ interface VideoCallPageProps {
 const VideoCallPage: React.FC<VideoCallPageProps> = (props) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
-  // Get identity and roomName from props or location state
-  const identity = props.identity || (location.state?.identity as string);
-  const roomName = props.roomName || (location.state?.roomName as string);
+  // Get identity and roomName from props, URL query parameters, or location state
+  const identity = props.identity || 
+                  searchParams.get('identity') || 
+                  (location.state?.identity as string);
+  const roomName = props.roomName || 
+                  searchParams.get('roomName') || 
+                  (location.state?.roomName as string);
+  const studentId = searchParams.get('studentId') ||
+      (location.state?.studentId as string);
+
   const previousPath = location.state?.from || '/dashboard';
 
   const [liveKitToken, setLiveKitToken] = useState<string | null>(null);
@@ -127,12 +136,40 @@ const VideoCallPage: React.FC<VideoCallPageProps> = (props) => {
           data-lk-theme="default"
           onDisconnected={handleLeave}
       >
-        <RoomContent onLeave={handleLeave} />
+        <RoomContent 
+          onLeave={handleLeave}
+          roomName={roomName}
+          userRole={user?.role}
+          studentId={studentId}
+        />
       </LiveKitRoom>
   );
 };
 
-const RoomContent: React.FC<{ onLeave: () => void }> = ({ onLeave }) => {
+interface RoomContentProps {
+  onLeave: () => void;
+  roomName?: string;
+  userRole?: string;
+  studentId?: string;
+}
+
+const RoomContent: React.FC<RoomContentProps> = ({ onLeave, roomName, userRole, studentId }) => {
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+
+  const generateDirectLink = () => {
+    const baseUrl = window.location.origin;
+    return `${baseUrl}/video-call?identity=${studentId}&roomName=${roomName}`;
+  };
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(generateDirectLink());
+    setSnackbarOpen(true);
+  };
+
+  const handleCloseSnackbar = () => {
+    setSnackbarOpen(false);
+  };
+
   return (
       <Box
           sx={{
@@ -141,9 +178,44 @@ const RoomContent: React.FC<{ onLeave: () => void }> = ({ onLeave }) => {
             flexDirection: 'column',
             height: '100vh',
             overflow: 'hidden',
+            position: 'relative',
           }}
       >
         <VideoConference style={{ height: '95%', width: '100%' }} />
+
+        {/* Copy Link Button - only visible for teachers */}
+        {userRole === 'tutor' && (
+          <Box
+            sx={{
+              position: 'absolute',
+              top: 16,
+              right: 16,
+              zIndex: 1000,
+              backgroundColor: 'rgba(255, 255, 255, 0.8)',
+              borderRadius: '50%',
+              padding: '4px',
+            }}
+          >
+            <Tooltip title="Copy direct link to this video call">
+              <IconButton 
+                onClick={handleCopyLink}
+                color="primary"
+                size="small"
+              >
+                <ContentCopyIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        )}
+
+        {/* Snackbar notification */}
+        <Snackbar
+          open={snackbarOpen}
+          autoHideDuration={3000}
+          onClose={handleCloseSnackbar}
+          message="Direct link copied to clipboard!"
+          anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+        />
       </Box>
   );
 };
