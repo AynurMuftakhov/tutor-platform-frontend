@@ -99,7 +99,7 @@ const StandaloneMediaPlayer: React.FC<StandaloneMediaPlayerProps> = ({
           if (playerRef.current) {
             try {
               const currentTime = playerRef.current.getCurrentTime();
-              if (currentTime >= endTime) {
+              if (endTime != 0 && currentTime >= endTime) {
                 playerRef.current.pauseVideo();
                 clearInterval(loopIntervalRef.current!);
                 loopIntervalRef.current = null;

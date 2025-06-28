@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -6,27 +6,30 @@ import {
   CircularProgress,
   Paper,
   Grid,
-  useMediaQuery,
   useTheme,
+  Dialog,
 } from '@mui/material';
+import ListeningTaskManager from '../components/materials/ListeningTaskManager';
 import {
   Add as AddIcon,
 } from '@mui/icons-material';
 import { useSearchParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { ROOT_FOLDER_ID } from '../components/folders/FolderTree';
 import FolderSidebar, { SIDEBAR_WIDTH } from '../components/folders/FolderSidebar';
 import MaterialsToolbar, { MaterialType, ViewMode } from '../components/materials/MaterialsToolbar';
 import MaterialCard, { Material } from '../components/materials/MaterialCard';
 import AddFolderModal from '../components/folders/AddFolderModal';
 import AddMaterialModal from '../components/materials/AddMaterialModal';
+import MoveToFolderModal from '../components/materials/MoveToFolderModal';
 import { useFolderTree, useMaterials } from '../hooks/useMaterials';
 import StandaloneMediaPlayer from '../components/lessonDetail/StandaloneMediaPlayer';
 import { extractVideoId } from '../utils/videoUtils';
-import Dialog from '@mui/material/Dialog';
+import { deleteMaterial } from '../services/api';
 
 const LearningMaterialsPage: React.FC = () => {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const queryClient = useQueryClient();
 
   // URL params for state persistence
   const [searchParams, setSearchParams] = useSearchParams();
@@ -37,8 +40,8 @@ const LearningMaterialsPage: React.FC = () => {
   };
 
   // State
-  const [selectedFolderId, setSelectedFolderId] = useState(getParamOrDefault('folder', ROOT_FOLDER_ID));
-  const [searchTerm, setSearchTerm] = useState(getParamOrDefault('search', ''));
+  const [selectedFolderId, setSelectedFolderId] = useState<string>(getParamOrDefault('folder', ROOT_FOLDER_ID));
+  const [searchTerm, setSearchTerm] = useState<string>(getParamOrDefault('search', ''));
   const [selectedType, setSelectedType] = useState<MaterialType>(getParamOrDefault('type', 'all'));
   const [selectedTags, setSelectedTags] = useState<string[]>(
     searchParams.get('tags') ? searchParams.get('tags')!.split(',') : []
@@ -46,10 +49,14 @@ const LearningMaterialsPage: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>(
     getParamOrDefault('view', localStorage.getItem('materialsViewMode') as ViewMode || 'grid')
   );
-  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [isAddFolderModalOpen, setIsAddFolderModalOpen] = useState(false);
   const [isAddMaterialModalOpen, setIsAddMaterialModalOpen] = useState(false);
   const [currentMaterial, setCurrentMaterial] = useState<Material | null>(null);
+  const [isTaskManagerOpen, setIsTaskManagerOpen] = useState(false);
+  const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null);
+  const [materialToEdit, setMaterialToEdit] = useState<Material | null>(null);
+  const [materialToMove, setMaterialToMove] = useState<Material | null>(null);
+  const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
 
   // Fetch data using React Query
   const { data: folderTree = [], isLoading: foldersLoading } = useFolderTree();
@@ -96,9 +103,6 @@ const LearningMaterialsPage: React.FC = () => {
   // Handle folder selection
   const handleFolderSelect = (folderId: string) => {
     setSelectedFolderId(folderId);
-    if (isMobile) {
-      setMobileDrawerOpen(false);
-    }
   };
 
   // Handle search term change
@@ -131,6 +135,18 @@ const LearningMaterialsPage: React.FC = () => {
     setCurrentMaterial(null);
   };
 
+  // Handle managing tasks for a material
+  const handleManageTasks = (material: Material) => {
+    setSelectedMaterial(material);
+    setIsTaskManagerOpen(true);
+  };
+
+  // Handle closing the task manager
+  const handleCloseTaskManager = () => {
+    setIsTaskManagerOpen(false);
+    setSelectedMaterial(null);
+  };
+
   // Handle add folder
   const handleAddFolder = () => {
     setIsAddFolderModalOpen(true);
@@ -138,12 +154,59 @@ const LearningMaterialsPage: React.FC = () => {
 
   // Handle add material
   const handleAddMaterial = () => {
+    setMaterialToEdit(null);
     setIsAddMaterialModalOpen(true);
   };
 
+  // Handle edit material
+  const handleEditMaterial = (material: Material) => {
+    setMaterialToEdit(material);
+    setIsAddMaterialModalOpen(true);
+  };
+
+  // Handle move material
+  const handleMoveMaterial = (material: Material) => {
+    setMaterialToMove(material);
+    setIsMoveModalOpen(true);
+  };
+
+  // Handle delete material
+  const handleDeleteMaterial = async (material: Material) => {
+    try {
+      await deleteMaterial(material.id);
+      // Invalidate materials query to refresh the list
+      await queryClient.invalidateQueries({ queryKey: ['materials'] });
+    } catch (error) {
+      console.error('Failed to delete material', error);
+    }
+  };
+
   // Handle material refresh after creation
-  const handleMaterialCreated = () => {
-    // React Query will automatically refetch the data
+  const handleMaterialCreated = async (newMaterial?: Material) => {
+    // Always invalidate all material queries so inactive queries refresh
+    await queryClient.invalidateQueries({ queryKey: ['materials'] });
+
+    // Optionally push the new material optimistically if already present
+    if (newMaterial) {
+      await queryClient.setQueryData(
+        ['materials', {
+          folderId: selectedFolderId === ROOT_FOLDER_ID ? undefined : selectedFolderId,
+          search: searchTerm,
+          type: selectedType === 'all' ? undefined : selectedType,
+          tags: selectedTags.length > 0 ? selectedTags : undefined,
+        }],
+        (old: any) => {
+          if (!old) return old;
+          const content = Array.isArray(old) ? old : old.content ?? [];
+          const alreadyExists = content.some((m: Material) => m.id === newMaterial.id);
+          if (alreadyExists) return old;
+          return {
+            ...old,
+            content: [newMaterial, ...content],
+          };
+        }
+      );
+    }
   };
 
   // Empty state component
@@ -251,10 +314,10 @@ const LearningMaterialsPage: React.FC = () => {
                   material={material}
                   viewMode={viewMode}
                   onPlay={handlePlay}
-                  onEdit={() => console.log('Edit', material)}
-                  onDuplicate={() => console.log('Duplicate', material)}
-                  onMove={() => console.log('Move', material)}
-                  onDelete={() => console.log('Delete', material)}
+                  onEdit={handleEditMaterial}
+                  onMove={handleMoveMaterial}
+                  onDelete={handleDeleteMaterial}
+                  onManageTasks={handleManageTasks}
                 />
               </Grid>
             ))}
@@ -276,6 +339,8 @@ const LearningMaterialsPage: React.FC = () => {
         onClose={() => setIsAddMaterialModalOpen(false)}
         onMaterialCreated={handleMaterialCreated}
         currentFolderId={selectedFolderId}
+        onOpenTaskManager={handleManageTasks}
+        materialToEdit={materialToEdit}
       />
 
       {/* Media Player Dialog */}
@@ -296,6 +361,24 @@ const LearningMaterialsPage: React.FC = () => {
           </Box>
         )}
       </Dialog>
+
+      {/* Listening Task Manager */}
+      {selectedMaterial && (
+        <ListeningTaskManager
+          material={selectedMaterial}
+          open={isTaskManagerOpen}
+          onClose={handleCloseTaskManager}
+        />
+      )}
+
+      {/* Move to Folder Modal */}
+      <MoveToFolderModal
+        open={isMoveModalOpen}
+        onClose={() => setIsMoveModalOpen(false)}
+        material={materialToMove}
+        folderTree={folderTree}
+        currentFolderId={selectedFolderId}
+      />
     </Box>
   );
 };

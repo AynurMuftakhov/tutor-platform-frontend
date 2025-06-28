@@ -216,22 +216,35 @@ export const getLessonTasks = async (lessonId: string) => {
   return response.data;
 }
 
+// Legacy API functions - deprecated
+/**
+ * @deprecated Use deleteListeningTask instead
+ */
 export const deleteGlobalListeningTask = async (taskId: string) => {
     const response = await api.delete(`/lessons-service/api/listening-tasks/${taskId}`);
     return response.data;
 }
 
+/**
+ * @deprecated Use fetchListeningTasks instead
+ */
 export const getAllListeningTasks = async () => {
     const response = await api.get(`/lessons-service/api/listening-tasks`);
     return response.data;
 }
 
+/**
+ * @deprecated Use fetchListeningTasks instead
+ */
 export const geListeningTasks = async (folderId: string) => {
   const query = folderId ? `?folderId=${folderId}` : '';
   const response = await api.get(`/lessons-service/api/listening-tasks${query}`);
   return response.data;
 }
 
+/**
+ * @deprecated Use createListeningTask instead
+ */
 export const createGlobalListeningTask = async (taskData: {
   assetType: string;
   sourceUrl: string;
@@ -245,6 +258,71 @@ export const createGlobalListeningTask = async (taskData: {
   const response = await api.post(`/lessons-service/api/listening-tasks`, taskData);
   return response.data;
 }
+
+// New API functions for materials
+export const createMaterial = async (materialData: {
+  title: string;
+  type: string;
+  sourceUrl?: string;
+  thumbnailUrl?: string;
+  duration?: number;
+  tags?: string[];
+  folderId?: string;
+}) => {
+  const response = await api.post(`/lessons-service/api/materials`, materialData);
+  return response.data;
+};
+
+export const updateMaterial = async (id: string, materialData: {
+  title?: string;
+  type?: string;
+  sourceUrl?: string;
+  thumbnailUrl?: string;
+  duration?: number;
+  tags?: string[];
+  folderId?: string;
+}) => {
+  const response = await api.patch(`/lessons-service/api/materials/${id}`, materialData);
+  return response.data;
+};
+
+export const deleteMaterial = async (id: string) => {
+  const response = await api.delete(`/lessons-service/api/materials/${id}`);
+  return response.data;
+};
+
+// New API functions for listening tasks
+export const fetchListeningTasks = async (materialId: string) => {
+  const response = await api.get(`/lessons-service/api/materials/${materialId}/tasks`);
+  return response.data;
+};
+
+export const createListeningTask = async (materialId: string, taskData: {
+  title?: string;
+  startSec: number;
+  endSec: number;
+  wordLimit?: number;
+  timeLimitSec?: number;
+}) => {
+  const response = await api.post(`/lessons-service/api/materials/${materialId}/tasks`, taskData);
+  return response.data;
+};
+
+export const updateListeningTask = async (materialId: string, taskId: string, taskData: {
+  title?: string;
+  startSec?: number;
+  endSec?: number;
+  wordLimit?: number;
+  timeLimitSec?: number;
+}) => {
+  const response = await api.patch(`/lessons-service/api/materials/${materialId}/tasks/${taskId}`, taskData);
+  return response.data;
+};
+
+export const deleteListeningTask = async (materialId: string, taskId: string) => {
+  const response = await api.delete(`/lessons-service/api/materials/${materialId}/tasks/${taskId}`);
+  return response.data;
+};
 
 export const getMaterialFolders = async () => {
   const response = await api.get(`/lessons-service/api/material-folders`);
@@ -304,6 +382,11 @@ export const assignTaskToLesson = async (lessonId: string, taskId: string) => {
 
 export const removeTaskFromLesson = async (lessonId: string, taskId: string) => {
   const response = await api.delete(`/lessons-service/api/lessons/${lessonId}/tasks/${taskId}`);
+  return response.data;
+}
+
+export const getMaterialTags = async () => {
+  const response = await api.get(`/lessons-service/api/materials/tags`);
   return response.data;
 }
 
