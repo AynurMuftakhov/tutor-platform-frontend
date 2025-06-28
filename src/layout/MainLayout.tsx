@@ -33,7 +33,7 @@ import NotificationToasterWrapper from "../components/NotificationToasterWrapper
 import {DeleteOutline} from "@mui/icons-material";
 import MotionDivTransition from "../components/MotionDivTransition";
 
-const drawerWidth = 280;
+export const drawerWidth = 280;
 const BRAND_NAME = "SpeakShire";
 
 const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {

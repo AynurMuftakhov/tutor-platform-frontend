@@ -251,6 +251,12 @@ export const getMaterialFolders = async () => {
   return response.data;
 };
 
+export const getMaterialFoldersByParent = async (parentId?: string) => {
+  const query = parentId ? `?parentId=${parentId}` : '';
+  const response = await api.get(`/lessons-service/api/material-folders${query}`);
+  return response.data;
+};
+
 export const getMaterialFolderTree = async () => {
   const response = await api.get(`/lessons-service/api/material-folders/tree`);
   return response.data;
@@ -258,6 +264,35 @@ export const getMaterialFolderTree = async () => {
 
 export const createMaterialFolder = async (folderData: { name: string, parentId?: string }) => {
   const response = await api.post(`/lessons-service/api/material-folders`, folderData);
+  return response.data;
+};
+
+export const updateMaterialFolder = async (id: string, folderData: { name: string, parentId?: string }) => {
+  const response = await api.patch(`/lessons-service/api/material-folders/${id}`, folderData);
+  return response.data;
+};
+
+export const getMaterials = async (params: {
+  folderId?: string;
+  page?: number;
+  size?: number;
+  search?: string;
+  type?: string;
+  tags?: string[];
+}) => {
+  const queryParams = new URLSearchParams();
+
+  if (params.folderId) queryParams.append('folderId', params.folderId);
+  if (params.page !== undefined) queryParams.append('page', params.page.toString());
+  if (params.size !== undefined) queryParams.append('size', params.size.toString());
+  if (params.search) queryParams.append('search', params.search);
+  if (params.type) queryParams.append('type', params.type);
+  if (params.tags && params.tags.length > 0) {
+    params.tags.forEach(tag => queryParams.append('tags', tag));
+  }
+
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const response = await api.get(`/lessons-service/api/materials${query}`);
   return response.data;
 };
 

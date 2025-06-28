@@ -9,14 +9,19 @@ import {
     Collapse,
     IconButton,
     Tooltip,
+    Typography,
+    alpha,
+    useTheme,
 } from '@mui/material';
 import {
-    ExpandLess,
+    ChevronRight,
     ExpandMore,
-    Folder as FolderIcon,
+    FolderOutlined,
+    FolderOpenOutlined,
     Add as AddIcon,
 } from '@mui/icons-material';
 import { MaterialFolderTree } from '../../types';
+import {drawerWidth} from "../../layout/MainLayout";
 
 const DRAWER_WIDTH = 220;
 
@@ -47,33 +52,55 @@ const RecursiveList: React.FC<{
                             selected={selectedId === n.id}
                             onClick={() => onSelect(n.id)}
                             sx={{
-                                pl: 1.5 + level * 2,
-                                borderRadius: 1,
+                                pl: 2 + level * 2,
+                                py: 1,
+                                mb: 0.5,
+                                borderRadius: '6px',
+                                transition: 'all 0.2s ease',
                                 '&.Mui-selected': {
-                                    bgcolor: 'action.selected',
-                                    fontWeight: 600,
+                                    bgcolor: (theme) => alpha(theme.palette.primary.main, 0.08),
+                                    borderLeft: (theme) => `3px solid ${theme.palette.primary.main}`,
+                                    pl: 2 + level * 2 - 3, // Adjust for the border
+                                },
+                                '&:hover': {
+                                    bgcolor: (theme) => alpha(theme.palette.primary.main, 0.06),
                                 },
                             }}
                         >
                             <ListItemIcon sx={{ minWidth: 28 }}>
-                                <FolderIcon fontSize="small" />
+                                {isOpen ? 
+                                    <FolderOpenOutlined fontSize="small" /> : 
+                                    <FolderOutlined fontSize="small" />
+                                }
                             </ListItemIcon>
                             <ListItemText
-                                primaryTypographyProps={{ variant: 'subtitle2' }}
+                                primaryTypographyProps={{ 
+                                    variant: 'body2',
+                                    sx: { 
+                                        fontWeight: selectedId === n.id ? 500 : 400,
+                                        color: selectedId === n.id ? 'primary.main' : 'text.primary'
+                                    }
+                                }}
                                 primary={n.name}
                             />
                             {hasChildren &&
                                 (isOpen ? (
-                                    <ExpandLess
+                                    <ExpandMore
                                         fontSize="small"
+                                        sx={{
+                                            transition: 'transform 0.3s ease',
+                                        }}
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             toggle(n.id);
                                         }}
                                     />
                                 ) : (
-                                    <ExpandMore
+                                    <ChevronRight
                                         fontSize="small"
+                                        sx={{
+                                            transition: 'transform 0.3s ease',
+                                        }}
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             toggle(n.id);
@@ -105,6 +132,7 @@ const FolderSidebar: React.FC<FolderSidebarProps> = ({
                                                          onSelect,
                                                          onAddFolder,
                                                      }) => {
+    const theme = useTheme();
     const root = tree[0];
     const nodes = root?.children ?? tree;
     return (
@@ -113,22 +141,66 @@ const FolderSidebar: React.FC<FolderSidebarProps> = ({
             PaperProps={{
                 elevation: 1,
                 sx: {
+                    ml: { xs: 0, md: `${drawerWidth}px` },
                     width: DRAWER_WIDTH,
                     bgcolor: 'grey.50',
                     borderRight: 0,
-                    pt: 2,
+                    pt: 0,
                     px: 1,
+                    zIndex: 1100,
+                    display: 'flex',
+                    flexDirection: 'column',
                 },
             }}
         >
-            <RecursiveList nodes={nodes} selectedId={selectedId} onSelect={onSelect} />
-            <Box sx={{ flexGrow: 1 }} />
-            <Box sx={{ p: 1, textAlign: 'center' }}>
+            {/* Sticky header with title and add button */}
+            <Box 
+                sx={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center',
+                    position: 'sticky',
+                    top: 0,
+                    bgcolor: 'grey.50',
+                    py: 2,
+                    px: 1,
+                    zIndex: 1,
+                    borderBottom: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
+                    mb: 1
+                }}
+            >
+                <Typography 
+                    variant="subtitle2" 
+                    color="text.secondary"
+                    sx={{ 
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 0.5
+                    }}
+                >
+                    📁 Your Folders
+                </Typography>
                 <Tooltip title="Add folder">
-                    <IconButton size="small" onClick={onAddFolder}>
+                    <IconButton 
+                        size="small" 
+                        onClick={onAddFolder}
+                        sx={{
+                            border: `1px solid ${alpha(theme.palette.primary.main, 0.5)}`,
+                            borderRadius: '4px',
+                            p: 0.5,
+                            '&:hover': {
+                                bgcolor: alpha(theme.palette.primary.main, 0.05),
+                            }
+                        }}
+                    >
                         <AddIcon fontSize="small" />
                     </IconButton>
                 </Tooltip>
+            </Box>
+
+            {/* Folder list */}
+            <Box sx={{ overflow: 'auto', flexGrow: 1 }}>
+                <RecursiveList nodes={nodes} selectedId={selectedId} onSelect={onSelect} />
             </Box>
         </Drawer>
     );

@@ -1,114 +1,313 @@
-import React from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
-  Drawer,
   Box,
-  List,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
-  Collapse,
+  Typography,
+  Button,
+  CircularProgress,
+  Paper,
+  Grid,
+  Drawer,
+  useMediaQuery,
+  useTheme,
   IconButton,
-  Tooltip,
-  SxProps,
-  Theme,
 } from '@mui/material';
 import {
-  Folder as FolderIcon,
-  FolderOpen as FolderOpenIcon,
   Add as AddIcon,
-  ExpandLess,
-  ExpandMore,
+  Menu as MenuIcon,
 } from '@mui/icons-material';
-import { MaterialFolderTree } from '../../types';
+import { useSearchParams } from 'react-router-dom';
+import { ROOT_FOLDER_ID } from '../components/folders/FolderTree';
+import FolderSidebar, { SIDEBAR_WIDTH } from '../components/folders/FolderSidebar';
+import MaterialsToolbar, { MaterialType, ViewMode } from '../components/materials/MaterialsToolbar';
+import MaterialCard, { Material } from '../components/materials/MaterialCard';
+import AddFolderModal from '../components/folders/AddFolderModal';
+import AddMaterialModal from '../components/materials/AddMaterialModal';
+import { useFolderTree, useMaterials, createFolderMap } from '../hooks/useMaterials';
+import StandaloneMediaPlayer from '../components/lessonDetail/StandaloneMediaPlayer';
+import { extractVideoId } from '../utils/videoUtils';
+import Dialog from '@mui/material/Dialog';
 
-export interface FolderSidebarProps {
-  tree: MaterialFolderTree[];
-  selectedId: string;
-  onSelect: (id: string) => void;
-  onAddFolder: () => void;
-  sx?: SxProps<Theme>;
-}
+const LearningMaterialsPage: React.FC = () => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-const DRAWER_WIDTH = 240;
+  // URL params for state persistence
+  const [searchParams, setSearchParams] = useSearchParams();
 
-const FolderSidebar: React.FC<FolderSidebarProps> = ({
-  tree = [],
-  selectedId,
-  onSelect,
-  onAddFolder,
-  sx = {},
-}) => {
-  const [openIds, setOpenIds] = React.useState<Record<string, boolean>>({});
-
-  const handleToggle = (id: string) => {
-    setOpenIds((prev) => ({ ...prev, [id]: !prev[id] }));
+  // Get state from URL or use defaults
+  const getParamOrDefault = <T extends string>(key: string, defaultValue: T): T => {
+    return (searchParams.get(key) as T) || defaultValue;
   };
 
-  const renderTree = (nodes?: MaterialFolderTree[]) =>
-    (nodes ?? []).map((node) => {
-      const hasChildren = Array.isArray(node.children) && node.children.length > 0;
-      const isOpen = openIds[node.id] || false;
-      const isSelected = selectedId === node.id;
+  // State
+  const [selectedFolderId, setSelectedFolderId] = useState(getParamOrDefault('folder', ROOT_FOLDER_ID));
+  const [searchTerm, setSearchTerm] = useState(getParamOrDefault('search', ''));
+  const [selectedType, setSelectedType] = useState<MaterialType>(getParamOrDefault('type', 'all'));
+  const [selectedTags, setSelectedTags] = useState<string[]>(
+    searchParams.get('tags') ? searchParams.get('tags')!.split(',') : []
+  );
+  const [viewMode, setViewMode] = useState<ViewMode>(
+    getParamOrDefault('view', localStorage.getItem('materialsViewMode') as ViewMode || 'grid')
+  );
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  const [isAddFolderModalOpen, setIsAddFolderModalOpen] = useState(false);
+  const [isAddMaterialModalOpen, setIsAddMaterialModalOpen] = useState(false);
+  const [currentMaterial, setCurrentMaterial] = useState<Material | null>(null);
 
-      return (
-        <Box key={node.id}>
-          <ListItemButton
-            selected={isSelected}
-            onClick={() => onSelect(node.id)}
-            sx={{ pl: 2 + (node.level || 0) * 2 }}
-          >
-            <ListItemIcon>
-              {isOpen ? <FolderOpenIcon /> : <FolderIcon />}
-            </ListItemIcon>
-            <ListItemText primary={node.name} />
-            {hasChildren ? (
-              <IconButton
-                size="small"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleToggle(node.id);
-                }}
-              >
-                {isOpen ? <ExpandLess /> : <ExpandMore />}
-              </IconButton>
-            ) : null}
-          </ListItemButton>
-          {hasChildren && (
-            <Collapse in={isOpen} timeout="auto" unmountOnExit>
-              <List component="div" disablePadding>
-                {renderTree(node.children)}
-              </List>
-            </Collapse>
-          )}
-        </Box>
-      );
-    });
+  // Fetch data using React Query
+  const { data: folderTree = [], isLoading: foldersLoading } = useFolderTree();
+  const { data: materialsData = { content: [] }, isLoading: materialsLoading } = useMaterials({
+    folderId: selectedFolderId === ROOT_FOLDER_ID ? undefined : selectedFolderId,
+    search: searchTerm,
+    type: selectedType === 'all' ? undefined : selectedType,
+    tags: selectedTags.length > 0 ? selectedTags : undefined,
+  });
 
-  return (
-    <Drawer
-      variant="permanent"
-      sx={{ width: DRAWER_WIDTH, flexShrink: 0, ...sx }}
-      PaperProps={{
-        elevation: 1,
-        sx: {
-          width: DRAWER_WIDTH,
-          bgcolor: 'grey.50',
-          borderRight: 0,
-          pt: 2,
-          px: 1,
-        },
+  // Extract materials array from response (handle both array and object responses)
+  const materials = Array.isArray(materialsData) ? materialsData : materialsData.content || [];
+
+  // Create folder map for breadcrumb navigation
+  const folderMap = useMemo(() => createFolderMap(folderTree), [folderTree]);
+
+  // Update URL params when state changes
+  useEffect(() => {
+    const params: Record<string, string> = {};
+
+    if (selectedFolderId !== ROOT_FOLDER_ID) {
+      params.folder = selectedFolderId;
+    }
+
+    if (searchTerm) {
+      params.search = searchTerm;
+    }
+
+    if (selectedType !== 'all') {
+      params.type = selectedType;
+    }
+
+    if (selectedTags.length > 0) {
+      params.tags = selectedTags.join(',');
+    }
+
+    if (viewMode !== 'grid') {
+      params.view = viewMode;
+    }
+
+    setSearchParams(params, { replace: true });
+
+    // Save view mode to localStorage
+    localStorage.setItem('materialsViewMode', viewMode);
+  }, [selectedFolderId, searchTerm, selectedType, selectedTags, viewMode, setSearchParams]);
+
+  // Handle folder selection
+  const handleFolderSelect = (folderId: string) => {
+    setSelectedFolderId(folderId);
+    if (isMobile) {
+      setMobileDrawerOpen(false);
+    }
+  };
+
+  // Handle search term change
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value);
+  };
+
+  // Handle material type change
+  const handleTypeChange = (type: MaterialType) => {
+    setSelectedType(type);
+  };
+
+  // Handle tags change
+  const handleTagsChange = (tags: string[]) => {
+    setSelectedTags(tags);
+  };
+
+  // Handle view mode change
+  const handleViewModeChange = (mode: ViewMode) => {
+    setViewMode(mode);
+  };
+
+  // Handle play button click
+  const handlePlay = (material: Material) => {
+    setCurrentMaterial(material);
+  };
+
+  // Close the player
+  const handleClosePlayer = () => {
+    setCurrentMaterial(null);
+  };
+
+  // Handle add folder
+  const handleAddFolder = () => {
+    setIsAddFolderModalOpen(true);
+  };
+
+  // Handle add material
+  const handleAddMaterial = () => {
+    setIsAddMaterialModalOpen(true);
+  };
+
+  // Handle material refresh after creation
+  const handleMaterialCreated = () => {
+    // React Query will automatically refetch the data
+  };
+
+  // Empty state component
+  const EmptyState = () => (
+    <Paper
+      elevation={0}
+      sx={{
+        p: 4,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'background.default',
+        borderRadius: 2,
+        textAlign: 'center'
       }}
     >
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', px: 1, mb: 1 }}>
-        <Tooltip title="Add Folder">
-          <IconButton onClick={onAddFolder} size="small">
-            <AddIcon />
-          </IconButton>
-        </Tooltip>
+      <img
+        src="/assets/empty-materials.svg"
+        alt="No materials"
+        style={{ width: '150px', height: '150px', marginBottom: '16px' }}
+        onError={(e) => {
+          // Fallback if image doesn't exist
+          e.currentTarget.style.display = 'none';
+        }}
+      />
+      <Typography variant="h6" gutterBottom>
+        No materials in this folder
+      </Typography>
+      <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
+        Drag & drop or click to add material to this folder.
+      </Typography>
+      <Button
+        variant="contained"
+        color="primary"
+        startIcon={<AddIcon />}
+        onClick={handleAddMaterial}
+      >
+        Add Material
+      </Button>
+    </Paper>
+  );
+
+  // Loading state
+  if (foldersLoading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+        <CircularProgress />
       </Box>
-      <List>{renderTree(tree)}</List>
-    </Drawer>
+    );
+  }
+
+  return (
+    <Box sx={{ display: 'flex', height: 'calc(100vh - 64px)' }}>
+      <FolderSidebar
+          tree={folderTree}
+          selectedId={selectedFolderId}
+          onSelect={handleFolderSelect}
+          onAddFolder={handleAddFolder}
+      />
+      {/* Main content */}
+      <Box
+        component="main"
+        sx={{
+          flexGrow: 1,
+          p: 3,
+          ml: { xs: 0, md: `${SIDEBAR_WIDTH}px` },
+          overflow: 'auto',
+        }}
+      >
+
+        {/* Toolbar with breadcrumbs, search, filters, etc. */}
+        <MaterialsToolbar
+          searchTerm={searchTerm}
+          onSearchChange={handleSearchChange}
+          viewMode={viewMode}
+          onViewModeChange={handleViewModeChange}
+          selectedType={selectedType}
+          onTypeChange={handleTypeChange}
+          selectedTags={selectedTags}
+          onTagsChange={handleTagsChange}
+          onAddMaterial={handleAddMaterial}
+          breadcrumbProps={{
+            selectedFolderId,
+            folderMap,
+            onSelect: handleFolderSelect,
+          }}
+        />
+
+        {/* Materials content */}
+        {materialsLoading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+            <CircularProgress />
+          </Box>
+        ) : materials.length === 0 ? (
+          <EmptyState />
+        ) : (
+          <Grid container spacing={2}>
+            {materials.map((material) => (
+              <Grid
+                item
+                xs={12}
+                sm={viewMode === 'list' ? 12 : 6}
+                md={viewMode === 'list' ? 12 : 4}
+                lg={viewMode === 'list' ? 12 : 3}
+                key={material.id}
+              >
+                <MaterialCard
+                  material={material}
+                  viewMode={viewMode}
+                  onPlay={handlePlay}
+                  onEdit={() => console.log('Edit', material)}
+                  onDuplicate={() => console.log('Duplicate', material)}
+                  onMove={() => console.log('Move', material)}
+                  onDelete={() => console.log('Delete', material)}
+                />
+              </Grid>
+            ))}
+          </Grid>
+        )}
+      </Box>
+
+      {/* Add Folder Modal */}
+      <AddFolderModal
+        open={isAddFolderModalOpen}
+        onClose={() => setIsAddFolderModalOpen(false)}
+        folderTree={folderTree}
+        currentFolderId={selectedFolderId}
+      />
+
+      {/* Add Material Modal */}
+      <AddMaterialModal
+        open={isAddMaterialModalOpen}
+        onClose={() => setIsAddMaterialModalOpen(false)}
+        onMaterialCreated={handleMaterialCreated}
+        currentFolderId={selectedFolderId}
+      />
+
+      {/* Media Player Dialog */}
+      <Dialog
+        open={!!currentMaterial}
+        onClose={handleClosePlayer}
+        maxWidth="md"
+        fullWidth
+      >
+        {currentMaterial && currentMaterial.sourceUrl && (
+          <Box sx={{ position: 'relative', height: 500 }}>
+            <StandaloneMediaPlayer
+              videoId={extractVideoId(currentMaterial.sourceUrl) || ''}
+              startTime={0}
+              endTime={0}
+              onClose={handleClosePlayer}
+            />
+          </Box>
+        )}
+      </Dialog>
+    </Box>
   );
 };
 
-export default FolderSidebar;
+export default LearningMaterialsPage;
