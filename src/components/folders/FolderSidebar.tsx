@@ -21,7 +21,7 @@ import {
     Add as AddIcon,
 } from '@mui/icons-material';
 import { MaterialFolderTree } from '../../types';
-import {drawerWidth} from "../../layout/MainLayout";
+import { drawerWidth } from '../../layout/MainLayout';
 
 const DRAWER_WIDTH = 220;
 
@@ -45,22 +45,25 @@ const RecursiveList: React.FC<{
         <List disablePadding dense>
             {nodes.map((n) => {
                 const hasChildren = (n.children?.length ?? 0) > 0;
-                const isOpen = openMap[n.id] ?? level < 1; // раскрыт 1-й уровень
+                const isOpen = openMap[n.id] ?? level < 1;
+                const selected = selectedId === n.id;
+
                 return (
                     <React.Fragment key={n.id}>
                         <ListItemButton
-                            selected={selectedId === n.id}
+                            selected={selected}
                             onClick={() => onSelect(n.id)}
                             sx={{
-                                pl: 2 + level * 2,
+                                display: 'flex',
+                                alignItems: 'center',
                                 py: 1,
-                                mb: 0.5,
+                                mb: 0.25,
                                 borderRadius: '6px',
                                 transition: 'all 0.2s ease',
+                                borderLeft: selected ? (theme) => `3px solid ${theme.palette.primary.main}` : 'none',
+                                pl: selected ? 2 + level * 1.5 - 3 : 2 + level * 1.5,
                                 '&.Mui-selected': {
                                     bgcolor: (theme) => alpha(theme.palette.primary.main, 0.08),
-                                    borderLeft: (theme) => `3px solid ${theme.palette.primary.main}`,
-                                    pl: 2 + level * 2 - 3, // Adjust for the border
                                 },
                                 '&:hover': {
                                     bgcolor: (theme) => alpha(theme.palette.primary.main, 0.06),
@@ -68,45 +71,55 @@ const RecursiveList: React.FC<{
                             }}
                         >
                             <ListItemIcon sx={{ minWidth: 28 }}>
-                                {isOpen ? 
-                                    <FolderOpenOutlined fontSize="small" /> : 
-                                    <FolderOutlined fontSize="small" />
-                                }
+                                {hasChildren ? (
+                                    isOpen ? (
+                                        <ExpandMore
+                                            fontSize="small"
+                                            sx={{ transition: 'transform 0.3s ease' }}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                toggle(n.id);
+                                            }}
+                                        />
+                                    ) : (
+                                        <ChevronRight
+                                            fontSize="small"
+                                            sx={{ transition: 'transform 0.3s ease' }}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                toggle(n.id);
+                                            }}
+                                        />
+                                    )
+                                ) : (
+                                    <Box sx={{ width: 16 }} />
+                                )}
                             </ListItemIcon>
+
+                            <Box >
+                                {isOpen ? (
+                                    <FolderOpenOutlined fontSize="small" />
+                                ) : (
+                                    <FolderOutlined fontSize="small" />
+                                )}
+                            </Box>
                             <ListItemText
-                                primaryTypographyProps={{ 
+                                primaryTypographyProps={{
                                     variant: 'body2',
-                                    sx: { 
-                                        fontWeight: selectedId === n.id ? 500 : 400,
-                                        color: selectedId === n.id ? 'primary.main' : 'text.primary'
-                                    }
+                                    ml: 1,
+                                    sx: {
+                                        fontSize: '0.85rem',
+                                        fontWeight: selected ? 600 : 400,
+                                        color: selected
+                                            ? 'primary.main'
+                                            : isOpen
+                                                ? 'text.primary'
+                                                : 'text.secondary',
+                                    },
                                 }}
                                 primary={n.name}
                             />
-                            {hasChildren &&
-                                (isOpen ? (
-                                    <ExpandMore
-                                        fontSize="small"
-                                        sx={{
-                                            transition: 'transform 0.3s ease',
-                                        }}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            toggle(n.id);
-                                        }}
-                                    />
-                                ) : (
-                                    <ChevronRight
-                                        fontSize="small"
-                                        sx={{
-                                            transition: 'transform 0.3s ease',
-                                        }}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            toggle(n.id);
-                                        }}
-                                    />
-                                ))}
+
                         </ListItemButton>
 
                         {hasChildren && (
@@ -135,6 +148,7 @@ const FolderSidebar: React.FC<FolderSidebarProps> = ({
     const theme = useTheme();
     const root = tree[0];
     const nodes = root?.children ?? tree;
+
     return (
         <Drawer
             variant="permanent"
@@ -143,8 +157,8 @@ const FolderSidebar: React.FC<FolderSidebarProps> = ({
                 sx: {
                     ml: { xs: 0, md: `${drawerWidth}px` },
                     width: DRAWER_WIDTH,
-                    bgcolor: 'grey.50',
-                    borderRight: 0,
+                    bgcolor: theme.palette.background.default,
+                    borderRight: `1px solid ${theme.palette.divider}`,
                     pt: 0,
                     px: 1,
                     zIndex: 1100,
@@ -153,36 +167,32 @@ const FolderSidebar: React.FC<FolderSidebarProps> = ({
                 },
             }}
         >
-            {/* Sticky header with title and add button */}
-            <Box 
-                sx={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between', 
+            {/* Sticky header */}
+            <Box
+                sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
                     alignItems: 'center',
                     position: 'sticky',
-                    top: 0,
-                    bgcolor: 'grey.50',
+                    top: 64,
+                    bgcolor: theme.palette.background.default,
                     py: 2,
                     px: 1,
                     zIndex: 1,
                     borderBottom: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
-                    mb: 1
+                    mb: 1,
                 }}
             >
-                <Typography 
-                    variant="subtitle2" 
+                <Typography
+                    variant="subtitle2"
                     color="text.secondary"
-                    sx={{ 
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 0.5
-                    }}
+                    sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
                 >
                     📁 Your Folders
                 </Typography>
                 <Tooltip title="Add folder">
-                    <IconButton 
-                        size="small" 
+                    <IconButton
+                        size="small"
                         onClick={onAddFolder}
                         sx={{
                             border: `1px solid ${alpha(theme.palette.primary.main, 0.5)}`,
@@ -190,7 +200,7 @@ const FolderSidebar: React.FC<FolderSidebarProps> = ({
                             p: 0.5,
                             '&:hover': {
                                 bgcolor: alpha(theme.palette.primary.main, 0.05),
-                            }
+                            },
                         }}
                     >
                         <AddIcon fontSize="small" />
@@ -199,7 +209,14 @@ const FolderSidebar: React.FC<FolderSidebarProps> = ({
             </Box>
 
             {/* Folder list */}
-            <Box sx={{ overflow: 'auto', flexGrow: 1 }}>
+            <Box
+                sx={{
+                    overflow: 'auto',
+                    flexGrow: 1,
+                    pt: 1,
+                    mt: '64px',
+                }}
+            >
                 <RecursiveList nodes={nodes} selectedId={selectedId} onSelect={onSelect} />
             </Box>
         </Drawer>

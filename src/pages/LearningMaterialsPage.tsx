@@ -6,14 +6,11 @@ import {
   CircularProgress,
   Paper,
   Grid,
-  Drawer,
   useMediaQuery,
   useTheme,
-  IconButton,
 } from '@mui/material';
 import {
   Add as AddIcon,
-  Menu as MenuIcon,
 } from '@mui/icons-material';
 import { useSearchParams } from 'react-router-dom';
 import { ROOT_FOLDER_ID } from '../components/folders/FolderTree';
@@ -22,7 +19,7 @@ import MaterialsToolbar, { MaterialType, ViewMode } from '../components/material
 import MaterialCard, { Material } from '../components/materials/MaterialCard';
 import AddFolderModal from '../components/folders/AddFolderModal';
 import AddMaterialModal from '../components/materials/AddMaterialModal';
-import { useFolderTree, useMaterials, createFolderMap } from '../hooks/useMaterials';
+import { useFolderTree, useMaterials } from '../hooks/useMaterials';
 import StandaloneMediaPlayer from '../components/lessonDetail/StandaloneMediaPlayer';
 import { extractVideoId } from '../utils/videoUtils';
 import Dialog from '@mui/material/Dialog';
@@ -65,9 +62,6 @@ const LearningMaterialsPage: React.FC = () => {
 
   // Extract materials array from response (handle both array and object responses)
   const materials = Array.isArray(materialsData) ? materialsData : materialsData.content || [];
-
-  // Create folder map for breadcrumb navigation
-  const folderMap = useMemo(() => createFolderMap(folderTree), [folderTree]);
 
   // Update URL params when state changes
   useEffect(() => {
@@ -218,10 +212,11 @@ const LearningMaterialsPage: React.FC = () => {
           p: 3,
           ml: { xs: 0, md: `${SIDEBAR_WIDTH}px` },
           overflow: 'auto',
+          borderLeft: { xs: 'none', md: `1px solid ${theme.palette.divider}` },
+          boxShadow: { xs: 'none', md: '-2px 0 5px rgba(0,0,0,0.02)' },
         }}
       >
 
-        {/* Toolbar with breadcrumbs, search, filters, etc. */}
         <MaterialsToolbar
           searchTerm={searchTerm}
           onSearchChange={handleSearchChange}
@@ -232,11 +227,6 @@ const LearningMaterialsPage: React.FC = () => {
           selectedTags={selectedTags}
           onTagsChange={handleTagsChange}
           onAddMaterial={handleAddMaterial}
-          breadcrumbProps={{
-            selectedFolderId,
-            folderMap,
-            onSelect: handleFolderSelect,
-          }}
         />
 
         {/* Materials content */}
@@ -248,7 +238,7 @@ const LearningMaterialsPage: React.FC = () => {
           <EmptyState />
         ) : (
           <Grid container spacing={2}>
-            {materials.map((material) => (
+            {materials.map((material: any) => (
               <Grid
                 item
                 xs={12}
