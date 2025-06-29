@@ -19,7 +19,7 @@ import LessonPlanSection from "../components/lessonDetail/LessonPlanSection";
 import HomeworkSection from "../components/lessonDetail/HomeworkSection";
 import PostLessonNotes from "../components/lessonDetail/PostLessonNotes";
 import LessonTracking from "../components/lessonDetail/LessonTracking";
-import MaterialsTab from "../components/lessonDetail/MaterialsTab";
+import LessonMaterialsTab from "../components/lessonDetail/LessonMaterialsTab";
 import {Lesson} from "../types/Lesson";
 import LessonActions from "../components/lessonDetail/LessonActions";
 import {useAuth} from "../context/AuthContext";
@@ -209,7 +209,7 @@ const LessonDetailPage = () => {
             </TabPanel>
 
             <TabPanel value={activeTab} index={1}>
-                <MaterialsTab lessonId={lesson.id} isTeacher={isTeacher} />
+                <LessonMaterialsTab lessonId={lesson.id} isTeacher={isTeacher} />
             </TabPanel>
 
             <TabPanel value={activeTab} index={2}>

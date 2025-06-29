@@ -36,6 +36,7 @@ interface ListeningTaskManagerProps {
   material: Material;
   open: boolean;
   onClose: () => void;
+  onTaskChange?: () => void; // Callback for when tasks are created, updated, or deleted
 }
 
 interface TaskFormData {
@@ -50,7 +51,8 @@ interface TaskFormData {
 const ListeningTaskManager: React.FC<ListeningTaskManagerProps> = ({
   material,
   open,
-  onClose
+  onClose,
+  onTaskChange
 }) => {
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [isEditingTask, setIsEditingTask] = useState(false);
@@ -113,7 +115,15 @@ const ListeningTaskManager: React.FC<ListeningTaskManagerProps> = ({
   // Handle confirming task deletion
   const handleDeleteConfirm = () => {
     if (taskToDelete) {
-      deleteTask.mutate({ materialId: material.id, taskId: taskToDelete });
+      deleteTask.mutate(
+        { materialId: material.id, taskId: taskToDelete },
+        {
+          onSuccess: () => {
+            // Call the onTaskChange callback if provided
+            if (onTaskChange) onTaskChange();
+          }
+        }
+      );
       setDeleteConfirmOpen(false);
       setTaskToDelete(null);
     }

@@ -52,9 +52,9 @@ interface MaterialCardProps {
   material: Material;
   onPlay?: (material: Material) => void;
   onEdit?: (material: Material) => void;
-  onDuplicate?: (material: Material) => void;
   onMove?: (material: Material) => void;
   onDelete?: (material: Material) => void;
+  onUnlink?: (material: Material) => void;
   onManageTasks?: (material: Material) => void;
   viewMode?: 'list' | 'grid';
 }
@@ -63,9 +63,9 @@ const MaterialCard: React.FC<MaterialCardProps> = ({
   material,
   onPlay,
   onEdit,
-  onDuplicate,
   onMove,
   onDelete,
+  onUnlink,
   onManageTasks,
   viewMode = 'grid',
 }) => {
@@ -97,13 +97,13 @@ const MaterialCard: React.FC<MaterialCardProps> = ({
     handleMenuClose();
   };
 
-  const handleDuplicate = () => {
-    if (onDuplicate) onDuplicate(material);
+  const handleMove = () => {
+    if (onMove) onMove(material);
     handleMenuClose();
   };
 
-  const handleMove = () => {
-    if (onMove) onMove(material);
+  const handleUnlink = () => {
+    if (onUnlink) onUnlink(material);
     handleMenuClose();
   };
 
@@ -314,7 +314,7 @@ const MaterialCard: React.FC<MaterialCardProps> = ({
                   </Tooltip>
                 )}
 
-                <Tooltip title="More options">
+                {onEdit && (<Tooltip title="More options">
                   <IconButton
                     size="small"
                     onClick={handleMenuOpen}
@@ -326,6 +326,7 @@ const MaterialCard: React.FC<MaterialCardProps> = ({
                     <MoreIcon fontSize="small" />
                   </IconButton>
                 </Tooltip>
+                )}
               </Box>
             </Box>
           </CardContent>
@@ -360,6 +361,14 @@ const MaterialCard: React.FC<MaterialCardProps> = ({
               <MoveIcon fontSize="small" />
             </ListItemIcon>
             <ListItemText>Move</ListItemText>
+          </MenuItem>
+        )}
+        {onUnlink && (
+          <MenuItem onClick={handleUnlink} sx={{ color: theme.palette.warning.main }}>
+            <ListItemIcon sx={{ color: 'inherit' }}>
+              <DeleteIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>Unlink</ListItemText>
           </MenuItem>
         )}
         {onDelete && (

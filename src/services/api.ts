@@ -379,12 +379,7 @@ export const getMaterials = async (params: {
   return response.data;
 };
 
-// New methods for lesson task management
-export const assignTaskToLesson = async (lessonId: string, taskId: string) => {
-  const response = await api.post(`/lessons-service/api/lessons/${lessonId}/tasks?taskId=${taskId}`);
-  return response.data;
-}
-
+// Legacy method for removing tasks from lessons
 export const removeTaskFromLesson = async (lessonId: string, taskId: string) => {
   const response = await api.delete(`/lessons-service/api/lessons/${lessonId}/tasks/${taskId}`);
   return response.data;
@@ -394,6 +389,21 @@ export const getMaterialTags = async () => {
   const response = await api.get(`/lessons-service/api/materials/tags`);
   return response.data;
 }
+
+// Lesson ↔ Material
+export const fetchLessonMaterials = async (lessonId:string) =>
+  api.get(`/lessons-service/api/lessons/${lessonId}/materials`).then(r=>r.data);
+
+export const linkMaterialToLesson = (lessonId:string, materialId:string) =>
+  api.post(`/lessons-service/api/lessons/${lessonId}/materials`, null,{ params:{ materialId }});
+
+export const unlinkMaterialFromLesson = (lessonId:string, linkId:string) =>
+  api.delete(`/lessons-service/api/lessons/${lessonId}/materials/${linkId}`);
+
+export const reorderLessonMaterial = (
+  lessonId:string, linkId:string, sortOrder:number
+) =>
+  api.patch(`/lessons-service/api/lessons/${lessonId}/materials/${linkId}`, { sortOrder });
 
 // Request interceptor to add authorization token
 api.interceptors.request.use((config) => {

@@ -17,22 +17,18 @@ import {
 } from '@mui/material';
 import ReactPlayer from 'react-player';
 import { AssetType, MaterialFolder } from '../../types';
-import { createGlobalListeningTask, assignTaskToLesson, getMaterialFolders } from '../../services/api';
+import { createGlobalListeningTask, getMaterialFolders } from '../../services/api';
 
 interface CreateListeningTaskModalProps {
   open: boolean;
   onClose: () => void;
-  lessonId?: string;
-  onTaskCreated: () => void;
-  isGlobal?: boolean;
+  onTaskCreated: (task?: any) => void;
 }
 
 const CreateListeningTaskModal: React.FC<CreateListeningTaskModalProps> = ({
   open,
   onClose,
-  lessonId,
-  onTaskCreated,
-  isGlobal = false
+  onTaskCreated
 }) => {
   // Form state
   const [assetType, setAssetType] = useState<AssetType>(AssetType.VIDEO);
@@ -133,15 +129,11 @@ const CreateListeningTaskModal: React.FC<CreateListeningTaskModalProps> = ({
 
     setIsSubmitting(true);
     try {
-      // Always create a global task first
+      // Create a global task
       const createdTask = await createGlobalListeningTask(taskData);
 
-      // If this is for a specific lesson, assign the task to the lesson
-      if (!isGlobal && lessonId) {
-        await assignTaskToLesson(lessonId, createdTask.id);
-      }
-
-      onTaskCreated();
+      // Pass the created task to the callback
+      onTaskCreated(createdTask);
       onClose();
     } catch (error) {
       console.error('Failed to create listening task', error);
