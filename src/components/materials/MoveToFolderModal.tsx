@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, {JSX, useState} from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -44,7 +44,7 @@ const MoveToFolderModal: React.FC<MoveToFolderModalProps> = ({
   }, [open, material]);
 
   // Recursive function to build folder options
-  const buildFolderOptions = (folders: MaterialFolderTree[], level = 0): React.ReactNode[] => {
+  const buildFolderOptions = (folders: MaterialFolderTree[], level = 0): JSX.Element[] => {
     return folders.flatMap((folder) => {
       const indent = '—'.repeat(level);
       const prefix = level > 0 ? `${indent} ` : '';

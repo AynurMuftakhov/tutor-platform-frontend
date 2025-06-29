@@ -97,7 +97,7 @@ const LessonDetailPage = () => {
 
     return (
         <Container maxWidth="lg" sx={{ mt: 4, mb: 6 }}>
-            <Grid item xs={12}>
+            <Grid size={{xs:12}}>
                 {user?.role === "tutor" && (
                     <Box
                         sx={{
@@ -156,7 +156,7 @@ const LessonDetailPage = () => {
             </Grid>
 
             {/* Header */}
-            <Grid item xs={12} sx={{ mb: 3 }}>
+            <Grid size={{xs:12}} sx={{ mb: 3 }}>
                 <LessonHero
                     lesson={lesson}
                     student={student}
@@ -191,18 +191,18 @@ const LessonDetailPage = () => {
             <TabPanel value={activeTab} index={0}>
                 <Grid container spacing={3}>
                     {/* Plan + Homework */}
-                    <Grid item xs={12} md={6}>
+                    <Grid  size={{xs:12, md:6}}>
                         <LessonPlanSection lesson={lesson} isTeacher={isTeacher}/>
                     </Grid>
-                    <Grid item xs={12} md={6}>
+                    <Grid size={{xs:12, md:6}}>
                         <HomeworkSection lesson={lesson} isTeacher={isTeacher}/>
                     </Grid>
 
                     {/* Notes + Metrics */}
-                    <Grid item xs={12} md={6}>
+                    <Grid size={{xs:12, md:6}}>
                         <PostLessonNotes lesson={lesson} isTeacher={isTeacher}/>
                     </Grid>
-                    <Grid item xs={12} md={6}>
+                    <Grid size={{xs:12, md:6}}>
                         <LessonTracking lesson={lesson}/>
                     </Grid>
                 </Grid>

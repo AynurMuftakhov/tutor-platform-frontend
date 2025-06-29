@@ -296,7 +296,6 @@ const LearningMaterialsPage: React.FC = () => {
           onAddFolder={handleAddFolder}
           onEditFolder={handleEditFolder}
           onDeleteFolder={handleDeleteFolder}
-          isPickerDialog={true}
       />
       {/* Main content */}
       <Box
@@ -304,7 +303,7 @@ const LearningMaterialsPage: React.FC = () => {
         sx={{
           flexGrow: 1,
           p: 3,
-          ml: { xs: 0 },
+          ml: { xs: 0, md: `${SIDEBAR_WIDTH}px`},
           overflow: 'auto',
           borderLeft: { xs: 'none', md: `1px solid ${theme.palette.divider}` },
           boxShadow: { xs: 'none', md: '-2px 0 5px rgba(0,0,0,0.02)' },
@@ -334,11 +333,12 @@ const LearningMaterialsPage: React.FC = () => {
           <Grid container spacing={2}>
             {materials.map((material: any) => (
               <Grid
-                item
-                xs={12}
-                sm={viewMode === 'list' ? 12 : 6}
-                md={viewMode === 'list' ? 12 : 4}
-                lg={viewMode === 'list' ? 12 : 3}
+                size ={{
+                xs: 12,
+                sm: viewMode === 'list' ? 12 : 6,
+                md: viewMode === 'list' ? 12 : 4,
+                lg: viewMode === 'list' ? 12 : 3
+                }}
                 key={material.id}
               >
                 <MaterialCard

@@ -240,7 +240,7 @@ const CreateListeningTaskModal: React.FC<CreateListeningTaskModalProps> = ({
               </Box>
 
               <Grid container spacing={3} sx={{ mb: 2 }}>
-                <Grid item xs={12} sm={6}>
+                <Grid size={{xs:12, sm:6}} >
                   <TextField
                     fullWidth
                     type="number"
@@ -251,7 +251,7 @@ const CreateListeningTaskModal: React.FC<CreateListeningTaskModalProps> = ({
                     helperText="Maximum number of words (0 for no limit)"
                   />
                 </Grid>
-                <Grid item xs={12} sm={6}>
+                <Grid size={{xs:12, sm:6}} >
                   <TextField
                     fullWidth
                     type="number"

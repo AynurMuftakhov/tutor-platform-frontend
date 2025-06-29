@@ -39,7 +39,7 @@ const LessonHero: React.FC<Props> = ({ lesson, student }) => {
         >
             <Grid container spacing={3} alignItems="center">
                 {/* Left: Avatar + Info */}
-                <Grid item xs={12} md={8}>
+                <Grid size={{xs:12, md:8}}>
                     <Stack direction="row" spacing={2} alignItems="center">
                         <Avatar
                             sx={{
@@ -82,7 +82,7 @@ const LessonHero: React.FC<Props> = ({ lesson, student }) => {
                 </Grid>
 
                 {/* Right: Status + Meta */}
-                <Grid item xs={12} md={4}>
+                <Grid size={{xs:12, md:4}}>
                     <Stack
                         direction="row"
                         alignItems="center"

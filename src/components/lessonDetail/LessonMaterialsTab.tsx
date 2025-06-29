@@ -42,7 +42,7 @@ const LessonMaterialsTab: React.FC<LessonMaterialsTabProps> = ({ lessonId, isTea
   // Handle closing the material picker
   const handleClosePicker = () => {
     setIsPickerOpen(false);
-    queryClient.invalidateQueries(['lessonMaterials', lessonId]);
+    queryClient.invalidateQueries({ queryKey: ['lessonMaterials', lessonId] });
   };
 
   // Handle play button click
@@ -84,7 +84,7 @@ const LessonMaterialsTab: React.FC<LessonMaterialsTabProps> = ({ lessonId, isTea
   const handleCloseTaskManager = () => {
     setIsTaskManagerOpen(false);
     // Invalidate lesson materials query to update task counts
-    queryClient.invalidateQueries(['lessonMaterials', lessonId]);
+    queryClient.invalidateQueries({ queryKey: ['lessonMaterials', lessonId] });
   };
 
   // Empty state component
@@ -161,11 +161,12 @@ const LessonMaterialsTab: React.FC<LessonMaterialsTabProps> = ({ lessonId, isTea
         <Grid container spacing={2}>
           {lessonMaterials.map((lessonMaterial: any) => (
             <Grid
-              item
-              xs={12}
-              sm={6}
-              md={4}
-              lg={3}
+              size={{
+                  xs : 12,
+                  sm : 6,
+                  md : 4,
+                  lg : 3,
+              }}
               key={lessonMaterial.id}
             >
               <MaterialCard 

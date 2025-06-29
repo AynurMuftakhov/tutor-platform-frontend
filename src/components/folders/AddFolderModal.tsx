@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, {JSX, useState} from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -14,6 +14,7 @@ import {
   Box,
   Typography,
 } from '@mui/material';
+import { SelectChangeEvent } from '@mui/material/Select';
 import { MaterialFolderTree } from '../../types';
 import { useCreateFolder } from '../../hooks/useMaterials';
 import { ROOT_FOLDER_ID } from './FolderTree';
@@ -44,8 +45,8 @@ const AddFolderModal: React.FC<AddFolderModalProps> = ({
     }
   };
 
-  const handleParentChange = (e: React.ChangeEvent<{ value: unknown }>) => {
-    setParentId(e.target.value as string);
+  const handleParentChange = (event: SelectChangeEvent<string>, child: React.ReactNode) => {
+    setParentId(event.target.value);
   };
 
   const handleSubmit = async () => {
@@ -76,7 +77,7 @@ const AddFolderModal: React.FC<AddFolderModalProps> = ({
   };
 
   // Recursive function to build folder options
-  const buildFolderOptions = (folders: MaterialFolderTree[], level = 0): React.ReactNode[] => {
+  const buildFolderOptions = (folders: MaterialFolderTree[], level = 0): JSX.Element[] => {
     return folders.flatMap((folder) => {
       const indent = '—'.repeat(level);
       const prefix = level > 0 ? `${indent} ` : '';

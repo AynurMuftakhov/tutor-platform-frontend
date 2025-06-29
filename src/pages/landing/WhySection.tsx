@@ -151,7 +151,7 @@ const WhySection: React.FC = () => {
 
         <Grid container spacing={4} justifyContent="center">
           {platformFeatures.map((feature, index) => (
-            <Grid item xs={12} md={4} key={feature.id}>
+            <Grid size={{xs:12, md:4}} key={feature.id}>
               <motion.div
                 initial={{ opacity: 0, y: 50 }}
                 whileInView={{ opacity: 1, y: 0 }}

@@ -135,7 +135,6 @@ const Dashboard = () => {
     const theme = useTheme();
     const isTeacher = user?.role === "tutor";
     const navigate = useNavigate();
-    const [isAddLessonOpen, setAddLessonOpen] = useState(false);
 
     // Fetch tutor statistics if user is a tutor
     const { data: tutorStats, isLoading: isLoadingStats } = useTutorStatistics(
@@ -189,7 +188,7 @@ const Dashboard = () => {
             {/* Stats Cards Section */}
             {user?.role === "tutor" && (
                 <Grid container spacing={2} sx={{ mb: 4 }} wrap="wrap">
-                    <Grid item xs={6} sm={6} md={6} lg={3}>
+                    <Grid size={{ xs:6, sm:6, md:6, lg:3 }}>
                         <StatCard
                             title="Students Taught"
                             value={isLoadingStats ? "..." : tutorStats?.taughtStudents.toString() || "0"}
@@ -197,7 +196,7 @@ const Dashboard = () => {
                             color="primary"
                         />
                     </Grid>
-                    <Grid item xs={6} sm={6} md={6} lg={3}>
+                    <Grid size={{ xs:6, sm:6, md:6, lg:3 }}>
                         {(() => {
                             const completedLessons = tutorStats?.completedLessons || 0;
                             const monthlyGoal = 20;
@@ -221,7 +220,7 @@ const Dashboard = () => {
             {/* Main Content Grid */}
             <Grid container spacing={4}>
                 {/* Next Lessons Section */}
-                <Grid item xs={12} md={8}>
+                <Grid size ={{ xs:12, md:8 }}>
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}

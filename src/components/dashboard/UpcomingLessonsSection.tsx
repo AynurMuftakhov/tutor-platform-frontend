@@ -41,7 +41,7 @@ const UpcomingLessonsSection: React.FC = () => {
             <Grid container spacing={2}>
                 {lessons.length > 0 ? (
                     lessons.slice(0, 2).map((lesson) => (
-                        <Grid item xs={12} sm={6} md={4} key={lesson.id}>
+                        <Grid size={{ xs: 12, sm: 6, md:4 }} key={lesson.id}>
                             <NextLessonCard lesson={lesson} />
                         </Grid>
                     ))

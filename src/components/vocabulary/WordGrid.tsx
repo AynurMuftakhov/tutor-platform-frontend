@@ -78,7 +78,7 @@ const WordGrid: React.FC<WordGridProps> = ({
     return (
         <Grid container spacing={3}>
             {data.map((word) => (
-                <Grid item xs={12} sm={6} md={4} key={word.id} sx={{ px: 1 }}>
+                <Grid size={{ xs:12, sm: 6, md:4 }} key={word.id} sx={{ px: 1 }}>
                     <WordCard
                         word={word}
                         onDelete={!readOnly ? onDelete : undefined}

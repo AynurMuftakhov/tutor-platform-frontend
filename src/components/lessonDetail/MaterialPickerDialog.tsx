@@ -187,11 +187,12 @@ const MaterialPickerDialog: React.FC<MaterialPickerDialogProps> = ({
                 const alreadyLinked = isLinkedToLesson(material.id);
                 return (
                   <Grid
-                    item
-                    xs={12}
-                    sm={viewMode === 'list' ? 12 : 6}
-                    md={viewMode === 'list' ? 12 : 4}
-                    lg={viewMode === 'list' ? 12 : 3}
+                    size={{
+                      xs : 12,
+                      sm : viewMode === 'list' ? 12 : 6,
+                      md: viewMode === 'list' ? 12 : 4,
+                      lg: viewMode === 'list' ? 12 : 3
+                    }}
                     key={material.id}
                   >
                     <Box sx={{ position: 'relative' }}>

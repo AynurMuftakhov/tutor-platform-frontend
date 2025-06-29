@@ -23,7 +23,7 @@ const renderNodes = (nodes: MaterialFolderTree[]) =>
 const FolderTree: React.FC<FolderTreeProps> = ({ tree, selectedId, onSelect }) => (
     <TreeView
         selected={selectedId}
-        onNodeSelect={(_, id) => onSelect(id)}
+        onNodeSelect={(_: React.SyntheticEvent, id: string) => onSelect(id)}
         aria-label="Material folders"
         defaultCollapseIcon={<ExpandMoreIcon />}
         defaultExpandIcon={<ChevronRightIcon />}

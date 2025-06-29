@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, {useState, useRef, useEffect, JSX} from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -153,7 +153,7 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
   };
 
   // Recursive function to build folder options
-  const buildFolderOptions = (folders: MaterialFolderTree[], level = 0): React.ReactNode[] => {
+  const buildFolderOptions = (folders: MaterialFolderTree[], level = 0): JSX.Element[] => {
     return folders.flatMap((folder) => {
       const indent = '—'.repeat(level);
       const prefix = level > 0 ? `${indent} ` : '';
@@ -301,16 +301,13 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
             onInputChange={(event, value) => setTagInputValue(value)}
             loading={isLoadingTags}
             freeSolo
-            renderTags={(value, getTagProps) =>
-              value.map((option, index) => (
-                <Chip
-                  key={option}
-                  label={option}
-                  size="small"
-                  {...getTagProps({ index })}
-                />
-              ))
-            }
+            renderValue={(selected) => (
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                {selected.map((option, index) => (
+                  <Chip key={option} label={option} size="small" />
+                ))}
+              </Box>
+            )}
             renderInput={(params) => (
               <TextField
                 {...params}
