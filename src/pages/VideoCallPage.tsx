@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
     Box,
     Typography,
     Button,
     CircularProgress,
     IconButton,
+    Tooltip, Snackbar
 } from '@mui/material';
-import { LibraryBooks as LibraryBooksIcon } from '@mui/icons-material';
+import { LibraryBooks as LibraryBooksIcon} from '@mui/icons-material';
 import { LiveKitRoom, VideoConference, useRoomContext } from '@livekit/components-react';
 import '@livekit/components-styles';
 import { useAuth } from '../context/AuthContext';
@@ -15,7 +16,8 @@ import { fetchLiveKitToken } from '../services/api';
 import MaterialDrawer from '../components/lessonDetail/MaterialDrawer';
 import SyncedVideoPlayer from '../components/lessonDetail/SyncedVideoPlayer';
 import { useSyncedVideo } from '../hooks/useSyncedVideo';
-import VideocamIcon from "@mui/icons-material/Videocam";
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import DoneIcon from "@mui/icons-material/Done";
 
 interface VideoCallPageProps {
     identity?: string;
@@ -29,9 +31,18 @@ const VideoCallPage: React.FC<VideoCallPageProps> = (props) => {
     const navigate = useNavigate();
     const { user } = useAuth();
 
-    // identity & roomName come either from props (tests) or router state
-    const identity = props.identity || (location.state?.identity as string);
-    const roomName = props.roomName || (location.state?.roomName as string);
+    const [searchParams] = useSearchParams();
+
+    // Get identity and roomName from props, URL query parameters, or location state
+    const identity = props.identity ||
+        searchParams.get('identity') ||
+        (location.state?.identity as string);
+    const roomName = props.roomName ||
+        searchParams.get('roomName') ||
+        (location.state?.roomName as string);
+    const studentId = searchParams.get('studentId') ||
+        (location.state?.studentId as string);
+
     const lessonId = roomName?.startsWith('lesson-') ? roomName.slice(7) : roomName;
     const previousPath = location.state?.from || '/dashboard';
 
@@ -102,7 +113,7 @@ const VideoCallPage: React.FC<VideoCallPageProps> = (props) => {
             data-lk-theme="default"
             onDisconnected={handleLeave}
         >
-            <RoomContent onLeave={handleLeave} lessonId={lessonId} />
+            <RoomContent onLeave={handleLeave} lessonId={lessonId} studentId={studentId} />
         </LiveKitRoom>
     );
 };
@@ -113,13 +124,26 @@ const VideoCallPage: React.FC<VideoCallPageProps> = (props) => {
 const RoomContent: React.FC<{
     onLeave: () => void;
     lessonId: string;
-}> = ({ onLeave, lessonId }) => {
+    studentId?: string;
+}> = ({ onLeave, lessonId, studentId }) => {
     const { user } = useAuth();
     const room = useRoomContext(); // existing LiveKit room
     const [drawerOpen, setDrawerOpen] = useState(false);
+    const [copied, setIsCopied] = useState(false);
 
     // Hook that encapsulates all playback sync
     const syncedVideo = useSyncedVideo(room, user?.role === 'tutor');
+
+    const generateDirectLink = () => {
+        const baseUrl = window.location.origin;
+        return `${baseUrl}/video-call?identity=${studentId}&roomName=${room.name}`;
+    };
+
+    const handleCopyLink = () => {
+        navigator.clipboard.writeText(generateDirectLink());
+        setIsCopied(true);
+        setTimeout(() => setIsCopied(false), 3000); // reset after 3 seconds
+    };
 
     return (
         <Box
@@ -131,22 +155,58 @@ const RoomContent: React.FC<{
                 position: 'relative',
             }}
         >
-            {/* ---------- Material drawer trigger (tutor only) ------------- */}
+
+            {/* Copy Link Button - only visible for teachers */}
             {user?.role === 'tutor' && (
-                <IconButton
-                    onClick={() => setDrawerOpen(true)}
+                <Box
                     sx={{
                         position: 'absolute',
-                        top: 64,
+                        top: 120,
                         right: 8,
                         zIndex: 1000,
-                        bgcolor: 'background.paper',
-                        '&:hover': { bgcolor: 'white' },
+                        backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                        borderRadius: '50%',
+                        padding: '4px',
                     }}
-                    aria-label="Open lesson materials"
                 >
-                    <LibraryBooksIcon />
-                </IconButton>
+                    {!copied ? (
+                        <Tooltip title="Copy direct link to this video call">
+                            <IconButton
+                                onClick={handleCopyLink}
+                                color="primary"
+                                size="small"
+                            >
+                                <ContentCopyIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                    ) : (
+                        <Tooltip title="Copied!">
+                            <IconButton color="success" size="small">
+                                <DoneIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                    )}
+                </Box>
+            )}
+
+            {/* ---------- Material drawer trigger (tutor only) ------------- */}
+            {user?.role === 'tutor' && (
+                <Tooltip title="Open lesson materials">
+                    <IconButton
+                        onClick={() => setDrawerOpen(true)}
+                        sx={{
+                            position: 'absolute',
+                            top: 64,
+                            right: 8,
+                            zIndex: 1000,
+                            bgcolor: 'background.paper',
+                            '&:hover': { bgcolor: 'white' },
+                        }}
+                        aria-label="Open lesson materials"
+                    >
+                        <LibraryBooksIcon />
+                    </IconButton>
+                </Tooltip>
             )}
 
             {/* ---------- LiveKit's default UI ----------------------------- */}
