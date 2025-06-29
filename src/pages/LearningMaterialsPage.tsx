@@ -296,6 +296,7 @@ const LearningMaterialsPage: React.FC = () => {
           onAddFolder={handleAddFolder}
           onEditFolder={handleEditFolder}
           onDeleteFolder={handleDeleteFolder}
+          isPickerDialog={true}
       />
       {/* Main content */}
       <Box
@@ -303,7 +304,7 @@ const LearningMaterialsPage: React.FC = () => {
         sx={{
           flexGrow: 1,
           p: 3,
-          ml: { xs: 0, md: `${SIDEBAR_WIDTH}px` },
+          ml: { xs: 0 },
           overflow: 'auto',
           borderLeft: { xs: 'none', md: `1px solid ${theme.palette.divider}` },
           boxShadow: { xs: 'none', md: '-2px 0 5px rgba(0,0,0,0.02)' },

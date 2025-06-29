@@ -314,7 +314,7 @@ const MaterialCard: React.FC<MaterialCardProps> = ({
                   </Tooltip>
                 )}
 
-                {onEdit && (<Tooltip title="More options">
+                {(onEdit || onUnlink) && (<Tooltip title="More options">
                   <IconButton
                     size="small"
                     onClick={handleMenuOpen}

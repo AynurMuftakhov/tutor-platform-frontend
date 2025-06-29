@@ -30,9 +30,9 @@ import {
     Delete as DeleteIcon,
 } from '@mui/icons-material';
 import { MaterialFolderTree } from '../../types';
-import { drawerWidth } from '../../layout/MainLayout';
 
-const DRAWER_WIDTH = 220;
+const DRAWER_WIDTH = 280;
+const HEADER_HEIGHT = 65;
 
 export interface FolderSidebarProps {
     tree: MaterialFolderTree[];
@@ -41,6 +41,7 @@ export interface FolderSidebarProps {
     onAddFolder: () => void;
     onEditFolder?: (folder: MaterialFolderTree) => void;
     onDeleteFolder?: (folder: MaterialFolderTree) => void;
+    isPickerDialog?: boolean;
 }
 
 const RecursiveList: React.FC<{
@@ -191,11 +192,11 @@ const RecursiveList: React.FC<{
                                 />
 
                                 {/* Folder action buttons */}
-                                <Box 
+                                <Box
                                     className="folder-actions"
-                                    sx={{ 
-                                        display: 'flex', 
-                                        opacity: 0, 
+                                    sx={{
+                                        display: 'flex',
+                                        opacity: 0,
                                         transition: 'opacity 0.2s ease',
                                         ml: 'auto',
                                         mr: 0
@@ -206,7 +207,7 @@ const RecursiveList: React.FC<{
                                             <IconButton
                                                 size="small"
                                                 onClick={(e) => handleEditClick(e, n)}
-                                                sx={{ 
+                                                sx={{
                                                     p: 0.5,
                                                     color: 'action.active',
                                                     '&:hover': { color: 'primary.main' }
@@ -222,7 +223,7 @@ const RecursiveList: React.FC<{
                                             <IconButton
                                                 size="small"
                                                 onClick={(e) => handleDeleteClick(e, n)}
-                                                sx={{ 
+                                                sx={{
                                                     p: 0.5,
                                                     color: 'action.active',
                                                     '&:hover': { color: 'error.main' }
@@ -296,36 +297,33 @@ const RecursiveList: React.FC<{
     );
 };
 
-const FolderSidebar: React.FC<FolderSidebarProps> = ({
-                                                         tree,
-                                                         selectedId,
-                                                         onSelect,
-                                                         onAddFolder,
-                                                         onEditFolder,
-                                                         onDeleteFolder,
-                                                     }) => {
-    const theme = useTheme();
-    const root = tree[0];
-    const nodes = root?.children ?? tree;
+export const FolderSidebar: React.FC<FolderSidebarProps> = ({
+                                                                tree,
+                                                                selectedId,
+                                                                onSelect,
+                                                                onAddFolder,
+                                                                onEditFolder,
+                                                                onDeleteFolder,
+                                                                isPickerDialog = false,
+                                                            }) => {
+    const theme      = useTheme();
+    const root       = tree[0];
+    const nodes      = root?.children ?? tree;
+    const headerTop  = isPickerDialog ? 0 : HEADER_HEIGHT;
 
-    return (
-        <Drawer
-            variant="permanent"
-            PaperProps={{
-                elevation: 1,
-                sx: {
-                    ml: { xs: 0, md: `${drawerWidth}px` },
-                    width: DRAWER_WIDTH,
-                    bgcolor: theme.palette.background.default,
-                    borderRight: `1px solid ${theme.palette.divider}`,
-                    pt: 0,
-                    px: 1,
-                    zIndex: 1100,
-                    display: 'flex',
-                    flexDirection: 'column',
-                },
-            }}
-        >
+    /* Common container styles (Drawer.Paper or Box) */
+    const containerSx = {
+        width: DRAWER_WIDTH,
+        bgcolor: isPickerDialog?  theme.palette.background.paper : theme.palette.background.default,
+        borderRight: `1px solid ${theme.palette.divider}`,
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+    } as const;
+
+    /* Shared header + list markup */
+    const Content = (
+        <>
             {/* Sticky header */}
             <Box
                 sx={{
@@ -333,8 +331,8 @@ const FolderSidebar: React.FC<FolderSidebarProps> = ({
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     position: 'sticky',
-                    top: 64,
-                    bgcolor: theme.palette.background.default,
+                    top: headerTop,
+                    bgcolor: isPickerDialog?  theme.palette.background.paper : theme.palette.background.default,
                     py: 2,
                     px: 1,
                     zIndex: 1,
@@ -349,34 +347,34 @@ const FolderSidebar: React.FC<FolderSidebarProps> = ({
                 >
                     📁 Materials tree
                 </Typography>
-                <Tooltip title="Add folder">
+
+                {!isPickerDialog && (<Tooltip title="Add folder">
                     <IconButton
                         size="small"
                         onClick={onAddFolder}
                         sx={{
                             border: `1px solid ${alpha(theme.palette.primary.main, 0.5)}`,
-                            borderRadius: '4px',
+                            borderRadius: 1,
                             p: 0.5,
-                            '&:hover': {
-                                bgcolor: alpha(theme.palette.primary.main, 0.05),
-                            },
+                            '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.05) },
                         }}
                     >
                         <AddIcon fontSize="small" />
                     </IconButton>
                 </Tooltip>
+                )}
             </Box>
 
-            {/* Folder list */}
+            {/* Scrollable folder list */}
             <Box
                 sx={{
                     overflow: 'auto',
                     flexGrow: 1,
                     pt: 1,
-                    mt: '64px',
+                    mt: `${headerTop}px`,
                 }}
             >
-                {/* All Materials option */}
+                {/* “All materials” */}
                 <List disablePadding dense>
                     <ListItemButton
                         selected={selectedId === 'all'}
@@ -386,46 +384,69 @@ const FolderSidebar: React.FC<FolderSidebarProps> = ({
                             alignItems: 'center',
                             py: 1,
                             mb: 0.25,
-                            borderRadius: '6px',
-                            transition: 'all 0.2s ease',
-                            borderLeft: selectedId === 'all' ? (theme) => `3px solid ${theme.palette.primary.main}` : 'none',
-                            pl: selectedId === 'all' ? 2 - 3 : 2,
+                            borderRadius: 1,
+                            borderLeft:
+                                selectedId === 'all'
+                                    ? `3px solid ${theme.palette.primary.main}`
+                                    : 'none',
+                            pl: selectedId === 'all' ? 1.25 : 2,
                             '&.Mui-selected': {
-                                bgcolor: (theme) => alpha(theme.palette.primary.main, 0.08),
+                                bgcolor: alpha(theme.palette.primary.main, 0.08),
                             },
-                            '&:hover': {
-                                bgcolor: (theme) => alpha(theme.palette.primary.main, 0.06),
-                            },
+                            '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.06) },
                         }}
                     >
-                        <Box>
-                            <FolderOpenOutlined fontSize="small" />
-                        </Box>
+                        <FolderOpenOutlined fontSize="small" />
                         <ListItemText
+                            primary="All Materials"
                             primaryTypographyProps={{
                                 variant: 'body2',
                                 ml: 1,
                                 sx: {
                                     fontSize: '0.85rem',
                                     fontWeight: selectedId === 'all' ? 600 : 400,
-                                    color: selectedId === 'all'
-                                        ? 'primary.main'
-                                        : 'text.secondary',
+                                    color:
+                                        selectedId === 'all'
+                                            ? 'primary.main'
+                                            : 'text.secondary',
                                 },
                             }}
-                            primary="All Materials"
                         />
                     </ListItemButton>
                 </List>
 
-                <RecursiveList 
-                    nodes={nodes} 
-                    selectedId={selectedId} 
+                {/* Recursive folder tree */}
+                <RecursiveList
+                    nodes={nodes}
+                    selectedId={selectedId}
                     onSelect={onSelect}
                     onEditFolder={onEditFolder}
                     onDeleteFolder={onDeleteFolder}
                 />
             </Box>
+        </>
+    );
+
+    /* Render variant */
+    return isPickerDialog ? (
+        /* Inside a dialog → just a Box */
+        <Box sx={containerSx}>{Content}</Box>
+    ) : (
+        /* Normal page → permanent Drawer */
+        <Drawer
+            variant="permanent"
+            PaperProps={{
+                elevation: 1,
+                sx: {
+                    ml: { xs: 0, md: `${DRAWER_WIDTH}px` }, // keep your original offset
+                    pt: 0,
+                    px: 1,
+                    zIndex: 1100,
+                    ...containerSx,
+                },
+            }}
+        >
+            {Content}
         </Drawer>
     );
 };

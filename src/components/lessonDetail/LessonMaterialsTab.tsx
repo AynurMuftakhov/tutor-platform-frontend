@@ -42,6 +42,7 @@ const LessonMaterialsTab: React.FC<LessonMaterialsTabProps> = ({ lessonId, isTea
   // Handle closing the material picker
   const handleClosePicker = () => {
     setIsPickerOpen(false);
+    queryClient.invalidateQueries(['lessonMaterials', lessonId]);
   };
 
   // Handle play button click

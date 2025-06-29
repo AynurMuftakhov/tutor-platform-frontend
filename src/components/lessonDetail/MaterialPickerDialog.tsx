@@ -14,8 +14,10 @@ import {
 import { Close as CloseIcon } from '@mui/icons-material';
 import MaterialCard, { Material } from '../materials/MaterialCard';
 import MaterialsToolbar, { MaterialType, ViewMode } from '../materials/MaterialsToolbar';
-import { useMaterials } from '../../hooks/useMaterials';
+import { useMaterials, useFolderTree } from '../../hooks/useMaterials';
 import { useLinkMaterialToLesson, useLessonMaterials } from '../../hooks/useLessonMaterials';
+import FolderSidebar, { SIDEBAR_WIDTH } from '../folders/FolderSidebar';
+import { ROOT_FOLDER_ID } from '../folders/FolderTree';
 
 interface MaterialPickerDialogProps {
   lessonId: string;
@@ -28,21 +30,27 @@ const MaterialPickerDialog: React.FC<MaterialPickerDialogProps> = ({
   open,
   onClose,
 }) => {
+  const theme = useTheme();
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedType, setSelectedType] = useState<MaterialType>('all');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [selectedFolderId, setSelectedFolderId] = useState<string>(ROOT_FOLDER_ID);
+
+  // Fetch folder tree
+  const { data: folderTree = [], isLoading: foldersLoading } = useFolderTree();
 
   // Fetch materials
   const { data: materialsData = { content: [] }, isLoading: materialsLoading } = useMaterials({
+    folderId: selectedFolderId === ROOT_FOLDER_ID || selectedFolderId === 'all' ? undefined : selectedFolderId,
     search: searchTerm,
     type: selectedType === 'all' ? undefined : selectedType,
     tags: selectedTags.length > 0 ? selectedTags : undefined,
   });
 
   // Fetch lesson materials to check which ones are already linked
-  const { data: lessonMaterials = [] } = useLessonMaterials(lessonId);
-  
+  const { data: lessonMaterials = [], refetch: refetchLessonMaterials } = useLessonMaterials(lessonId);
+
   // Link material mutation
   const linkMutation = useLinkMaterialToLesson();
 
@@ -69,9 +77,24 @@ const MaterialPickerDialog: React.FC<MaterialPickerDialogProps> = ({
     setSelectedTags(tags);
   };
 
+  // Handle tags change
+  const handleAddMaterial = () => {
+    console.log('Add material');
+  };
+
   // Handle view mode change
   const handleViewModeChange = (mode: ViewMode) => {
     setViewMode(mode);
+  };
+
+  // Handle folder selection
+  const handleFolderSelect = (folderId: string) => {
+    setSelectedFolderId(folderId);
+  };
+
+  // Handle add folder
+  const handleAddFolder = () => {
+    console.log('Add folder');
   };
 
   // Handle assign button click
@@ -80,7 +103,7 @@ const MaterialPickerDialog: React.FC<MaterialPickerDialogProps> = ({
       { lessonId, materialId: material.id },
       {
         onSuccess: () => {
-          // Do nothing, the query will be invalidated automatically
+          refetchLessonMaterials();
         },
         onError: (error) => {
           console.error('Failed to link material to lesson', error);
@@ -104,6 +127,14 @@ const MaterialPickerDialog: React.FC<MaterialPickerDialogProps> = ({
       onClose={onClose}
       maxWidth="lg"
       fullWidth
+      PaperProps={{
+        sx: {
+          height: '80vh',
+          maxHeight: '900px',
+          display: 'flex',
+          flexDirection: 'column',
+        }
+      }}
     >
       <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Typography variant="h6">Add Materials from Library</Typography>
@@ -111,70 +142,90 @@ const MaterialPickerDialog: React.FC<MaterialPickerDialogProps> = ({
           <CloseIcon />
         </IconButton>
       </DialogTitle>
-      <DialogContent>
-        <MaterialsToolbar
-          searchTerm={searchTerm}
-          onSearchChange={handleSearchChange}
-          viewMode={viewMode}
-          onViewModeChange={handleViewModeChange}
-          selectedType={selectedType}
-          onTypeChange={handleTypeChange}
-          selectedTags={selectedTags}
-          onTagsChange={handleTagsChange}
-          hideAddButton
-        />
-
-        {/* Materials content */}
-        {materialsLoading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+      <DialogContent sx={{ display: 'flex', p: 0, overflow: 'hidden' }}>
+        {/* Folder Sidebar */}
+        {foldersLoading ? (
+          <Box sx={{ width: SIDEBAR_WIDTH, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
             <CircularProgress />
           </Box>
-        ) : materials.length === 0 ? (
-          <EmptyState />
         ) : (
-          <Grid container spacing={2}>
-            {materials.map((material: Material) => {
-              const alreadyLinked = isLinkedToLesson(material.id);
-              return (
-                <Grid
-                  item
-                  xs={12}
-                  sm={viewMode === 'list' ? 12 : 6}
-                  md={viewMode === 'list' ? 12 : 4}
-                  lg={viewMode === 'list' ? 12 : 3}
-                  key={material.id}
-                >
-                  <Box sx={{ position: 'relative' }}>
-                    <MaterialCard
-                      material={material}
-                      viewMode={viewMode}
-                    />
-                    <Button
-                      variant="contained"
-                      color="primary"
-                      size="small"
-                      disabled={alreadyLinked}
-                      sx={{ 
-                        position: 'absolute', 
-                        bottom: 16, 
-                        right: 16,
-                        zIndex: 1,
-                        '&:hover': {
-                          transform: 'translateY(-2px)',
-                          boxShadow: 2
-                        },
-                        opacity: alreadyLinked ? 0.5 : 1,
-                      }}
-                      onClick={() => handleAssign(material)}
-                    >
-                      {alreadyLinked ? 'Already Linked' : 'Assign'}
-                    </Button>
-                  </Box>
-                </Grid>
-              );
-            })}
-          </Grid>
+          <Box sx={{ width: SIDEBAR_WIDTH, borderRight: `1px solid ${theme.palette.divider}` }}>
+            <FolderSidebar
+              tree={folderTree}
+              selectedId={selectedFolderId}
+              onSelect={handleFolderSelect}
+              onAddFolder={handleAddFolder}
+              isPickerDialog={true}
+            />
+          </Box>
         )}
+
+        {/* Main Content */}
+        <Box sx={{ flexGrow: 1, p: 3, overflow: 'auto' }}>
+          <MaterialsToolbar
+            searchTerm={searchTerm}
+            onSearchChange={handleSearchChange}
+            viewMode={viewMode}
+            onViewModeChange={handleViewModeChange}
+            selectedType={selectedType}
+            onTypeChange={handleTypeChange}
+            selectedTags={selectedTags}
+            onTagsChange={handleTagsChange}
+            onAddMaterial={handleAddMaterial}
+          />
+
+          {/* Materials content */}
+          {materialsLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+              <CircularProgress />
+            </Box>
+          ) : materials.length === 0 ? (
+            <EmptyState />
+          ) : (
+            <Grid container spacing={2}>
+              {materials.map((material: Material) => {
+                const alreadyLinked = isLinkedToLesson(material.id);
+                return (
+                  <Grid
+                    item
+                    xs={12}
+                    sm={viewMode === 'list' ? 12 : 6}
+                    md={viewMode === 'list' ? 12 : 4}
+                    lg={viewMode === 'list' ? 12 : 3}
+                    key={material.id}
+                  >
+                    <Box sx={{ position: 'relative' }}>
+                      <MaterialCard
+                        material={material}
+                        viewMode={viewMode}
+                      />
+                      <Button
+                        variant="contained"
+                        color="primary"
+                        size="small"
+                        disabled={alreadyLinked}
+                        sx={{ 
+                          position: 'absolute', 
+                          bottom: 16, 
+                          right: 16,
+                          zIndex: 1,
+                          '&:hover': {
+                            transform: 'translateY(-2px)',
+                            boxShadow: 2
+                          },
+                          opacity: alreadyLinked ? 0.5 : 1,
+                        }}
+                        onClick={() => handleAssign(material)}
+                      >
+                        {alreadyLinked ? 'Already Linked' : 'Assign'}
+                      </Button>
+                    </Box>
+                  </Grid>
+                );
+              })}
+            </Grid>
+          )}
+        </Box>
       </DialogContent>
     </Dialog>
   );

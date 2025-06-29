@@ -159,29 +159,45 @@ const ListeningTaskManager: React.FC<ListeningTaskManagerProps> = ({
 
     if (isEditingTask && currentTask.id) {
       // Update existing task
-      updateTask.mutate({
-        materialId: material.id,
-        taskId: currentTask.id,
-        taskData: {
-          title: currentTask.title || undefined,
-          startSec: currentTask.startSec,
-          endSec: currentTask.endSec,
-          wordLimit: currentTask.wordLimit,
-          timeLimitSec: currentTask.timeLimitSec
+      updateTask.mutate(
+        {
+          materialId: material.id,
+          taskId: currentTask.id,
+          taskData: {
+            title: currentTask.title || undefined,
+            startSec: currentTask.startSec,
+            endSec: currentTask.endSec,
+            wordLimit: currentTask.wordLimit,
+            timeLimitSec: currentTask.timeLimitSec
+          }
+        },
+        {
+          onSuccess: () => {
+            // Call the onTaskChange callback if provided
+            if (onTaskChange) onTaskChange();
+          }
         }
-      });
+      );
     } else {
       // Create new task
-      createTask.mutate({
-        materialId: material.id,
-        taskData: {
-          title: currentTask.title || undefined,
-          startSec: currentTask.startSec,
-          endSec: currentTask.endSec,
-          wordLimit: currentTask.wordLimit,
-          timeLimitSec: currentTask.timeLimitSec
+      createTask.mutate(
+        {
+          materialId: material.id,
+          taskData: {
+            title: currentTask.title || undefined,
+            startSec: currentTask.startSec,
+            endSec: currentTask.endSec,
+            wordLimit: currentTask.wordLimit,
+            timeLimitSec: currentTask.timeLimitSec
+          }
+        },
+        {
+          onSuccess: () => {
+            // Call the onTaskChange callback if provided
+            if (onTaskChange) onTaskChange();
+          }
         }
-      });
+      );
     }
 
     // Close the form
