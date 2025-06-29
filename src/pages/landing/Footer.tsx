@@ -21,7 +21,7 @@ const Footer: React.FC = () => {
     >
       <Container maxWidth="lg">
         <Grid container spacing={4}>
-          <Grid item xs={12} md={4}>
+          <Grid size={{xs:12, md:4}}>
             <Box sx={{ mb: 2 }}>
               <Typography
                 variant="h4"
@@ -41,11 +41,11 @@ const Footer: React.FC = () => {
             </Box>
           </Grid>
 
-          <Grid item xs={12} sm={6} md={4}>
+          <Grid size={{xs:12, md:4, sm:6}}>
 
           </Grid>
 
-          <Grid item xs={12} sm={6} md={4}>
+          <Grid  size={{xs:12, md:4, sm:6}}>
             <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
               Connect With Us
             </Typography>

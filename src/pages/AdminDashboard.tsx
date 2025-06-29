@@ -31,7 +31,7 @@ const AdminDashboard: React.FC = () => {
                 Dashboard
             </Typography>
             <Grid container spacing={3}>
-                <Grid item xs={12} sm={6} md={3}>
+                <Grid size={{xs:12, md:4, sm:6}}>
                     <Card>
                         <CardContent>
                             <Typography variant="h5">Total Users</Typography>
@@ -39,7 +39,7 @@ const AdminDashboard: React.FC = () => {
                         </CardContent>
                     </Card>
                 </Grid>
-                <Grid item xs={12} sm={6} md={3}>
+                <Grid size={{xs:12, md:4, sm:6}}>
                     <Card>
                         <CardContent>
                             <Typography variant="h5">Admins</Typography>
@@ -47,7 +47,7 @@ const AdminDashboard: React.FC = () => {
                         </CardContent>
                     </Card>
                 </Grid>
-                <Grid item xs={12} sm={6} md={3}>
+                <Grid size={{xs:12, md:4, sm:6}}>
                     <Card>
                         <CardContent>
                             <Typography variant="h5">Teachers</Typography>
@@ -55,7 +55,7 @@ const AdminDashboard: React.FC = () => {
                         </CardContent>
                     </Card>
                 </Grid>
-                <Grid item xs={12} sm={6} md={3}>
+                <Grid size={{xs:12, md:4, sm:6}}>
                     <Card>
                         <CardContent>
                             <Typography variant="h5">Students</Typography>

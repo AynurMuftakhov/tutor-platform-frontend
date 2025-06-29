@@ -81,7 +81,7 @@ const PostLessonNotes: React.FC<Props> = ({ lesson, isTeacher, onUpdated }) => {
                 <Box sx={{ minHeight: "280px" }}>
                     {editing ? (
                         <Grid container spacing={2}>
-                            <Grid item xs={12} sm={6}>
+                            <Grid size={{ xs:12, sm:6 }}>
                                 <TextField
                                     label="Tutor's Notes"
                                     multiline
@@ -91,7 +91,7 @@ const PostLessonNotes: React.FC<Props> = ({ lesson, isTeacher, onUpdated }) => {
                                     onChange={(e) => handleChange("notes", e.target.value)}
                                 />
                             </Grid>
-                            <Grid item xs={12} sm={6}>
+                            <Grid size={{ xs:12, sm:6 }}>
                                 <TextField
                                     label="Student Performance"
                                     multiline
@@ -101,7 +101,7 @@ const PostLessonNotes: React.FC<Props> = ({ lesson, isTeacher, onUpdated }) => {
                                     onChange={(e) => handleChange("studentPerformance", e.target.value)}
                                 />
                             </Grid>
-                            <Grid item xs={12}>
+                            <Grid size={{ xs:12 }}>
                                 <FormControl fullWidth>
                                     <InputLabel>Lesson Satisfaction</InputLabel>
                                     <Select
@@ -119,7 +119,7 @@ const PostLessonNotes: React.FC<Props> = ({ lesson, isTeacher, onUpdated }) => {
                                     </Select>
                                 </FormControl>
                             </Grid>
-                            <Grid item xs={12}>
+                            <Grid size={{ xs:12 }}>
                                 <Stack direction="row" spacing={2}>
                                     <Button
                                         variant="contained"
@@ -141,15 +141,15 @@ const PostLessonNotes: React.FC<Props> = ({ lesson, isTeacher, onUpdated }) => {
                         </Grid>
                     ) : (
                         <Grid container spacing={2}>
-                            <Grid item xs={12} sm={6}>
+                            <Grid size={{ xs:12, sm:6 }}>
                                 <Typography variant="subtitle2" gutterBottom>
-                                    Tutor's Notes
+                                    Tutor Notes
                                 </Typography>
                                 <Paper variant="outlined" sx={{ p: 2 }}>
                                     <Typography>{values.notes || "No notes provided."}</Typography>
                                 </Paper>
                             </Grid>
-                            <Grid item xs={12} sm={6}>
+                            <Grid size={{ xs:12, sm:6 }}>
                                 <Typography variant="subtitle2" gutterBottom>
                                     Student Performance
                                 </Typography>
@@ -157,7 +157,7 @@ const PostLessonNotes: React.FC<Props> = ({ lesson, isTeacher, onUpdated }) => {
                                     <Typography>{values.studentPerformance || "No performance info recorded."}</Typography>
                                 </Paper>
                             </Grid>
-                            <Grid item xs={12}>
+                            <Grid size={{ xs:12, sm:6 }}>
                                 <Typography variant="subtitle2" gutterBottom>
                                     Lesson Satisfaction
                                 </Typography>
