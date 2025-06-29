@@ -350,6 +350,11 @@ export const updateMaterialFolder = async (id: string, folderData: { name: strin
   return response.data;
 };
 
+export const deleteMaterialFolder = async (id: string) => {
+  const response = await api.delete(`/lessons-service/api/material-folders/${id}`);
+  return response.data;
+};
+
 export const getMaterials = async (params: {
   folderId?: string;
   page?: number;

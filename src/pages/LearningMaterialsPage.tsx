@@ -25,7 +25,7 @@ import MoveToFolderModal from '../components/materials/MoveToFolderModal';
 import { useFolderTree, useMaterials } from '../hooks/useMaterials';
 import StandaloneMediaPlayer from '../components/lessonDetail/StandaloneMediaPlayer';
 import { extractVideoId } from '../utils/videoUtils';
-import { deleteMaterial } from '../services/api';
+import { deleteMaterial, updateMaterialFolder, deleteMaterialFolder } from '../services/api';
 
 const LearningMaterialsPage: React.FC = () => {
   const theme = useTheme();
@@ -61,7 +61,7 @@ const LearningMaterialsPage: React.FC = () => {
   // Fetch data using React Query
   const { data: folderTree = [], isLoading: foldersLoading } = useFolderTree();
   const { data: materialsData = { content: [] }, isLoading: materialsLoading } = useMaterials({
-    folderId: selectedFolderId === ROOT_FOLDER_ID ? undefined : selectedFolderId,
+    folderId: selectedFolderId === ROOT_FOLDER_ID || selectedFolderId === 'all' ? undefined : selectedFolderId,
     search: searchTerm,
     type: selectedType === 'all' ? undefined : selectedType,
     tags: selectedTags.length > 0 ? selectedTags : undefined,
@@ -74,7 +74,7 @@ const LearningMaterialsPage: React.FC = () => {
   useEffect(() => {
     const params: Record<string, string> = {};
 
-    if (selectedFolderId !== ROOT_FOLDER_ID) {
+    if (selectedFolderId !== ROOT_FOLDER_ID && selectedFolderId !== 'all') {
       params.folder = selectedFolderId;
     }
 
@@ -152,6 +152,32 @@ const LearningMaterialsPage: React.FC = () => {
     setIsAddFolderModalOpen(true);
   };
 
+  // Handle edit folder
+  const handleEditFolder = async (folder: any) => {
+    try {
+      await updateMaterialFolder(folder.id, { name: folder.name });
+      // Invalidate folder tree query to refresh the list
+      await queryClient.invalidateQueries({ queryKey: ['materialFolderTree'] });
+    } catch (error) {
+      console.error('Failed to update folder', error);
+    }
+  };
+
+  // Handle delete folder
+  const handleDeleteFolder = async (folder: any) => {
+    try {
+      await deleteMaterialFolder(folder.id);
+      // Invalidate folder tree query to refresh the list
+      await queryClient.invalidateQueries({ queryKey: ['materialFolderTree'] });
+      // If the deleted folder was selected, select the root folder
+      if (selectedFolderId === folder.id) {
+        setSelectedFolderId(ROOT_FOLDER_ID);
+      }
+    } catch (error) {
+      console.error('Failed to delete folder', error);
+    }
+  };
+
   // Handle add material
   const handleAddMaterial = () => {
     setMaterialToEdit(null);
@@ -190,7 +216,7 @@ const LearningMaterialsPage: React.FC = () => {
     if (newMaterial) {
       await queryClient.setQueryData(
         ['materials', {
-          folderId: selectedFolderId === ROOT_FOLDER_ID ? undefined : selectedFolderId,
+          folderId: selectedFolderId === ROOT_FOLDER_ID || selectedFolderId === 'all' ? undefined : selectedFolderId,
           search: searchTerm,
           type: selectedType === 'all' ? undefined : selectedType,
           tags: selectedTags.length > 0 ? selectedTags : undefined,
@@ -234,10 +260,12 @@ const LearningMaterialsPage: React.FC = () => {
         }}
       />
       <Typography variant="h6" gutterBottom>
-        No materials in this folder
+        {selectedFolderId === 'all' ? 'No materials found' : 'No materials in this folder'}
       </Typography>
       <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
-        Drag & drop or click to add material to this folder.
+        {selectedFolderId === 'all' 
+          ? 'Click to add your first material.'
+          : 'Drag & drop or click to add material to this folder.'}
       </Typography>
       <Button
         variant="contained"
@@ -266,6 +294,8 @@ const LearningMaterialsPage: React.FC = () => {
           selectedId={selectedFolderId}
           onSelect={handleFolderSelect}
           onAddFolder={handleAddFolder}
+          onEditFolder={handleEditFolder}
+          onDeleteFolder={handleDeleteFolder}
       />
       {/* Main content */}
       <Box
@@ -338,7 +368,7 @@ const LearningMaterialsPage: React.FC = () => {
         open={isAddMaterialModalOpen}
         onClose={() => setIsAddMaterialModalOpen(false)}
         onMaterialCreated={handleMaterialCreated}
-        currentFolderId={selectedFolderId}
+        currentFolderId={selectedFolderId === 'all' ? '' : selectedFolderId}
         onOpenTaskManager={handleManageTasks}
         materialToEdit={materialToEdit}
       />

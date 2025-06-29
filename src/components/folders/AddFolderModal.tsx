@@ -34,32 +34,32 @@ const AddFolderModal: React.FC<AddFolderModalProps> = ({
   const [name, setName] = useState('');
   const [parentId, setParentId] = useState(currentFolderId || ROOT_FOLDER_ID);
   const [nameError, setNameError] = useState('');
-  
+
   const createFolder = useCreateFolder();
-  
+
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setName(e.target.value);
     if (e.target.value.trim()) {
       setNameError('');
     }
   };
-  
+
   const handleParentChange = (e: React.ChangeEvent<{ value: unknown }>) => {
     setParentId(e.target.value as string);
   };
-  
+
   const handleSubmit = async () => {
     if (!name.trim()) {
       setNameError('Folder name is required');
       return;
     }
-    
+
     try {
       await createFolder.mutateAsync({
         name: name.trim(),
-        parentId: parentId === ROOT_FOLDER_ID ? undefined : parentId,
+        parentId: parentId,
       });
-      
+
       // Reset form and close modal
       setName('');
       setNameError('');
@@ -68,33 +68,33 @@ const AddFolderModal: React.FC<AddFolderModalProps> = ({
       console.error('Failed to create folder:', error);
     }
   };
-  
+
   const handleClose = () => {
     setName('');
     setNameError('');
     onClose();
   };
-  
+
   // Recursive function to build folder options
   const buildFolderOptions = (folders: MaterialFolderTree[], level = 0): React.ReactNode[] => {
     return folders.flatMap((folder) => {
       const indent = '—'.repeat(level);
       const prefix = level > 0 ? `${indent} ` : '';
-      
+
       const options = [
         <MenuItem key={folder.id} value={folder.id}>
           {prefix}{folder.name}
         </MenuItem>
       ];
-      
+
       if (folder.children && folder.children.length > 0) {
         options.push(...buildFolderOptions(folder.children, level + 1));
       }
-      
+
       return options;
     });
   };
-  
+
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
       <DialogTitle>Add New Folder</DialogTitle>
@@ -111,7 +111,7 @@ const AddFolderModal: React.FC<AddFolderModalProps> = ({
             helperText={nameError}
             sx={{ mb: 2 }}
           />
-          
+
           <FormControl fullWidth error={false}>
             <InputLabel id="parent-folder-label">Parent Folder</InputLabel>
             <Select
