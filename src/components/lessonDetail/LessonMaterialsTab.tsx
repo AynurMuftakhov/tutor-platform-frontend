@@ -170,12 +170,6 @@ const LessonMaterialsTab: React.FC<LessonMaterialsTabProps> = ({ lessonId, isTea
         <Grid container spacing={2}>
           {lessonMaterials.map((lessonMaterial: any) => (
             <Grid
-              size={{
-                  xs : 12,
-                  sm : 6,
-                  md : 4,
-                  lg : 3,
-              }}
               key={lessonMaterial.id}
             >
               <MaterialCard 

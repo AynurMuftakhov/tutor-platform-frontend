@@ -25,7 +25,13 @@ const DraggableDivider: React.FC<DraggableDividerProps> = ({
     setIsDragging(true);
   };
 
-  // Handle mouse move to calculate new ratio
+  // Handle touch start to start dragging on touch devices
+  const handleTouchStart = (e: React.TouchEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  // Handle mouse/touch move to calculate new ratio
   useEffect(() => {
     if (!isDragging) return;
 
@@ -53,19 +59,55 @@ const DraggableDivider: React.FC<DraggableDividerProps> = ({
       }
     };
 
-    // Handle mouse up to stop dragging
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length > 0) {
+        const containerWidth = window.innerWidth;
+        const newLeftWidth = e.touches[0].clientX;
+
+        // Calculate percentage (0-100)
+        let newRatio = (newLeftWidth / containerWidth) * 100;
+
+        // Enforce min width in pixels
+        const minRatio = (minLeftWidth / containerWidth) * 100;
+        if (newRatio < minRatio) newRatio = minRatio;
+
+        // Enforce max width as percentage
+        if (newRatio > maxLeftWidth) newRatio = maxLeftWidth;
+
+        // Call the onDrag callback with the new ratio
+        onDrag(newRatio);
+
+        // Update grid template columns directly
+        const wrapper = document.querySelector('[style*="grid-template-columns"]') as HTMLElement;
+        if (wrapper) {
+          wrapper.style.gridTemplateColumns = `${newRatio}% 6px 1fr`;
+        }
+      }
+    };
+
+    // Handle mouse/touch up to stop dragging
     const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    const handleTouchEnd = () => {
       setIsDragging(false);
     };
 
     // Add event listeners
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('touchmove', handleTouchMove, { passive: false });
+    document.addEventListener('touchend', handleTouchEnd);
+    document.addEventListener('touchcancel', handleTouchEnd);
 
     // Clean up event listeners
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('touchmove', handleTouchMove);
+      document.removeEventListener('touchend', handleTouchEnd);
+      document.removeEventListener('touchcancel', handleTouchEnd);
     };
   }, [isDragging, onDrag, minLeftWidth, maxLeftWidth]);
 
@@ -86,6 +128,7 @@ const DraggableDivider: React.FC<DraggableDividerProps> = ({
         zIndex: 10,
       }}
       onMouseDown={handleMouseDown}
+      onTouchStart={handleTouchStart}
     >
       <Box
         sx={{

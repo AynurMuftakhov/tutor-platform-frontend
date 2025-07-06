@@ -26,6 +26,7 @@ const WorkZone: React.FC<WorkZoneProps> = ({useSyncedVideo, onClose, lessonId })
   const { state } = useSyncedVideo;
   const { currentTool, setCurrentTool } = useWorkspace();
   const { user } = useAuth();
+  const isTutor = user?.role === 'tutor';
 
   // Set default tool to 'video' if a material is open, otherwise 'materials'
   useEffect(() => {
@@ -128,9 +129,11 @@ const WorkZone: React.FC<WorkZoneProps> = ({useSyncedVideo, onClose, lessonId })
                 ? state.material.title || 'Learning Material' 
                 : 'Workspace'}
           </Typography>
-          <IconButton onClick={onClose} edge="end" aria-label="close workspace">
-            <CloseIcon />
-          </IconButton>
+            {isTutor && (
+                <IconButton onClick={onClose} edge="end" aria-label="close workspace">
+                    <CloseIcon />
+                </IconButton>
+            )}
         </Box>
 
         {/* Tool content */}

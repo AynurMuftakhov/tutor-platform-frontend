@@ -21,6 +21,8 @@ import { WorkspaceProvider } from '../context/WorkspaceContext';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DoneIcon from "@mui/icons-material/Done";
 import { LibraryBooks as LibraryBooksIcon } from '@mui/icons-material';
+import { useTheme } from '@mui/material/styles';
+import useMediaQuery from '@mui/material/useMediaQuery';
 
 interface VideoCallPageProps {
     identity?: string;
@@ -139,6 +141,9 @@ const RoomContent: React.FC<{
     const syncedVideo = useSyncedVideo(room, user?.role === 'tutor', workspaceOpen, openWorkspace);
 
     const isTutor = user?.role === 'tutor';
+    const theme = useTheme();
+    const isSmallScreen = useMediaQuery(theme.breakpoints.down('sm'));
+
     useWorkspaceSync(room, isTutor, workspaceOpen, openWorkspace, closeWorkspace);
 
     const generateDirectLink = () => {
@@ -165,9 +170,9 @@ const RoomContent: React.FC<{
             <Box
                 sx={{
                     display: 'grid',
-                    gridTemplateColumns: workspaceOpen ? `${splitRatio}% 6px 1fr` : '100%',
+                    gridTemplateColumns: !workspaceOpen || isSmallScreen ? '100%' : `${splitRatio}% 6px 1fr`,
                     gridTemplateRows: '100%',
-                    height: '100vh',
+                    height: '100%',
                     overflow: 'hidden',
                     position: 'relative',
                 }}
@@ -177,9 +182,9 @@ const RoomContent: React.FC<{
                     <Box
                         sx={{
                             position: 'absolute',
-                            top: workspaceOpen ? 8 : 120,
-                            right: workspaceOpen ? 'auto' : 8,
-                            left: workspaceOpen ? 8 : 'auto',
+                            top: 8,
+                            right: 'auto',
+                            left: 8,
                             zIndex: 1000,
                             backgroundColor: 'rgba(255, 255, 255, 0.8)',
                             borderRadius: '50%',
@@ -207,14 +212,15 @@ const RoomContent: React.FC<{
                 )}
 
                 {/* ---------- Button to open workspace (always visible when workspace is closed) */}
-                {!workspaceOpen && (
+                {!workspaceOpen && isTutor && (
                     <Tooltip title="Open materials">
                         <IconButton
                             onClick={openWorkspace}
                             sx={{
                                 position: 'absolute',
                                 top: 64,
-                                right: 8,
+                                left: 8,
+                                right: 'auto',
                                 zIndex: 1000,
                                 bgcolor: 'primary.main',
                                 color: 'white',
