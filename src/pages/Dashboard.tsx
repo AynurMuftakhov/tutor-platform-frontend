@@ -148,7 +148,9 @@ const Dashboard = () => {
                 bgcolor: '#fafbfd',
                 minHeight: '100dvh',
                 width: '100%',
-                overflowX: 'hidden'
+                overflowX: 'hidden',
+                overflow: 'hidden',
+                position: 'fixed',
             }}
         >
             {/* Header Section with Greeting */}

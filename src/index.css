@@ -24,3 +24,15 @@ code {
   display: flex;
   flex-direction: column;
 }
+
+[data-lk-theme='default'] {
+  --lk-bg: #ffffff;
+  --lk-bg-secondary: #f4f7fb;
+  --lk-bg-tertiary: #f8fafc;
+  --lk-fg: #222;
+  --lk-fg-secondary: #555;
+  --lk-accent-bg: #1976d2;          /* MUI primary.main */
+  --lk-accent-fg: #ffffff;
+  --lk-control-bg: var(--lk-bg-secondary);
+  --lk-control-fg: var(--lk-fg);
+}

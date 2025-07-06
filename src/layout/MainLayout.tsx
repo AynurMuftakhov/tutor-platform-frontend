@@ -1,14 +1,12 @@
 import React, { useState, useEffect } from "react";
-import axios from "axios";
 import {
     AppBar, Avatar, Badge, Box, Button, CssBaseline, Dialog, DialogActions, DialogContent,
     DialogTitle, Drawer, IconButton, List, ListItem, ListItemButton, Tooltip,
-    ListItemIcon, ListItemText, Menu, MenuItem, MenuList, Toolbar, Typography, useTheme, alpha
+    ListItemIcon, ListItemText, Menu, MenuItem, MenuList, Toolbar, Typography, useTheme, alpha, GlobalStyles
 } from "@mui/material";
 
 import {
     markNotificationAsRead,
-    deleteNotificationById,
     markAllNotificationsAsRead,
     clearAllNotifications,
     fetchNotifications, getCurrentLesson
@@ -25,6 +23,7 @@ import CheckIcon from "@mui/icons-material/Check";
 import SchoolIcon from "@mui/icons-material/School";
 import BookIcon from "@mui/icons-material/Book";
 import { motion } from "framer-motion";
+import useMediaQuery from '@mui/material/useMediaQuery';
 
 import { useAuth } from "../context/AuthContext";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -138,6 +137,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     }, []);
 
     const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
     const drawer = (
         <Box
@@ -337,9 +337,9 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return (
         <>
             <NotificationToasterWrapper/>
-            <Box sx={{ display: "flex", flexDirection: "row", width: "100%", overflowX: "hidden" }}>
+            <GlobalStyles styles={{ body: { overflow: 'hidden' } }} />
+            <Box sx={{  display: 'flex', width: '100%', height: '100dvh', overflow: 'hidden' }}>
                 <CssBaseline />
-
                 <AppBar
                     position="fixed"
                     elevation={0}
@@ -531,7 +531,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                                                     No notifications
                                                 </Typography>
                                                 <Typography variant="body2">
-                                                    You're all caught up!
+                                                    You are all caught up!
                                                 </Typography>
                                             </Box>
                                         )}
@@ -753,12 +753,13 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                     component="main"
                     sx={{
                         flexGrow: 1,
+                        display: "flex",
+                        flexDirection: "column",
                         minWidth: 0,
-                        mt: 8,
+                        minHeight: 0,
+                        pt: isMobile ? `${theme.mixins.toolbar.minHeight}px` : '64px',
                         background: `linear-gradient(180deg, ${alpha(theme.palette.background.default, 0.8)} 0%, ${alpha(theme.palette.background.default, 1)} 100%)`,
-                        minHeight: '100dvh',
                         position: 'relative',
-                        overflow: 'hidden',
                         '&::before': {
                             content: '""',
                             position: 'absolute',
@@ -841,7 +842,9 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                         transition={{ duration: 0.5 }}
                         sx={{
                             position: 'relative',
-                            zIndex: 1
+                            zIndex: 1,
+                            flexGrow: 1,
+                            overflow: 'hidden',
                         }}
                     >
                         {children}

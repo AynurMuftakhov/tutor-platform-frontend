@@ -76,7 +76,11 @@ const WordGrid: React.FC<WordGridProps> = ({
     }
 
     return (
-        <Grid container spacing={3}>
+        <Grid
+            container
+            columnSpacing={{ xs: 2, md: 3 }}
+            rowSpacing={{ xs: 3, md: 4 }}
+        >
             {data.map((word) => (
                 <Grid size={{ xs:12, sm: 6, md:4 }} key={word.id} sx={{ px: 1 }}>
                     <WordCard
@@ -90,7 +94,6 @@ const WordGrid: React.FC<WordGridProps> = ({
                         isSelected={selectedWords.includes(word.id)}
                         onToggleSelection={onToggleSelection}
                         readOnly={readOnly}
-                        compact={readOnly}
                     />
                 </Grid>
             ))}
