@@ -44,7 +44,7 @@ export const getUpcomingLessons = async (tutorId: string, studentId: string, cur
     if (tutorId) params.append("tutorId", tutorId);
     if (studentId) params.append("studentId", studentId);
     if (currentDate) params.append("currentDate", currentDate);
-    params.append("status", "SCHEDULED,RESCHEDULED");
+    params.append("status", "SCHEDULED,RESCHEDULED,IN_PROGRESS");
 
     const response = await api.get(`/lessons-service/api/lessons/upcoming?${params}`);
     return response.data;

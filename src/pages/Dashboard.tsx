@@ -17,7 +17,6 @@ import { useAuth } from "../context/AuthContext";
 import UpcomingLessonsSection from "../components/dashboard/UpcomingLessonsSection";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
 
 type StatCardProps = {
     title: string;
