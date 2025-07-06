@@ -150,20 +150,6 @@ const RoomContent: React.FC<{
         setTimeout(() => setIsCopied(false), 3000); // reset after 3 seconds
     };
 
-    // Open workspace when a material is selected
-    useEffect(() => {
-        if (syncedVideo.state.open && !workspaceOpen) {
-            openWorkspace();
-        }
-    }, [syncedVideo.state.open, workspaceOpen, openWorkspace]);
-
-    // Close workspace when video is closed
-    useEffect(() => {
-        if (!syncedVideo.state.open && workspaceOpen) {
-            closeWorkspace();
-        }
-    }, [syncedVideo.state.open, workspaceOpen, closeWorkspace]);
-
     // Pause video locally when workspace is closed
     useEffect(() => {
         if (syncedVideo.state.open && syncedVideo.state.isPlaying && !workspaceOpen) {
@@ -272,11 +258,6 @@ const RoomContent: React.FC<{
                         />
                     </WorkspaceProvider>
                 </Box>
-            )}
-
-            {/* ---------- Synced video dialog (only used when workspace is closed) */}
-            {!workspaceOpen && (
-                <SyncedVideoPlayer room={room} useSyncedVideo={syncedVideo} />
             )}
         </Box>
     );

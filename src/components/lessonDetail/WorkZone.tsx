@@ -9,7 +9,6 @@ import {
 import SyncedVideoPlayer from './SyncedVideoPlayer';
 import MaterialsTab from './MaterialsTab';
 import { Room } from 'livekit-client';
-import ReactPlayer from 'react-player';
 import { useWorkspace, WorkspaceTool } from '../../context/WorkspaceContext';
 
 interface WorkZoneProps {
