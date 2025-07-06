@@ -3,6 +3,18 @@ import { Room } from 'livekit-client';
 import { Material } from '../components/materials/MaterialCard';
 import ReactPlayer from "react-player";
 
+export interface UseSyncedVideoResult {
+  state: SyncedVideoState;
+  playerRef: React.RefObject<ReactPlayer|null>;
+  open: (material: Material) => void;
+  play: () => void;
+  pause: () => void;
+  seek: (time: number) => void;
+  close: () => void;
+  pauseLocally: () => void;
+  isTutor: boolean;
+}
+
 interface SyncedVideoState {
   open: boolean;
   material: Material | null;
@@ -19,7 +31,12 @@ interface MaterialSyncPacket {
   time: number;
 }
 
-export const useSyncedVideo = (room: Room | undefined, isTutor = false) => {
+export const useSyncedVideo = (
+  room: Room | undefined, 
+  isTutor = false,
+  workspaceOpen?: boolean,
+  openWorkspace?: () => void
+): UseSyncedVideoResult => {
   const [state, setState] = useState<SyncedVideoState>({
     open: false,
     material: null,
@@ -144,6 +161,8 @@ export const useSyncedVideo = (room: Room | undefined, isTutor = false) => {
               isPlaying: false,
               currentTime: 0,
             });
+            // ensure workspace is visible on students
+            if (!workspaceOpen && openWorkspace) openWorkspace();
             break;
           case 'play':
             suppressLocalEvent.current = true;
@@ -173,7 +192,7 @@ export const useSyncedVideo = (room: Room | undefined, isTutor = false) => {
     return () => {
       room.off('dataReceived', handleData);
     };
-  }, [room]);
+  }, [room, workspaceOpen, openWorkspace]);
 
   // Pause locally without broadcasting
   const pauseLocally = () => {

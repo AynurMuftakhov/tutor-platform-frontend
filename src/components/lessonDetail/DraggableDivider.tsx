@@ -10,6 +10,7 @@ interface DraggableDividerProps {
 
 /**
  * A draggable divider component that allows resizing the split between two panes
+ * using CSS Grid columns
  */
 const DraggableDivider: React.FC<DraggableDividerProps> = ({
   onDrag,
@@ -31,19 +32,25 @@ const DraggableDivider: React.FC<DraggableDividerProps> = ({
     const handleMouseMove = (e: MouseEvent) => {
       const containerWidth = window.innerWidth;
       const newLeftWidth = e.clientX;
-      
+
       // Calculate percentage (0-100)
       let newRatio = (newLeftWidth / containerWidth) * 100;
-      
+
       // Enforce min width in pixels
       const minRatio = (minLeftWidth / containerWidth) * 100;
       if (newRatio < minRatio) newRatio = minRatio;
-      
+
       // Enforce max width as percentage
       if (newRatio > maxLeftWidth) newRatio = maxLeftWidth;
-      
+
       // Call the onDrag callback with the new ratio
       onDrag(newRatio);
+
+      // Update grid template columns directly
+      const wrapper = document.querySelector('[style*="grid-template-columns"]') as HTMLElement;
+      if (wrapper) {
+        wrapper.style.gridTemplateColumns = `${newRatio}% 6px 1fr`;
+      }
     };
 
     // Handle mouse up to stop dragging

@@ -6,17 +6,17 @@ import {
     Button,
     CircularProgress,
     IconButton,
-    Tooltip, Snackbar
+    Tooltip
 } from '@mui/material';
 import { LiveKitRoom, VideoConference, useRoomContext } from '@livekit/components-react';
 import '@livekit/components-styles';
 import { useAuth } from '../context/AuthContext';
 import { fetchLiveKitToken } from '../services/api';
-import SyncedVideoPlayer from '../components/lessonDetail/SyncedVideoPlayer';
 import WorkZone from '../components/lessonDetail/WorkZone';
 import DraggableDivider from '../components/lessonDetail/DraggableDivider';
 import { useSyncedVideo } from '../hooks/useSyncedVideo';
 import { useWorkspaceToggle } from '../hooks/useWorkspaceToggle';
+import { useWorkspaceSync } from '../hooks/useWorkspaceSync';
 import { WorkspaceProvider } from '../context/WorkspaceContext';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DoneIcon from "@mui/icons-material/Done";
@@ -116,7 +116,7 @@ const VideoCallPage: React.FC<VideoCallPageProps> = (props) => {
             data-lk-theme="default"
             onDisconnected={handleLeave}
         >
-            <RoomContent onLeave={handleLeave} lessonId={lessonId} studentId={studentId} />
+            <RoomContent lessonId={lessonId} studentId={studentId} />
         </LiveKitRoom>
     );
 };
@@ -125,19 +125,21 @@ const VideoCallPage: React.FC<VideoCallPageProps> = (props) => {
 /* RoomContent – everything inside LiveKit context                      */
 /* -------------------------------------------------------------------- */
 const RoomContent: React.FC<{
-    onLeave: () => void;
     lessonId: string;
     studentId?: string;
-}> = ({ onLeave, lessonId, studentId }) => {
+}> = ({ lessonId, studentId }) => {
     const { user } = useAuth();
     const room = useRoomContext(); // existing LiveKit room
     const [copied, setIsCopied] = useState(false);
 
-    // Hook that encapsulates all playback sync
-    const syncedVideo = useSyncedVideo(room, user?.role === 'tutor');
-
     // Hook to manage workspace toggle and split ratio
     const [workspaceOpen, openWorkspace, closeWorkspace, splitRatio, setSplitRatio] = useWorkspaceToggle();
+
+    // Hook that encapsulates all playback sync
+    const syncedVideo = useSyncedVideo(room, user?.role === 'tutor', workspaceOpen, openWorkspace);
+
+    const isTutor = user?.role === 'tutor';
+    useWorkspaceSync(room, isTutor, workspaceOpen, openWorkspace, closeWorkspace);
 
     const generateDirectLink = () => {
         const baseUrl = window.location.origin;
@@ -157,109 +159,108 @@ const RoomContent: React.FC<{
         }
     }, [workspaceOpen, syncedVideo]);
 
+
     return (
-        <Box
-            sx={{
-                display: 'flex',
-                flexDirection: workspaceOpen ? 'row' : 'column',
-                height: '100vh',
-                overflow: 'hidden',
-                position: 'relative',
-            }}
-        >
-            {/* Copy Link Button - only visible for teachers */}
-            {user?.role === 'tutor' && (
-                <Box
-                    sx={{
-                        position: 'absolute',
-                        top: workspaceOpen ? 8 : 120,
-                        right: workspaceOpen ? 'auto' : 8,
-                        left: workspaceOpen ? 8 : 'auto',
-                        zIndex: 1000,
-                        backgroundColor: 'rgba(255, 255, 255, 0.8)',
-                        borderRadius: '50%',
-                        padding: '4px',
-                    }}
-                >
-                    {!copied ? (
-                        <Tooltip title="Copy direct link to this video call">
-                            <IconButton
-                                onClick={handleCopyLink}
-                                color="primary"
-                                size="small"
-                            >
-                                <ContentCopyIcon fontSize="small" />
-                            </IconButton>
-                        </Tooltip>
-                    ) : (
-                        <Tooltip title="Copied!">
-                            <IconButton color="success" size="small">
-                                <DoneIcon fontSize="small" />
-                            </IconButton>
-                        </Tooltip>
-                    )}
-                </Box>
-            )}
-
-            {/* ---------- Button to open workspace (always visible when workspace is closed) */}
-            {!workspaceOpen && (
-                <Tooltip title="Open materials">
-                    <IconButton
-                        onClick={openWorkspace}
-                        sx={{
-                            position: 'absolute',
-                            top: 64,
-                            right: 8,
-                            zIndex: 1000,
-                            bgcolor: 'primary.main',
-                            color: 'white',
-                            '&:hover': { bgcolor: 'primary.dark' },
-                        }}
-                        aria-label="Open workspace"
-                    >
-                        <LibraryBooksIcon />
-                    </IconButton>
-                </Tooltip>
-            )}
-
-            {/* ---------- Left pane: VideoConference ----------------------- */}
+        <WorkspaceProvider>
             <Box
                 sx={{
-                    height: '100%',
-                    width: workspaceOpen ? `${splitRatio}%` : '100%',
-                    minWidth: 280,
-                    flex: workspaceOpen ? `0 0 ${splitRatio}%` : 1,
+                    display: 'grid',
+                    gridTemplateColumns: workspaceOpen ? `${splitRatio}% 6px 1fr` : '100%',
+                    gridTemplateRows: '100%',
+                    height: '100vh',
                     overflow: 'hidden',
+                    position: 'relative',
                 }}
             >
-                <VideoConference style={{ height: '100%', width: '100%' }} />
-            </Box>
+                {/* Copy Link Button - only visible for teachers */}
+                {user?.role === 'tutor' && (
+                    <Box
+                        sx={{
+                            position: 'absolute',
+                            top: workspaceOpen ? 8 : 120,
+                            right: workspaceOpen ? 'auto' : 8,
+                            left: workspaceOpen ? 8 : 'auto',
+                            zIndex: 1000,
+                            backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                            borderRadius: '50%',
+                            padding: '4px',
+                        }}
+                    >
+                        {!copied ? (
+                            <Tooltip title="Copy direct link to this video call">
+                                <IconButton
+                                    onClick={handleCopyLink}
+                                    color="primary"
+                                    size="small"
+                                >
+                                    <ContentCopyIcon fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                        ) : (
+                            <Tooltip title="Copied!">
+                                <IconButton color="success" size="small">
+                                    <DoneIcon fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                        )}
+                    </Box>
+                )}
 
-            {/* ---------- Draggable divider (only when workspace is open) -- */}
-            {workspaceOpen && (
-                <DraggableDivider onDrag={setSplitRatio} />
-            )}
+                {/* ---------- Button to open workspace (always visible when workspace is closed) */}
+                {!workspaceOpen && (
+                    <Tooltip title="Open materials">
+                        <IconButton
+                            onClick={openWorkspace}
+                            sx={{
+                                position: 'absolute',
+                                top: 64,
+                                right: 8,
+                                zIndex: 1000,
+                                bgcolor: 'primary.main',
+                                color: 'white',
+                                '&:hover': { bgcolor: 'primary.dark' },
+                            }}
+                            aria-label="Open workspace"
+                        >
+                            <LibraryBooksIcon />
+                        </IconButton>
+                    </Tooltip>
+                )}
 
-            {/* ---------- Right pane: WorkZone (only when workspace is open) */}
-            {workspaceOpen && (
+                {/* ---------- Left pane: VideoConference ----------------------- */}
                 <Box
                     sx={{
                         height: '100%',
-                        flex: 1,
+                        minWidth: 280,
                         overflow: 'hidden',
+                        transition: 'width .25s ease',
                     }}
                 >
-                    <WorkspaceProvider>
+                    <VideoConference style={{ height: '100%', width: '100%' }} />
+                </Box>
+
+                {/* ---------- Draggable divider (only when workspace is open) -- */}
+                {workspaceOpen && (
+                    <DraggableDivider onDrag={setSplitRatio} />
+                )}
+
+                {/* ---------- Right pane: WorkZone (only when workspace is open) */}
+                {workspaceOpen && (
+                    <Box
+                        sx={{
+                            height: '100%',
+                            overflow: 'hidden',
+                        }}
+                    >
                         <WorkZone
-                            room={room}
                             useSyncedVideo={syncedVideo}
                             onClose={closeWorkspace}
                             lessonId={lessonId}
                         />
-                    </WorkspaceProvider>
-                </Box>
-            )}
-        </Box>
+                    </Box>
+                )}
+            </Box>
+        </WorkspaceProvider>
     );
 };
 

@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 
 // Default split ratio (38% for the left pane)
 const DEFAULT_SPLIT_RATIO = 38;
+// Default workspace open state (false)
+const DEFAULT_WORKSPACE_OPEN = false;
 
 /**
  * Hook to manage workspace toggle state and split ratio
@@ -10,8 +12,12 @@ const DEFAULT_SPLIT_RATIO = 38;
  */
 export const useWorkspaceToggle = () => {
   // State for workspace open/closed
-  const [open, setOpen] = useState(false);
-  
+  const [open, setOpen] = useState(() => {
+    // Try to get saved open state from localStorage
+    const savedOpen = localStorage.getItem('workspaceOpen');
+    return savedOpen ? JSON.parse(savedOpen) : DEFAULT_WORKSPACE_OPEN;
+  });
+
   // State for split ratio (percentage width of left pane)
   const [splitRatio, setSplitRatio] = useState(() => {
     // Try to get saved ratio from localStorage
@@ -23,6 +29,11 @@ export const useWorkspaceToggle = () => {
   useEffect(() => {
     localStorage.setItem('splitRatio', splitRatio.toString());
   }, [splitRatio]);
+
+  // Save open state to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('workspaceOpen', JSON.stringify(open));
+  }, [open]);
 
   // Function to open workspace
   const openWorkspace = useCallback(() => {

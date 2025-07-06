@@ -19,9 +19,13 @@ import {extractVideoId} from "../../utils/videoUtils";
 interface LessonMaterialsTabProps {
   lessonId: string;
   isTeacher: boolean;
+    /** Optional: when provided we’re inside the video-call workspace
+     *  and should forward the material to the synced player instead
+     *  of opening the standalone dialog. */
+    onPlay?: (material: Material) => void;
 }
 
-const LessonMaterialsTab: React.FC<LessonMaterialsTabProps> = ({ lessonId, isTeacher }) => {
+const LessonMaterialsTab: React.FC<LessonMaterialsTabProps> = ({ lessonId, isTeacher, onPlay }) => {
   const queryClient = useQueryClient();
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [selectedMaterial, setSelectedMaterial] = useState<any>(null);
@@ -45,9 +49,14 @@ const LessonMaterialsTab: React.FC<LessonMaterialsTabProps> = ({ lessonId, isTea
     queryClient.invalidateQueries({ queryKey: ['lessonMaterials', lessonId] });
   };
 
-  // Handle play button click
     const handlePlay = (material: Material) => {
-        setCurrentMaterial(material);
+        // If parent supplied an onPlay callback (video-conference mode)
+        // send the material up. Otherwise fall back to local StandaloneMediaPlayer.
+        if (onPlay) {
+            onPlay(material);
+        } else {
+            setCurrentMaterial(material);
+        }
     };
 
     // Close the player

@@ -7,13 +7,13 @@ import {
   Dashboard as DashboardIcon
 } from '@mui/icons-material';
 import SyncedVideoPlayer from './SyncedVideoPlayer';
-import MaterialsTab from './MaterialsTab';
-import { Room } from 'livekit-client';
+import LessonMaterialsTab from './LessonMaterialsTab';
 import { useWorkspace, WorkspaceTool } from '../../context/WorkspaceContext';
+import { useAuth } from '../../context/AuthContext';
+import { UseSyncedVideoResult } from '../../hooks/useSyncedVideo';
 
 interface WorkZoneProps {
-  room: Room;
-  useSyncedVideo: any; // Import the actual type from your hook
+  useSyncedVideo: UseSyncedVideoResult;
   onClose: () => void;
   lessonId: string;
 }
@@ -22,9 +22,10 @@ interface WorkZoneProps {
  * WorkZone component that houses the SyncedVideoPlayer and future components
  * like Whiteboard, Quiz, PDFViewer, etc.
  */
-const WorkZone: React.FC<WorkZoneProps> = ({ room, useSyncedVideo, onClose, lessonId }) => {
+const WorkZone: React.FC<WorkZoneProps> = ({useSyncedVideo, onClose, lessonId }) => {
   const { state } = useSyncedVideo;
   const { currentTool, setCurrentTool } = useWorkspace();
+  const { user } = useAuth();
 
   // Set default tool to 'video' if a material is open, otherwise 'materials'
   useEffect(() => {
@@ -34,6 +35,15 @@ const WorkZone: React.FC<WorkZoneProps> = ({ room, useSyncedVideo, onClose, less
       setCurrentTool('materials');
     }
   }, [state.open, state.material, setCurrentTool]);
+
+  // Auto-open workspace when currentTool changes to 'video'
+  useEffect(() => {
+    if (currentTool === 'video' && !state.open) {
+      // If we're switching to video tab but no video is open,
+      // switch back to materials tab
+      setCurrentTool('materials');
+    }
+  }, [currentTool, state.open, setCurrentTool]);
 
   // Handle tab change
   const handleTabChange = (_event: React.SyntheticEvent, newValue: WorkspaceTool) => {
@@ -132,17 +142,19 @@ const WorkZone: React.FC<WorkZoneProps> = ({ room, useSyncedVideo, onClose, less
           }}
         >
           {currentTool === 'materials' && (
-            <MaterialsTab 
+            <LessonMaterialsTab 
               lessonId={lessonId} 
-              onSelectMaterial={useSyncedVideo.open} 
+              isTeacher={user?.role === 'tutor'}
+              onPlay={(material) => {
+                useSyncedVideo.open(material);
+                setCurrentTool('video');
+              }}
             />
           )}
 
           {currentTool === 'video' && state.open && state.material && (
             <SyncedVideoPlayer
-              room={room}
               useSyncedVideo={useSyncedVideo}
-              inWorkspace={true}
             />
           )}
 
