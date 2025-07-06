@@ -8,16 +8,19 @@ import {
     IconButton,
     Tooltip, Snackbar
 } from '@mui/material';
-import { LibraryBooks as LibraryBooksIcon} from '@mui/icons-material';
 import { LiveKitRoom, VideoConference, useRoomContext } from '@livekit/components-react';
 import '@livekit/components-styles';
 import { useAuth } from '../context/AuthContext';
 import { fetchLiveKitToken } from '../services/api';
-import MaterialDrawer from '../components/lessonDetail/MaterialDrawer';
 import SyncedVideoPlayer from '../components/lessonDetail/SyncedVideoPlayer';
+import WorkZone from '../components/lessonDetail/WorkZone';
+import DraggableDivider from '../components/lessonDetail/DraggableDivider';
 import { useSyncedVideo } from '../hooks/useSyncedVideo';
+import { useWorkspaceToggle } from '../hooks/useWorkspaceToggle';
+import { WorkspaceProvider } from '../context/WorkspaceContext';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DoneIcon from "@mui/icons-material/Done";
+import { LibraryBooks as LibraryBooksIcon } from '@mui/icons-material';
 
 interface VideoCallPageProps {
     identity?: string;
@@ -128,11 +131,13 @@ const RoomContent: React.FC<{
 }> = ({ onLeave, lessonId, studentId }) => {
     const { user } = useAuth();
     const room = useRoomContext(); // existing LiveKit room
-    const [drawerOpen, setDrawerOpen] = useState(false);
     const [copied, setIsCopied] = useState(false);
 
     // Hook that encapsulates all playback sync
     const syncedVideo = useSyncedVideo(room, user?.role === 'tutor');
+
+    // Hook to manage workspace toggle and split ratio
+    const [workspaceOpen, openWorkspace, closeWorkspace, splitRatio, setSplitRatio] = useWorkspaceToggle();
 
     const generateDirectLink = () => {
         const baseUrl = window.location.origin;
@@ -145,24 +150,45 @@ const RoomContent: React.FC<{
         setTimeout(() => setIsCopied(false), 3000); // reset after 3 seconds
     };
 
+    // Open workspace when a material is selected
+    useEffect(() => {
+        if (syncedVideo.state.open && !workspaceOpen) {
+            openWorkspace();
+        }
+    }, [syncedVideo.state.open, workspaceOpen, openWorkspace]);
+
+    // Close workspace when video is closed
+    useEffect(() => {
+        if (!syncedVideo.state.open && workspaceOpen) {
+            closeWorkspace();
+        }
+    }, [syncedVideo.state.open, workspaceOpen, closeWorkspace]);
+
+    // Pause video locally when workspace is closed
+    useEffect(() => {
+        if (syncedVideo.state.open && syncedVideo.state.isPlaying && !workspaceOpen) {
+            syncedVideo.pauseLocally();
+        }
+    }, [workspaceOpen, syncedVideo]);
+
     return (
         <Box
             sx={{
                 display: 'flex',
-                flexDirection: 'column',
+                flexDirection: workspaceOpen ? 'row' : 'column',
                 height: '100vh',
                 overflow: 'hidden',
                 position: 'relative',
             }}
         >
-
             {/* Copy Link Button - only visible for teachers */}
             {user?.role === 'tutor' && (
                 <Box
                     sx={{
                         position: 'absolute',
-                        top: 120,
-                        right: 8,
+                        top: workspaceOpen ? 8 : 120,
+                        right: workspaceOpen ? 'auto' : 8,
+                        left: workspaceOpen ? 8 : 'auto',
                         zIndex: 1000,
                         backgroundColor: 'rgba(255, 255, 255, 0.8)',
                         borderRadius: '50%',
@@ -189,39 +215,69 @@ const RoomContent: React.FC<{
                 </Box>
             )}
 
-            {/* ---------- Material drawer trigger (tutor only) ------------- */}
-            {user?.role === 'tutor' && (
-                <Tooltip title="Open lesson materials">
+            {/* ---------- Button to open workspace (always visible when workspace is closed) */}
+            {!workspaceOpen && (
+                <Tooltip title="Open materials">
                     <IconButton
-                        onClick={() => setDrawerOpen(true)}
+                        onClick={openWorkspace}
                         sx={{
                             position: 'absolute',
                             top: 64,
                             right: 8,
                             zIndex: 1000,
-                            bgcolor: 'background.paper',
-                            '&:hover': { bgcolor: 'white' },
+                            bgcolor: 'primary.main',
+                            color: 'white',
+                            '&:hover': { bgcolor: 'primary.dark' },
                         }}
-                        aria-label="Open lesson materials"
+                        aria-label="Open workspace"
                     >
                         <LibraryBooksIcon />
                     </IconButton>
                 </Tooltip>
             )}
 
-            {/* ---------- LiveKit's default UI ----------------------------- */}
-            <VideoConference style={{ height: '95%', width: '100%' }} />
+            {/* ---------- Left pane: VideoConference ----------------------- */}
+            <Box
+                sx={{
+                    height: '100%',
+                    width: workspaceOpen ? `${splitRatio}%` : '100%',
+                    minWidth: 280,
+                    flex: workspaceOpen ? `0 0 ${splitRatio}%` : 1,
+                    overflow: 'hidden',
+                }}
+            >
+                <VideoConference style={{ height: '100%', width: '100%' }} />
+            </Box>
 
-            {/* ---------- Drawer with lesson videos ------------------------ */}
-            <MaterialDrawer
-                open={drawerOpen}
-                onClose={() => setDrawerOpen(false)}
-                lessonId={lessonId}
-                onSelectMaterial={syncedVideo.open}
-            />
+            {/* ---------- Draggable divider (only when workspace is open) -- */}
+            {workspaceOpen && (
+                <DraggableDivider onDrag={setSplitRatio} />
+            )}
 
-            {/* ---------- Synced video dialog ------------------------------ */}
-            <SyncedVideoPlayer room={room} useSyncedVideo={syncedVideo} />
+            {/* ---------- Right pane: WorkZone (only when workspace is open) */}
+            {workspaceOpen && (
+                <Box
+                    sx={{
+                        height: '100%',
+                        flex: 1,
+                        overflow: 'hidden',
+                    }}
+                >
+                    <WorkspaceProvider>
+                        <WorkZone
+                            room={room}
+                            useSyncedVideo={syncedVideo}
+                            onClose={closeWorkspace}
+                            lessonId={lessonId}
+                        />
+                    </WorkspaceProvider>
+                </Box>
+            )}
+
+            {/* ---------- Synced video dialog (only used when workspace is closed) */}
+            {!workspaceOpen && (
+                <SyncedVideoPlayer room={room} useSyncedVideo={syncedVideo} />
+            )}
         </Box>
     );
 };

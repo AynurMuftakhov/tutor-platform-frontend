@@ -175,12 +175,19 @@ export const useSyncedVideo = (room: Room | undefined, isTutor = false) => {
     };
   }, [room]);
 
+  // Pause locally without broadcasting
+  const pauseLocally = () => {
+    if (!state.material) return;
+    setState((prev) => ({ ...prev, isPlaying: false }));
+  };
+
   return {
     state,
     playerRef,
     open,
     play,
     pause,
+    pauseLocally,
     seek,
     close,
     isTutor,
