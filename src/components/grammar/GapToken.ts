@@ -23,7 +23,7 @@ export const GapToken = Node.create<GapTokenOptions>({
   addOptions() {
     return {
       mode: 'player' as const,
-      onGapChange: () => {},
+      onGapChange: () => { /* Default empty handler */ },
       disabled: false,
       gapResults: [],
     };
@@ -145,9 +145,26 @@ export const GapToken = Node.create<GapTokenOptions>({
       return {
         dom: wrapper,
         update(updated) {
+          // Store the current focus state and cursor position
+          const hasFocus = document.activeElement === input;
+          const cursorStart = input.selectionStart;
+          const cursorEnd = input.selectionEnd;
+
           input.value = updated.attrs.value || '';
           input.disabled = !!options.disabled;
           applyResult();
+
+          if (hasFocus) {
+            setTimeout(() => {
+              console.log(input)
+              console.log(document.activeElement)
+              input.focus();
+              input.setSelectionRange(cursorStart, cursorEnd);
+              console.log(input)
+              console.log(document.activeElement)
+            }, 10); // Or a small delay like 10 or 50
+          }
+
           return true;
         },
       };
@@ -159,6 +176,11 @@ export default GapToken;
 
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
-    setGapToken: (attrs: GapTokenAttrs) => ReturnType;
+    gapToken: {
+      /**
+       * Set a gap token
+       */
+      setGapToken: (attrs: GapTokenAttrs) => ReturnType;
+    }
   }
 }
