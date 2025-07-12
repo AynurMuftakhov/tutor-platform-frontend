@@ -294,7 +294,7 @@ const MaterialCard: React.FC<MaterialCardProps> = ({
 
               {/* Action buttons */}
               <Box sx={{ display: 'flex', gap: 1, ml: 'auto' }}>
-                {(material.type === 'AUDIO' || material.type === 'VIDEO') && onPlay && (
+                {(material.type === 'AUDIO' || material.type === 'VIDEO' || material.type === 'GRAMMAR') && onPlay && (
                   <Tooltip title="Play">
                     <IconButton
                       size="small"

@@ -452,4 +452,64 @@ api.interceptors.response.use(
     }
 );
 
+// Grammar items
+export interface GrammarItemDto {
+  id: string;
+  sortOrder: number;
+  type: 'GAP_FILL';      // room for future
+  text: string;          // contains {{1}} etc.
+  metadata?: string;     // JSON string
+  answer: string;        // canonical answers list
+}
+
+// GET all items for a material
+export const fetchGrammarItems = (materialId: string) =>
+  api.get<GrammarItemDto[]>(`/lessons-service/api/materials/${materialId}/grammar-items`)
+     .then(r => r.data);
+
+// POST score request/response
+export interface GrammarScoreRequest {
+  attempts: {
+    grammarItemId: string;
+    gapAnswers: string[];
+  }[];
+}
+
+export interface GrammarScoreResponse {
+  materialId: string;
+  totalItems: number;
+  correctItems: number;
+  totalGaps: number;
+  correctGaps: number;
+  details: {
+    grammarItemId: string;
+    gapResults: {
+      index: number;
+      student: string;
+      correct: string;
+      isCorrect: boolean;
+    }[];
+    itemCorrect: boolean;
+  }[];
+}
+
+export const scoreGrammar = (
+  materialId: string,
+  payload: GrammarScoreRequest
+) =>
+  api.post<GrammarScoreResponse>(
+    `/lessons-service/api/materials/${materialId}/score`,
+    payload
+  ).then(r => r.data);
+
+// Create a grammar item for a material
+export const createGrammarItem = (
+  materialId: string,
+  item: Omit<GrammarItemDto, 'id'>
+) =>
+  api.post<GrammarItemDto>(
+    `/lessons-service/api/materials/${materialId}/grammar-items`,
+    item
+  ).then(r => r.data);
+
 export default api;
