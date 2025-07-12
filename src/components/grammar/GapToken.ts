@@ -156,3 +156,9 @@ export const GapToken = Node.create<GapTokenOptions>({
 });
 
 export default GapToken;
+
+declare module '@tiptap/core' {
+  interface Commands<ReturnType> {
+    setGapToken: (attrs: GapTokenAttrs) => ReturnType;
+  }
+}
