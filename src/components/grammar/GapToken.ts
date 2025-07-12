@@ -2,7 +2,7 @@ import { Node, type NodeViewRendererProps } from '@tiptap/core';
 
 export interface GapTokenOptions {
   mode: 'editor' | 'player';
-  onGapChange?: (index: number, value: string) => void;
+  onGapChange?: (index: number, value: string, itemId?: string) => void;
   disabled?: boolean;
   gapResults?: { index: number; isCorrect: boolean; correct: string }[];
 }
@@ -78,7 +78,7 @@ export const GapToken = Node.create<GapTokenOptions>({
         const chip = document.createElement('span');
         chip.className = 'gap-token-chip';
         const label = node.attrs.placeholder
-          ? `${node.attrs.index}:${node.attrs.placeholder}`
+          ? `${node.attrs.placeholder}`
           : `${node.attrs.index}`;
         chip.textContent = `{{${label}}}`;
         chip.style.display = 'inline-flex';
@@ -98,7 +98,7 @@ export const GapToken = Node.create<GapTokenOptions>({
       const input = document.createElement('input');
       input.type = 'text';
       input.className = 'gap-token-input';
-      input.placeholder = node.attrs.placeholder || `Gap ${node.attrs.index}`;
+      input.placeholder = '';
       input.value = node.attrs.value || '';
       input.disabled = !!options.disabled;
       input.style.display = 'inline-block';
@@ -137,7 +137,20 @@ export const GapToken = Node.create<GapTokenOptions>({
           tr.setNodeMarkup(getPos(), undefined, { ...node.attrs, value: val });
           return true;
         });
-        options.onGapChange?.(node.attrs.index, val);
+
+        // Find the closest parent element with a data-item-id attribute
+        let itemId: string | undefined;
+        let parent = input.parentElement;
+        while (parent) {
+          const dataItemId = parent.getAttribute('data-item-id');
+          if (dataItemId) {
+            itemId = dataItemId;
+            break;
+          }
+          parent = parent.parentElement;
+        }
+
+        options.onGapChange?.(node.attrs.index, val, itemId);
       });
 
       wrapper.appendChild(input);
@@ -155,14 +168,16 @@ export const GapToken = Node.create<GapTokenOptions>({
           applyResult();
 
           if (hasFocus) {
-            setTimeout(() => {
-              console.log(input)
-              console.log(document.activeElement)
+            // Use a more reliable approach to restore focus
+            // We need to ensure this runs after React's updates
+            requestAnimationFrame(() => {
               input.focus();
-              input.setSelectionRange(cursorStart, cursorEnd);
-              console.log(input)
-              console.log(document.activeElement)
-            }, 10); // Or a small delay like 10 or 50
+              try {
+                input.setSelectionRange(cursorStart, cursorEnd);
+              } catch (e) {
+                console.error('Failed to set selection range:', e);
+              }
+            });
           }
 
           return true;

@@ -1,75 +1,16 @@
-import React, {useState, useMemo} from 'react';
+import React, {useState, useMemo, useRef, useEffect} from 'react';
 import { Box, Button, Typography, Paper, Chip, Snackbar, Alert, CircularProgress } from '@mui/material';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import GapToken from './GapToken';
 import { gapTokensToNodes, GAP_REGEX } from '../../utils/grammarUtils';
 import { useGrammarItems, useScoreGrammar } from '../../hooks/useGrammarItems';
-import {GrammarItemDto, GrammarScoreResponse} from '../../services/api';
+import {GrammarScoreResponse} from '../../services/api';
 
 interface GrammarPlayerProps {
     materialId: string;
     onClose?: () => void;
 }
-
-
-/* ------------------------------------------------------------------ */
-/* Sub-component that owns its own TipTap instance                    */
-/* ------------------------------------------------------------------ */
-type ItemPlayerProps = {
-    item: GrammarItemDto;
-    onGapChange: (itemId: string, idx: number, val: string) => void;
-    result?: GrammarScoreResponse['details'][number];
-    disabled: boolean;
-    answers: Record<number, string>;
-};
-
-const ItemPlayer: React.FC<ItemPlayerProps> = ({
-                                                   item,
-                                                   onGapChange,
-                                                   result,
-                                                   disabled,
-                                                   answers,
-                                               }) => {
-    const gapResults = result?.gapResults.map(r => ({
-        index: r.index,
-        isCorrect: r.isCorrect,
-        correct: r.correct,
-    }));
-
-    /* ------------------------------------------------------------
-     * Build the extension list reactively so TipTap can re-configure
-     * itself whenever answers / result / disabled change.
-     * ------------------------------------------------------------ */
-    const extensions = useMemo(
-        () => [
-            StarterKit,
-            GapToken.configure({
-                mode: 'player',
-                onGapChange: (idx, val) => onGapChange(item.id, idx, val),
-                disabled,
-                gapResults,
-            }),
-        ],
-        [disabled, gapResults, item.id, onGapChange],
-    );
-
-
-    /* ------------------------------------------------------------
-     * ❶ pass options object ❷ pass deps array for re-configuration
-     * ------------------------------------------------------------ */
-    const editor = useEditor(
-        {
-            extensions,
-            content: gapTokensToNodes(item.text, answers),
-            editable: false,
-        },
-        [extensions, answers],
-    );
-
-    return <EditorContent editor={editor} />;
-};
-
 /* ------------------------------------------------------------------ */
 /* Main GrammarPlayer                                                 */
 /* ------------------------------------------------------------------ */
@@ -83,6 +24,129 @@ const GrammarPlayer: React.FC<GrammarPlayerProps> = ({
 
     const { data: grammarItems = [], isLoading, error } = useGrammarItems(materialId);
     const scoreMutation = useScoreGrammar();
+
+    // Create a single editor instance for all items
+    const extensions = useMemo(() => {
+        // Create a map of item IDs to their gap results
+        const gapResultsMap: Record<string, { index: number; isCorrect: boolean; correct: string }[]> = {};
+        if (scoreResult) {
+            scoreResult.details.forEach(detail => {
+                gapResultsMap[detail.grammarItemId] = detail.gapResults.map(r => ({
+                    index: r.index,
+                    isCorrect: r.isCorrect,
+                    correct: r.correct,
+                }));
+            });
+        }
+
+        return [
+            StarterKit,
+            GapToken.configure({
+                mode: 'player',
+                onGapChange: (idx, val, itemId) => {
+                    if (itemId) {
+                        handleGapChange(itemId, idx, val);
+                    }
+                },
+                disabled: !!scoreResult,
+                gapResults: [], // We'll handle this differently now
+            }),
+        ];
+    }, [scoreResult]);
+
+    // Create a single editor instance
+    const editor = useEditor(
+        {
+            extensions,
+            content: '', // We'll set the content after initialization
+            editable: false,
+        },
+        [extensions]
+    );
+
+    // Update editor content when items or answers change
+    useEffect(() => {
+        if (editor && grammarItems.length > 0) {
+            // Get the currently focused element before updating content
+            const activeElement = document.activeElement;
+            let focusedInput: HTMLInputElement | null = null;
+            let focusedInputValue = '';
+            let focusedInputSelectionStart = 0;
+            let focusedInputSelectionEnd = 0;
+
+            if (activeElement instanceof HTMLInputElement && activeElement.classList.contains('gap-token-input')) {
+                focusedInput = activeElement;
+                focusedInputValue = focusedInput.value;
+                focusedInputSelectionStart = focusedInput.selectionStart || 0;
+                focusedInputSelectionEnd = focusedInput.selectionEnd || 0;
+            }
+
+            // Create content for each item separately
+            grammarItems.forEach((item, index) => {
+                const itemAnswers = answers[item.id] || {};
+                const content = gapTokensToNodes(item.text, itemAnswers);
+
+                // If this is the first item, set the content directly
+                if (index === 0) {
+                    editor.commands.setContent(content);
+                }
+            });
+
+            // Restore focus after content update
+            if (focusedInput) {
+                requestAnimationFrame(() => {
+                    // Find the input with the same value and position
+                    const inputs = document.querySelectorAll('.gap-token-input');
+                    for (const input of inputs) {
+                        if (input instanceof HTMLInputElement && input.value === focusedInputValue) {
+                            input.focus();
+                            try {
+                                input.setSelectionRange(focusedInputSelectionStart, focusedInputSelectionEnd);
+                            } catch (e) {
+                                console.error('Failed to set selection range:', e);
+                            }
+                            break;
+                        }
+                    }
+                });
+            }
+        }
+    }, [editor, grammarItems, answers]);
+
+    // Create a ref to track the currently focused item
+    const focusedItemRef = useRef<string | null>(null);
+
+    // Update the editor when a gap input is focused
+    const handleGapFocus = (itemId: string) => {
+        focusedItemRef.current = itemId;
+    };
+
+    // Add a listener to the GapToken component to track focus
+    useEffect(() => {
+        if (!editor) return;
+
+        const handleFocus = (e: FocusEvent) => {
+            if (e.target instanceof HTMLInputElement && e.target.classList.contains('gap-token-input')) {
+                // Find the closest parent with data-item-id
+                let parent = e.target.parentElement;
+                while (parent) {
+                    const itemId = parent.getAttribute('data-item-id');
+                    if (itemId) {
+                        handleGapFocus(itemId);
+                        break;
+                    }
+                    parent = parent.parentElement;
+                }
+            }
+        };
+
+        // Add the focus event listener to the document
+        document.addEventListener('focus', handleFocus, true);
+
+        return () => {
+            document.removeEventListener('focus', handleFocus, true);
+        };
+    }, [editor]);
 
     /* -------------- helpers ---------------- */
     // This handler correctly updates the state for a specific item and gap index
@@ -133,16 +197,13 @@ const GrammarPlayer: React.FC<GrammarPlayerProps> = ({
 
     return (
         <Box sx={{ width: '100%' }}>
+            {/* We render each exercise with its own title */}
             {grammarItems.map((item, i) => (
-                <Paper key={item.id} sx={{ p:2, mb:2 }}>
+                <Paper key={item.id} sx={{ p:2, mb:2 }} data-item-id={item.id}>
                     <Typography variant="subtitle1" gutterBottom>Exercise {i + 1}</Typography>
-                    <ItemPlayer
-                        item={item}
-                        answers={answers[item.id] || {}}
-                        onGapChange={handleGapChange}
-                        result={scoreResult?.details.find(d => d.grammarItemId === item.id)}
-                        disabled={!!scoreResult}
-                    />
+                    {i === 0 && (
+                        <EditorContent editor={editor} />
+                    )}
                 </Paper>
             ))}
 
