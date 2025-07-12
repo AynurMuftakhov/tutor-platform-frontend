@@ -2,7 +2,8 @@ import React, {useState, useMemo} from 'react';
 import { Box, Button, Typography, Paper, Chip, Snackbar, Alert, CircularProgress } from '@mui/material';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { GapTokenExtension } from './GapTokenExtension';
+import GapToken from './GapToken';
+import { gapTokensToNodes, GAP_REGEX } from '../../utils/grammarUtils';
 import { useGrammarItems, useScoreGrammar } from '../../hooks/useGrammarItems';
 import {GrammarItemDto, GrammarScoreResponse} from '../../services/api';
 
@@ -11,25 +12,24 @@ interface GrammarPlayerProps {
     onClose?: () => void;
 }
 
-const GAP_REGEX = /\{\{(\d+)(?::([^}]+))?\}\}/g;
 
 /* ------------------------------------------------------------------ */
 /* Sub-component that owns its own TipTap instance                    */
 /* ------------------------------------------------------------------ */
 type ItemPlayerProps = {
     item: GrammarItemDto;
-    allAnswers: Record<string, Record<number, string>>;
     onGapChange: (itemId: string, idx: number, val: string) => void;
-    result?: GrammarScoreResponse['details'][number]; // per-item result
+    result?: GrammarScoreResponse['details'][number];
     disabled: boolean;
+    answers: Record<number, string>;
 };
 
 const ItemPlayer: React.FC<ItemPlayerProps> = ({
                                                    item,
-                                                   allAnswers,
                                                    onGapChange,
                                                    result,
                                                    disabled,
+                                                   answers,
                                                }) => {
     const gapResults = result?.gapResults.map(r => ({
         index: r.index,
@@ -44,16 +44,14 @@ const ItemPlayer: React.FC<ItemPlayerProps> = ({
     const extensions = useMemo(
         () => [
             StarterKit,
-            GapTokenExtension.configure({
+            GapToken.configure({
                 mode: 'player',
-                itemId: item.id,                            // tell the plugin whose gaps these are
                 onGapChange: (idx, val) => onGapChange(item.id, idx, val),
-                allAnswers,                                 // latest state every render
                 disabled,
                 gapResults,
             }),
         ],
-        [allAnswers, disabled, gapResults, item.id, onGapChange],
+        [disabled, gapResults, item.id, onGapChange],
     );
 
 
@@ -63,10 +61,10 @@ const ItemPlayer: React.FC<ItemPlayerProps> = ({
     const editor = useEditor(
         {
             extensions,
-            content: item.text,
+            content: gapTokensToNodes(item.text, answers),
             editable: false,
         },
-        [extensions], // whenever extensions ref changes, re-apply them
+        [extensions, answers],
     );
 
     return <EditorContent editor={editor} />;
@@ -140,9 +138,7 @@ const GrammarPlayer: React.FC<GrammarPlayerProps> = ({
                     <Typography variant="subtitle1" gutterBottom>Exercise {i + 1}</Typography>
                     <ItemPlayer
                         item={item}
-                        // Pass the entire answers state down
-                        allAnswers={answers}
-                        // Pass the top-level handler
+                        answers={answers[item.id] || {}}
                         onGapChange={handleGapChange}
                         result={scoreResult?.details.find(d => d.grammarItemId === item.id)}
                         disabled={!!scoreResult}

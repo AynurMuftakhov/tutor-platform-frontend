@@ -10,7 +10,8 @@ import {
 import { Add as AddIcon, AutoFixHigh as AIIcon } from '@mui/icons-material';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { GapTokenExtension } from './GapTokenExtension';
+import GapToken from './GapToken';
+import { gapTokensToNodes, gapNodesToTokens, GAP_REGEX } from '../../utils/grammarUtils';
 
 interface GrammarEditorProps {
   initialContent?: string;
@@ -18,8 +19,6 @@ interface GrammarEditorProps {
 }
 
 // --------------------------- helpers ----------------------------------------
-
-const GAP_REGEX = /\{\{(\d+)(?::([^}]+))?\}\}/g;
 
 /** returns next free sequential gap number in given html */
 const nextGapNumberIn = (html: string) => {
@@ -46,15 +45,11 @@ const GrammarEditor: React.FC<GrammarEditorProps> = ({
                                                      }) => {
   const [html, setHtml] = useState(initialContent);
 
-  // -------- initialise TipTap ----------
   const editor = useEditor({
-    extensions: [
-      StarterKit,
-      GapTokenExtension.configure({ mode: 'editor' }),
-    ],
-    content: initialContent,
+    extensions: [StarterKit, GapToken.configure({ mode: 'editor' })],
+    content: gapTokensToNodes(initialContent),
     onUpdate: ({ editor }) => {
-      const newHtml = editor.getHTML();
+      const newHtml = gapNodesToTokens(editor.getHTML());
       setHtml(newHtml);
     },
   });
@@ -66,12 +61,14 @@ const GrammarEditor: React.FC<GrammarEditorProps> = ({
     const { from, to } = editor.state.selection;
     const selectedText = editor.state.doc.textBetween(from, to, ' ', ' ');
 
-    const token =
-        selectedText.trim().length > 0
-            ? `{{${nextGapNumberIn(html)}:${selectedText}}}`
-            : `{{${nextGapNumberIn(html)}}}`;
-
-    editor.chain().focus().insertContent(token).run();
+    editor
+      .chain()
+      .focus()
+      .setGapToken({
+        index: nextGapNumberIn(html),
+        placeholder: selectedText.trim() || undefined,
+      })
+      .run();
   };
 
   useMemo(() => {
@@ -115,4 +112,4 @@ const GrammarEditor: React.FC<GrammarEditorProps> = ({
   );
 };
 
-export default GrammarEditor;
+export default GrammarEditor
