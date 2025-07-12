@@ -4,7 +4,7 @@ export interface GapTokenOptions {
   mode: 'editor' | 'player';
   onGapChange?: (index: number, value: string, itemId?: string) => void;
   disabled?: boolean;
-  gapResults?: { index: number; isCorrect: boolean; correct: string }[];
+  gapResults?: { index: number; isCorrect?: boolean; student?: string; correct: string }[];
 }
 
 export interface GapTokenAttrs {
@@ -111,14 +111,22 @@ export const GapToken = Node.create<GapTokenOptions>({
       input.style.fontSize = '0.875rem';
 
       const applyResult = () => {
-        const res = options.gapResults?.find(r => r.index === node.attrs.index);
+        const res = options.gapResults?.find(r => r.index === node.attrs.index - 1);
         if (!res) {
           input.style.borderColor = '#ccc';
           input.style.backgroundColor = '';
           input.title = '';
           return;
         }
-        if (res.isCorrect) {
+
+        // Determine if the answer is correct
+        // If isCorrect is provided, use it
+        // Otherwise, compare student and correct values
+        const isCorrect = res.isCorrect !== undefined 
+          ? res.isCorrect 
+          : (res.student === res.correct);
+
+        if (isCorrect) {
           input.style.borderColor = '#4caf50';
           input.style.backgroundColor = 'rgba(76,175,80,0.1)';
           input.title = '';

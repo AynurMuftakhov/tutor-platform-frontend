@@ -25,6 +25,9 @@ const GrammarPlayer: React.FC<GrammarPlayerProps> = ({
     const { data: grammarItems = [], isLoading, error } = useGrammarItems(materialId);
     const scoreMutation = useScoreGrammar();
 
+    // Create a ref to track the currently focused item
+    const focusedItemRef = useRef<string | null>(null);
+
     // Create a single editor instance for all items
     const extensions = useMemo(() => {
         // Create a map of item IDs to their gap results
@@ -39,6 +42,19 @@ const GrammarPlayer: React.FC<GrammarPlayerProps> = ({
             });
         }
 
+        // Get the current focused item ID
+        const currentItemId = focusedItemRef.current;
+
+        // Get the gap results for the current item
+        const currentGapResults = currentItemId && scoreResult
+            ? scoreResult.details.find(d => d.grammarItemId === currentItemId)?.gapResults.map(r => ({
+                index: r.index,
+                isCorrect: r.isCorrect, // This might be undefined in some API responses
+                student: r.student,
+                correct: r.correct,
+              }))
+            : [];
+
         return [
             StarterKit,
             GapToken.configure({
@@ -48,11 +64,11 @@ const GrammarPlayer: React.FC<GrammarPlayerProps> = ({
                         handleGapChange(itemId, idx, val);
                     }
                 },
-                disabled: !!scoreResult,
-                gapResults: [], // We'll handle this differently now
+                disabled: false,
+                gapResults: currentGapResults || [],
             }),
         ];
-    }, [scoreResult]);
+    }, [scoreResult, focusedItemRef.current]);
 
     // Create a single editor instance
     const editor = useEditor(
@@ -113,8 +129,6 @@ const GrammarPlayer: React.FC<GrammarPlayerProps> = ({
         }
     }, [editor, grammarItems, answers]);
 
-    // Create a ref to track the currently focused item
-    const focusedItemRef = useRef<string | null>(null);
 
     // Update the editor when a gap input is focused
     const handleGapFocus = (itemId: string) => {
@@ -225,7 +239,7 @@ const GrammarPlayer: React.FC<GrammarPlayerProps> = ({
                     <Button
                         variant="contained"
                         onClick={handleCheck}
-                        disabled={!allGapsFilled || !!scoreResult || scoreMutation.isPending}
+                        disabled={!allGapsFilled || scoreMutation.isPending}
                     >
                         {scoreMutation.isPending ? 'Checking…' : 'Check'}
                     </Button>
