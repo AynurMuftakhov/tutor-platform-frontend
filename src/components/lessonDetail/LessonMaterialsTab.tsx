@@ -15,6 +15,7 @@ import { useLessonMaterials, useUnlinkMaterialFromLesson } from '../../hooks/use
 import { useQueryClient } from '@tanstack/react-query';
 import StandaloneMediaPlayer from "./StandaloneMediaPlayer";
 import {extractVideoId} from "../../utils/videoUtils";
+import GrammarViewerDialog from "../grammar/GrammarViewerDialog";
 
 interface LessonMaterialsTabProps {
   lessonId: string;
@@ -31,6 +32,7 @@ const LessonMaterialsTab: React.FC<LessonMaterialsTabProps> = ({ lessonId, isTea
   const [selectedMaterial, setSelectedMaterial] = useState<any>(null);
   const [isTaskManagerOpen, setIsTaskManagerOpen] = useState(false);
   const [currentMaterial, setCurrentMaterial] = useState<Material | null>(null);
+  const [isGrammarDialogOpen, setIsGrammarDialogOpen] = useState(false);
 
   // Fetch lesson materials
   const { data: lessonMaterials = [], isLoading } = useLessonMaterials(lessonId);
@@ -50,6 +52,11 @@ const LessonMaterialsTab: React.FC<LessonMaterialsTabProps> = ({ lessonId, isTea
   };
 
     const handlePlay = (material: Material) => {
+        if (material.type === 'GRAMMAR') {
+            setSelectedMaterial(material);
+            setIsGrammarDialogOpen(true);
+            return
+        }
         // If parent supplied an onPlay callback (video-conference mode)
         // send the material up. Otherwise fall back to local StandaloneMediaPlayer.
         if (onPlay) {
@@ -57,6 +64,12 @@ const LessonMaterialsTab: React.FC<LessonMaterialsTabProps> = ({ lessonId, isTea
         } else {
             setCurrentMaterial(material);
         }
+    };
+
+    // Close the grammar dialog
+    const handleCloseGrammarDialog = () => {
+        setIsGrammarDialogOpen(false);
+        setSelectedMaterial(null);
     };
 
     // Close the player
@@ -212,13 +225,23 @@ const LessonMaterialsTab: React.FC<LessonMaterialsTabProps> = ({ lessonId, isTea
       />
 
       {/* Listening Task Manager */}
-      {selectedMaterial && (
+      {selectedMaterial && selectedMaterial.type === 'VIDEO' && (
         <ListeningTaskManager
           material={selectedMaterial}
           open={isTaskManagerOpen}
           onClose={handleCloseTaskManager}
         />
       )}
+
+        {/* Grammar Viewer Dialog */}
+        {selectedMaterial && selectedMaterial.type === 'GRAMMAR' && (
+            <GrammarViewerDialog
+                open={isGrammarDialogOpen}
+                onClose={handleCloseGrammarDialog}
+                materialId={selectedMaterial.id}
+                title={selectedMaterial.title}
+            />
+        )}
     </Box>
   );
 };

@@ -1,17 +1,14 @@
-import React, { useState, useMemo } from 'react';
-import {
-  Box,
-   Paper,
-  Typography,
-  IconButton,
-  Tooltip,
-  Divider,
-} from '@mui/material';
-import { Add as AddIcon, AutoFixHigh as AIIcon } from '@mui/icons-material';
-import { useEditor, EditorContent } from '@tiptap/react';
+import React, {useMemo, useState} from 'react';
+import {Box, Divider, FormHelperText, IconButton, Paper, Tooltip, Typography,} from '@mui/material';
+import {Add as AddIcon, AutoFixHigh as AIIcon} from '@mui/icons-material';
+import {EditorContent, useEditor} from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import GapToken from './GapToken';
-import { gapTokensToNodes, gapNodesToTokens, GAP_REGEX } from '../../utils/grammarUtils';
+import {GAP_REGEX, gapNodesToTokens, gapTokensToNodes} from '../../utils/grammarUtils';
+import AISuggestDialog from './AISuggestDialog';
+import { useSnackbar } from 'notistack';
+import {GenerateExerciseRequest} from "../../types";
+import {generateAiExercise} from "../../services/api";
 
 interface GrammarEditorProps {
   initialContent?: string;
@@ -108,9 +105,8 @@ const extractAnswers = (html: string) => {
   // Process gaps in order of their position
   gaps.forEach((gap, i) => {
     // Split by pipe character to support multiple answers
-    const answers = gap.answerText.split('|').map(a => a.trim());
     // Use the sequential index (i+1) as the key, not the original index
-    map[i + 1] = answers;
+    map[i + 1] = gap.answerText.split('|').map(a => a.trim());
   });
 
   return map;
@@ -136,6 +132,10 @@ const GrammarEditor: React.FC<GrammarEditorProps> = ({
   // Renumber any existing gaps in the initial content
   const processedInitialContent = renumberGapsInOrder(initialContent);
   const [html, setHtml] = useState(processedInitialContent);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [answers, setAnswers] = useState<Record<number, string[]>>({});
+  const { enqueueSnackbar } = useSnackbar();
 
   const editor = useEditor({
     extensions: [StarterKit, GapToken.configure({ mode: 'editor' })],
@@ -181,11 +181,32 @@ const GrammarEditor: React.FC<GrammarEditorProps> = ({
     // and updating the editor content if necessary
   };
 
+  // -------- AI generation ----------
+  const generateExercise = async (req: GenerateExerciseRequest) => {
+    setLoading(true);
+    try {
+      const data = await generateAiExercise(req);
+      editor?.commands.setContent(gapTokensToNodes(data.html));
+      setAnswers(data.answers);
+      setDialogOpen(false);
+    } catch (e) {
+      enqueueSnackbar('AI failed to generate exercise', { variant: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useMemo(() => {
-    const answersMap = extractAnswers(html);
+    // If we have answers from AI, use those, otherwise extract from HTML
+    const answersMap = Object.keys(answers).length > 0 ? answers : extractAnswers(html);
     const answerString = formatAnswersString(answersMap);
     onSave(html, answerString);
-  }, [html])
+
+    // Reset answers state after saving to ensure future edits extract from HTML
+    if (Object.keys(answers).length > 0) {
+      setAnswers({});
+    }
+  }, [html, answers])
 
   return (
       <Box sx={{ width: '100%' }}>
@@ -203,13 +224,11 @@ const GrammarEditor: React.FC<GrammarEditorProps> = ({
               </IconButton>
             </Tooltip>
 
-            {/* placeholder for future AI */}
-            <Tooltip title="AI Suggest (coming soon)">
-            <span>
-              <IconButton size="small" disabled>
+            {/* AI Suggest */}
+            <Tooltip title="AI Suggest">
+              <IconButton size="small" onClick={() => setDialogOpen(true)}>
                 <AIIcon fontSize="small" />
               </IconButton>
-            </span>
             </Tooltip>
 
             <Box sx={{ flexGrow: 1 }} />
@@ -218,7 +237,16 @@ const GrammarEditor: React.FC<GrammarEditorProps> = ({
           <Divider sx={{ mb: 2 }} />
 
           <EditorContent editor={editor} />
+          <FormHelperText>Use &#39;|&#39; symbol for multiple answers for one gap: &#39;student|pupil&#39;.</FormHelperText>
         </Paper>
+
+        {/* AI Suggest Dialog */}
+        <AISuggestDialog
+          open={dialogOpen}
+          onClose={() => setDialogOpen(false)}
+          onGenerate={generateExercise}
+          loading={loading}
+        />
       </Box>
   );
 };

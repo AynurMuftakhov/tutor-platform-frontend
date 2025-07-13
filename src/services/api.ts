@@ -2,6 +2,7 @@ import axios from 'axios';
 import {Student} from "../pages/MyStudentsPage";
 import { NotificationMessage} from "../context/NotificationsSocketContext";
 import { ApiError } from '../context/ApiErrorContext';
+import {GenerateExerciseRequest, GenerateExerciseResponse} from "../types";
 
 const api = axios.create({
     baseURL: import.meta.env.VITE_API_URL,
@@ -511,5 +512,11 @@ export const createGrammarItem = (
     `/lessons-service/api/materials/${materialId}/grammar-items`,
     item
   ).then(r => r.data);
+
+
+export const generateAiExercise = async (payload: GenerateExerciseRequest): Promise<GenerateExerciseResponse> => {
+    const response = await api.post(`/lessons-service/api/ai/exercises`, payload);
+    return response.data;
+};
 
 export default api;

@@ -218,9 +218,7 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
       finalTags.push(tagInputValue.trim());
     }
 
-    // For GRAMMAR type, use the grammar content as the sourceUrl
-    // In a real implementation, we would store this differently
-    const effectiveSourceUrl = materialType === 'GRAMMAR' ? grammarContent : sourceUrl;
+    const effectiveSourceUrl = materialType === 'GRAMMAR' ? '' : sourceUrl;
 
     const materialData = {
       type: materialType,
