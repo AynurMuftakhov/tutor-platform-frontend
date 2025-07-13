@@ -1,7 +1,7 @@
-import React, {useMemo, useState} from 'react';
+import React, {useEffect, useMemo, useState} from 'react';
 import {Box, Divider, FormHelperText, IconButton, Paper, Tooltip, Typography,} from '@mui/material';
 import {Add as AddIcon, AutoFixHigh as AIIcon} from '@mui/icons-material';
-import {EditorContent, useEditor} from '@tiptap/react';
+import {EditorContent, useEditor, Editor} from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import GapToken from './GapToken';
 import {GAP_REGEX, gapNodesToTokens, gapTokensToNodes} from '../../utils/grammarUtils';
@@ -132,6 +132,7 @@ const GrammarEditor: React.FC<GrammarEditorProps> = ({
   // Renumber any existing gaps in the initial content
   const processedInitialContent = renumberGapsInOrder(initialContent);
   const [html, setHtml] = useState(processedInitialContent);
+  const [content, setContent] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [answers, setAnswers] = useState<Record<number, string[]>>({});
@@ -140,7 +141,7 @@ const GrammarEditor: React.FC<GrammarEditorProps> = ({
   const editor = useEditor({
     extensions: [StarterKit, GapToken.configure({ mode: 'editor' })],
     content: gapTokensToNodes(processedInitialContent),
-    onUpdate: ({ editor }) => {
+    onUpdate: ({ editor }: { editor: Editor }) => {
       // Convert editor content to HTML with gap tokens
       const newHtml = gapNodesToTokens(editor.getHTML());
 
@@ -154,6 +155,7 @@ const GrammarEditor: React.FC<GrammarEditorProps> = ({
       if (renumberedHtml !== newHtml) {
         // We need to use setTimeout to avoid recursive updates
         setTimeout(() => {
+          setContent(renumberedHtml);
           editor.commands.setContent(gapTokensToNodes(renumberedHtml));
         }, 0);
       }
@@ -187,6 +189,7 @@ const GrammarEditor: React.FC<GrammarEditorProps> = ({
     try {
       const data = await generateAiExercise(req);
       editor?.commands.setContent(gapTokensToNodes(data.html));
+      setContent(data.html);
       setAnswers(data.answers);
       setDialogOpen(false);
     } catch (e) {
@@ -196,17 +199,16 @@ const GrammarEditor: React.FC<GrammarEditorProps> = ({
     }
   };
 
-  useMemo(() => {
+  useEffect(() => {
     // If we have answers from AI, use those, otherwise extract from HTML
     const answersMap = Object.keys(answers).length > 0 ? answers : extractAnswers(html);
     const answerString = formatAnswersString(answersMap);
-    onSave(html, answerString);
-
     // Reset answers state after saving to ensure future edits extract from HTML
     if (Object.keys(answers).length > 0) {
       setAnswers({});
+      onSave(content, answerString);
     }
-  }, [html, answers])
+  }, [answers])
 
   return (
       <Box sx={{ width: '100%' }}>

@@ -191,6 +191,13 @@ const SyncedGrammarPlayer: React.FC<SyncedGrammarPlayerProps> = ({ useSyncedGram
       }),
     };
 
+    // We've already checked that state.material is not null at the beginning of the component
+    // but TypeScript doesn't recognize this, so we need to add a check here
+    if (!state.material) {
+      console.error('Material is null');
+      return;
+    }
+
     scoreMutation.mutate(
       { materialId: state.material.id, payload },
       {

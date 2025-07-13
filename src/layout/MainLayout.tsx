@@ -43,12 +43,15 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [hasMounted, setHasMounted] = useState(false);
     const [currentLessonId, setCurrentLessonId] = useState<string | null>(null);
 
+    // Check if current page is video call page
+    const location = useLocation();
+    const isVideoCallPage = location.pathname === '/video-call';
+
     const isProfileMenuOpen = Boolean(profileAnchorEl);
 
     const { user, logout } = useAuth();
     const isTeacher = user?.role === "tutor";
     const navigate = useNavigate();
-    const location = useLocation();
 
     const menuItems = [
         { label: "Dashboard", icon: <HomeIcon />, path: "/dashboard" },
@@ -60,7 +63,10 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         { label: "Lessons", icon: <EventNoteIcon />, path: "/lessons" }
     ];
 
-    const handleDrawerToggle = () => setMobileOpen(!mobileOpen);
+    const handleDrawerToggle = () => {
+        if (isVideoCallPage) return; // Don't toggle drawer on video call page
+        setMobileOpen(!mobileOpen);
+    };
     const handleProfileMenuOpen = (e: React.MouseEvent<HTMLElement>) => setProfileAnchorEl(e.currentTarget);
     const handleProfileMenuClose = () => setProfileAnchorEl(null);
     const handleProfile = () => {
@@ -340,12 +346,12 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             <GlobalStyles styles={{ body: { overflow: 'hidden' } }} />
             <Box sx={{  display: 'flex', width: '100%', height: '100dvh', overflow: 'hidden' }}>
                 <CssBaseline />
-                <AppBar
+                {!isVideoCallPage && (<AppBar
                     position="fixed"
                     elevation={0}
                     sx={{
-                        width: { md: `calc(100% - ${drawerWidth}px)` },
-                        ml: { md: `${drawerWidth}px` },
+                        width: isVideoCallPage ? '100%' : { md: `calc(100% - ${drawerWidth}px)` },
+                        ml: isVideoCallPage ? 0 : { md: `${drawerWidth}px` },
                         backgroundColor: "rgba(255, 255, 255, 0.95)",
                         backdropFilter: "blur(10px)",
                         color: "text.primary",
@@ -355,39 +361,43 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 >
                     <Toolbar sx={{ display: "flex", justifyContent: "space-between", py: 1 }}>
                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            <IconButton
-                                color="inherit"
-                                edge="start"
-                                onClick={handleDrawerToggle}
-                                sx={{
-                                    mr: 2,
-                                    display: { md: "none" },
-                                    color: 'primary.main'
-                                }}
-                            >
-                                <MenuIcon />
-                            </IconButton>
-
-                            <Box
-                                component={motion.div}
-                                initial={{ opacity: 0, y: -10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ duration: 0.3 }}
-                                sx={{ display: { xs: 'none', sm: 'block' } }}
-                            >
-                                <Typography
-                                    variant="h6"
-                                    fontWeight={600}
+                            {!isVideoCallPage && (
+                                <IconButton
+                                    color="inherit"
+                                    edge="start"
+                                    onClick={handleDrawerToggle}
                                     sx={{
-                                        background: `linear-gradient(90deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
-                                        WebkitBackgroundClip: 'text',
-                                        WebkitTextFillColor: 'transparent',
-                                        display: { xs: 'none', md: 'block' }
+                                        mr: 2,
+                                        display: { md: "none" },
+                                        color: 'primary.main'
                                     }}
                                 >
-                                    {BRAND_NAME}
-                                </Typography>
-                            </Box>
+                                    <MenuIcon />
+                                </IconButton>
+                            )}
+
+                            {!isVideoCallPage && (
+                                <Box
+                                    component={motion.div}
+                                    initial={{ opacity: 0, y: -10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ duration: 0.3 }}
+                                    sx={{ display: { xs: 'none', sm: 'block' } }}
+                                >
+                                    <Typography
+                                        variant="h6"
+                                        fontWeight={600}
+                                        sx={{
+                                            background: `linear-gradient(90deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
+                                            WebkitBackgroundClip: 'text',
+                                            WebkitTextFillColor: 'transparent',
+                                            display: { xs: 'none', md: 'block' }
+                                        }}
+                                    >
+                                        {BRAND_NAME}
+                                    </Typography>
+                                </Box>
+                            )}
                         </Box>
 
                         <Box
@@ -715,39 +725,43 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                             </Box>
                         </Box>
                     </Toolbar>
-                </AppBar>
+                </AppBar>)}
 
-                <Drawer
-                    variant="temporary"
-                    open={mobileOpen}
-                    onClose={handleDrawerToggle}
-                    ModalProps={{ keepMounted: true }}
-                    sx={{
-                        display: { xs: "block", md: "none" },
-                        "& .MuiDrawer-paper": {
-                            boxSizing: "border-box",
-                            width: drawerWidth,
-                            top: (theme) => theme.mixins.toolbar.minHeight,
-                            height: (theme) => `calc(100% - ${theme.mixins.toolbar.minHeight}px)`,
-                            position: 'fixed'
-                        },
-                    }}
-                >
-                    {drawer}
-                </Drawer>
+                {!isVideoCallPage && (
+                    <>
+                        <Drawer
+                            variant="temporary"
+                            open={mobileOpen}
+                            onClose={handleDrawerToggle}
+                            ModalProps={{ keepMounted: true }}
+                            sx={{
+                                display: { xs: "block", md: "none" },
+                                "& .MuiDrawer-paper": {
+                                    boxSizing: "border-box",
+                                    width: drawerWidth,
+                                    top: (theme) => theme.mixins.toolbar.minHeight,
+                                    height: (theme) => `calc(100% - ${theme.mixins.toolbar.minHeight}px)`,
+                                    position: 'fixed'
+                                },
+                            }}
+                        >
+                            {drawer}
+                        </Drawer>
 
-                <Drawer
-                    variant="permanent"
-                    sx={{
-                        display: { xs: "none", md: "block" },
-                        width: drawerWidth,
-                        flexShrink: 0,
-                        "& .MuiDrawer-paper": { boxSizing: "border-box", width: drawerWidth },
-                    }}
-                    open
-                >
-                    {drawer}
-                </Drawer>
+                        <Drawer
+                            variant="permanent"
+                            sx={{
+                                display: { xs: "none", md: "block" },
+                                width: drawerWidth,
+                                flexShrink: 0,
+                                "& .MuiDrawer-paper": { boxSizing: "border-box", width: drawerWidth },
+                            }}
+                            open
+                        >
+                            {drawer}
+                        </Drawer>
+                    </>
+                )}
 
                 <Box
                     component="main"
@@ -757,9 +771,10 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                         flexDirection: "column",
                         minWidth: 0,
                         minHeight: 0,
-                        pt: isMobile ? `${theme.mixins.toolbar.minHeight}px` : '64px',
+                        pt: isMobile ? `${theme.mixins.toolbar.minHeight}px` : isVideoCallPage ? '0' : '64px',
                         background: `linear-gradient(180deg, ${alpha(theme.palette.background.default, 0.8)} 0%, ${alpha(theme.palette.background.default, 1)} 100%)`,
                         position: 'relative',
+                        width: isVideoCallPage ? '100%' : 'auto',
                         '&::before': {
                             content: '""',
                             position: 'absolute',

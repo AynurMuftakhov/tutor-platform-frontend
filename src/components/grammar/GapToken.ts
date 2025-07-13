@@ -1,4 +1,5 @@
-import { Node, type NodeViewRendererProps } from '@tiptap/core';
+import type { Node as PMNode } from '@tiptap/pm/model';
+import { Node as TiptapNode, type NodeViewRendererProps } from '@tiptap/core';
 
 export interface GapTokenOptions {
   mode: 'editor' | 'player';
@@ -13,7 +14,7 @@ export interface GapTokenAttrs {
   value?: string;
 }
 
-export const GapToken = Node.create<GapTokenOptions>({
+export const GapToken = TiptapNode.create<GapTokenOptions>({
   name: 'gapToken',
   inline: true,
   group: 'inline',
@@ -73,13 +74,14 @@ export const GapToken = Node.create<GapTokenOptions>({
     const options = this.options;
     return ({ node, getPos, editor }: NodeViewRendererProps) => {
       const wrapper = document.createElement('span');
+      const pmNode = node as PMNode;
 
       if (options.mode === 'editor') {
         const chip = document.createElement('span');
         chip.className = 'gap-token-chip';
-        const label = node.attrs.placeholder
-          ? `${node.attrs.placeholder}`
-          : `${node.attrs.index}`;
+        const label = pmNode.attrs.placeholder
+          ? `${pmNode.attrs.placeholder}`
+          : `${pmNode.attrs.index}`;
         chip.textContent = `{{${label}}}`;
         chip.style.display = 'inline-flex';
         chip.style.alignItems = 'center';
@@ -99,7 +101,7 @@ export const GapToken = Node.create<GapTokenOptions>({
       input.type = 'text';
       input.className = 'gap-token-input';
       input.placeholder = '';
-      input.value = node.attrs.value || '';
+      input.value = pmNode.attrs.value || '';
       input.disabled = !!options.disabled;
       input.style.display = 'inline-block';
       input.style.minWidth = '80px';
@@ -111,7 +113,7 @@ export const GapToken = Node.create<GapTokenOptions>({
       input.style.fontSize = '0.875rem';
 
       const applyResult = () => {
-        const res = options.gapResults?.find(r => r.index === node.attrs.index - 1);
+        const res = options.gapResults?.find(r => r.index === pmNode.attrs.index - 1);
         if (!res) {
           input.style.borderColor = '#ccc';
           input.style.backgroundColor = '';
@@ -122,8 +124,8 @@ export const GapToken = Node.create<GapTokenOptions>({
         // Determine if the answer is correct
         // If isCorrect is provided, use it
         // Otherwise, compare student and correct values
-        const isCorrect = res.isCorrect !== undefined 
-          ? res.isCorrect 
+        const isCorrect = res.isCorrect !== undefined
+          ? res.isCorrect
           : (res.student === res.correct);
 
         if (isCorrect) {
@@ -142,7 +144,7 @@ export const GapToken = Node.create<GapTokenOptions>({
       input.addEventListener('input', e => {
         const val = (e.target as HTMLInputElement).value;
         editor.commands.command(({ tr }) => {
-          tr.setNodeMarkup(getPos(), undefined, { ...node.attrs, value: val });
+          tr.setNodeMarkup(getPos(), undefined, { ...pmNode.attrs, value: val });
           return true;
         });
 
@@ -158,20 +160,20 @@ export const GapToken = Node.create<GapTokenOptions>({
           parent = parent.parentElement;
         }
 
-        options.onGapChange?.(node.attrs.index, val, itemId);
+        options.onGapChange?.(pmNode.attrs.index, val, itemId);
       });
 
       wrapper.appendChild(input);
 
       return {
         dom: wrapper,
-        update(updated) {
+        update(updatedNode: PMNode, _decorations?: unknown, _innerDecorations?: unknown): boolean {
           // Store the current focus state and cursor position
           const hasFocus = document.activeElement === input;
           const cursorStart = input.selectionStart;
           const cursorEnd = input.selectionEnd;
 
-          input.value = updated.attrs.value || '';
+          input.value = updatedNode.attrs.value || '';
           input.disabled = !!options.disabled;
           applyResult();
 

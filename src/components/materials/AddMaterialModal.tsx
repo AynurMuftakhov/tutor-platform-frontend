@@ -417,7 +417,7 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
           variant="contained"
           disabled={
             materialType === 'GRAMMAR'
-              ? (!!titleError || !title || !grammarContent || !grammarContent.includes('{{') || isSubmitting)
+              ? (!!titleError || !title || isSubmitting)
               : (materialType === 'VIDEO' || materialType === 'AUDIO')
                 ? (!!urlError || !!titleError || isSubmitting)
                 : (!!urlError || !!titleError || !sourceUrl || !title || isSubmitting)
