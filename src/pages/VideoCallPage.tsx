@@ -15,6 +15,7 @@ import { fetchLiveKitToken } from '../services/api';
 import WorkZone from '../components/lessonDetail/WorkZone';
 import DraggableDivider from '../components/lessonDetail/DraggableDivider';
 import { useSyncedVideo } from '../hooks/useSyncedVideo';
+import { useSyncedGrammar } from '../hooks/useSyncedGrammar';
 import { useWorkspaceToggle } from '../hooks/useWorkspaceToggle';
 import { useWorkspaceSync } from '../hooks/useWorkspaceSync';
 import { WorkspaceProvider } from '../context/WorkspaceContext';
@@ -23,6 +24,8 @@ import DoneIcon from "@mui/icons-material/Done";
 import { LibraryBooks as LibraryBooksIcon } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
+
+import '../styles/livekit-custom.css';
 
 interface VideoCallPageProps {
     identity?: string;
@@ -115,7 +118,7 @@ const VideoCallPage: React.FC<VideoCallPageProps> = (props) => {
             token={liveKitToken}
             serverUrl={SERVER_URL}
             connect
-            data-lk-theme="default"
+            data-lk-theme="speakshire"
             onDisconnected={handleLeave}
         >
             <RoomContent lessonId={lessonId} studentId={studentId} />
@@ -137,8 +140,9 @@ const RoomContent: React.FC<{
     // Hook to manage workspace toggle and split ratio
     const [workspaceOpen, openWorkspace, closeWorkspace, splitRatio, setSplitRatio] = useWorkspaceToggle();
 
-    // Hook that encapsulates all playback sync
+    // Hooks that encapsulate all playback sync
     const syncedVideo = useSyncedVideo(room, user?.role === 'tutor', workspaceOpen, openWorkspace);
+    const syncedGrammar = useSyncedGrammar(room, user?.role === 'tutor', workspaceOpen, openWorkspace);
 
     const isTutor = user?.role === 'tutor';
     const theme = useTheme();
@@ -260,6 +264,7 @@ const RoomContent: React.FC<{
                     >
                         <WorkZone
                             useSyncedVideo={syncedVideo}
+                            useSyncedGrammar={syncedGrammar}
                             onClose={closeWorkspace}
                             lessonId={lessonId}
                         />

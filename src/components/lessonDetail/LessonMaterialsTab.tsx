@@ -36,7 +36,7 @@ const LessonMaterialsTab: React.FC<LessonMaterialsTabProps> = ({ lessonId, isTea
 
   // Fetch lesson materials
   const { data: lessonMaterials = [], isLoading } = useLessonMaterials(lessonId);
-  
+
   // Unlink material mutation
   const unlinkMutation = useUnlinkMaterialFromLesson();
 
@@ -52,17 +52,18 @@ const LessonMaterialsTab: React.FC<LessonMaterialsTabProps> = ({ lessonId, isTea
   };
 
     const handlePlay = (material: Material) => {
-        if (material.type === 'GRAMMAR') {
-            setSelectedMaterial(material);
-            setIsGrammarDialogOpen(true);
-            return
-        }
         // If parent supplied an onPlay callback (video-conference mode)
-        // send the material up. Otherwise fall back to local StandaloneMediaPlayer.
+        // send the material up regardless of type. Otherwise handle locally.
         if (onPlay) {
             onPlay(material);
         } else {
-            setCurrentMaterial(material);
+            // Local handling based on material type
+            if (material.type === 'GRAMMAR') {
+                setSelectedMaterial(material);
+                setIsGrammarDialogOpen(true);
+            } else {
+                setCurrentMaterial(material);
+            }
         }
     };
 

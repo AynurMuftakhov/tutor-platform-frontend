@@ -7,13 +7,16 @@ import {
   Dashboard as DashboardIcon
 } from '@mui/icons-material';
 import SyncedVideoPlayer from './SyncedVideoPlayer';
+import SyncedGrammarPlayer from '../grammar/SyncedGrammarPlayer';
 import LessonMaterialsTab from './LessonMaterialsTab';
 import { useWorkspace, WorkspaceTool } from '../../context/WorkspaceContext';
 import { useAuth } from '../../context/AuthContext';
 import { UseSyncedVideoResult } from '../../hooks/useSyncedVideo';
+import { UseSyncedGrammarResult } from '../../hooks/useSyncedGrammar';
 
 interface WorkZoneProps {
   useSyncedVideo: UseSyncedVideoResult;
+  useSyncedGrammar?: UseSyncedGrammarResult;
   onClose: () => void;
   lessonId: string;
 }
@@ -22,8 +25,9 @@ interface WorkZoneProps {
  * WorkZone component that houses the SyncedVideoPlayer and future components
  * like Whiteboard, Quiz, PDFViewer, etc.
  */
-const WorkZone: React.FC<WorkZoneProps> = ({useSyncedVideo, onClose, lessonId }) => {
+const WorkZone: React.FC<WorkZoneProps> = ({useSyncedVideo, useSyncedGrammar, onClose, lessonId }) => {
   const { state } = useSyncedVideo;
+  const grammarState = useSyncedGrammar?.state;
   const { currentTool, setCurrentTool } = useWorkspace();
   const { user } = useAuth();
   const isTutor = user?.role === 'tutor';
@@ -32,19 +36,21 @@ const WorkZone: React.FC<WorkZoneProps> = ({useSyncedVideo, onClose, lessonId })
   useEffect(() => {
     if (state.open && state.material) {
       setCurrentTool('video');
+    } else if (grammarState?.open && grammarState?.material) {
+      setCurrentTool('video');
     } else {
       setCurrentTool('materials');
     }
-  }, [state.open, state.material, setCurrentTool]);
+  }, [state.open, state.material, grammarState?.open, grammarState?.material, setCurrentTool]);
 
   // Auto-open workspace when currentTool changes to 'video'
   useEffect(() => {
-    if (currentTool === 'video' && !state.open) {
-      // If we're switching to video tab but no video is open,
+    if (currentTool === 'video' && !state.open && !grammarState?.open) {
+      // If we're switching to video tab but no video or grammar is open,
       // switch back to materials tab
       setCurrentTool('materials');
     }
-  }, [currentTool, state.open, setCurrentTool]);
+  }, [currentTool, state.open, grammarState?.open, setCurrentTool]);
 
   // Handle tab change
   const handleTabChange = (_event: React.SyntheticEvent, newValue: WorkspaceTool) => {
@@ -149,16 +155,29 @@ const WorkZone: React.FC<WorkZoneProps> = ({useSyncedVideo, onClose, lessonId })
               lessonId={lessonId} 
               isTeacher={user?.role === 'tutor'}
               onPlay={(material) => {
-                useSyncedVideo.open(material);
+                if (material.type === 'GRAMMAR' && useSyncedGrammar) {
+                  useSyncedGrammar.open(material);
+                } else {
+                  useSyncedVideo.open(material);
+                }
                 setCurrentTool('video');
               }}
             />
           )}
 
-          {currentTool === 'video' && state.open && state.material && (
-            <SyncedVideoPlayer
-              useSyncedVideo={useSyncedVideo}
-            />
+          {currentTool === 'video' && (
+            <>
+              {state.open && state.material && (
+                <SyncedVideoPlayer
+                  useSyncedVideo={useSyncedVideo}
+                />
+              )}
+              {grammarState?.open && grammarState?.material && useSyncedGrammar && (
+                <SyncedGrammarPlayer
+                  useSyncedGrammar={useSyncedGrammar}
+                />
+              )}
+            </>
           )}
 
           {currentTool === 'whiteboard' && (
