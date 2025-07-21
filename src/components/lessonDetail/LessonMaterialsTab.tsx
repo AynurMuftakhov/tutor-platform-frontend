@@ -15,22 +15,28 @@ import { useLessonMaterials, useUnlinkMaterialFromLesson } from '../../hooks/use
 import { useQueryClient } from '@tanstack/react-query';
 import StandaloneMediaPlayer from "./StandaloneMediaPlayer";
 import {extractVideoId} from "../../utils/videoUtils";
+import GrammarViewerDialog from "../grammar/GrammarViewerDialog";
 
 interface LessonMaterialsTabProps {
   lessonId: string;
   isTeacher: boolean;
+    /** Optional: when provided we’re inside the video-call workspace
+     *  and should forward the material to the synced player instead
+     *  of opening the standalone dialog. */
+    onPlay?: (material: Material) => void;
 }
 
-const LessonMaterialsTab: React.FC<LessonMaterialsTabProps> = ({ lessonId, isTeacher }) => {
+const LessonMaterialsTab: React.FC<LessonMaterialsTabProps> = ({ lessonId, isTeacher, onPlay }) => {
   const queryClient = useQueryClient();
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [selectedMaterial, setSelectedMaterial] = useState<any>(null);
   const [isTaskManagerOpen, setIsTaskManagerOpen] = useState(false);
   const [currentMaterial, setCurrentMaterial] = useState<Material | null>(null);
+  const [isGrammarDialogOpen, setIsGrammarDialogOpen] = useState(false);
 
   // Fetch lesson materials
   const { data: lessonMaterials = [], isLoading } = useLessonMaterials(lessonId);
-  
+
   // Unlink material mutation
   const unlinkMutation = useUnlinkMaterialFromLesson();
 
@@ -45,9 +51,26 @@ const LessonMaterialsTab: React.FC<LessonMaterialsTabProps> = ({ lessonId, isTea
     queryClient.invalidateQueries({ queryKey: ['lessonMaterials', lessonId] });
   };
 
-  // Handle play button click
     const handlePlay = (material: Material) => {
-        setCurrentMaterial(material);
+        // If parent supplied an onPlay callback (video-conference mode)
+        // send the material up regardless of type. Otherwise handle locally.
+        if (onPlay) {
+            onPlay(material);
+        } else {
+            // Local handling based on material type
+            if (material.type === 'GRAMMAR') {
+                setSelectedMaterial(material);
+                setIsGrammarDialogOpen(true);
+            } else {
+                setCurrentMaterial(material);
+            }
+        }
+    };
+
+    // Close the grammar dialog
+    const handleCloseGrammarDialog = () => {
+        setIsGrammarDialogOpen(false);
+        setSelectedMaterial(null);
     };
 
     // Close the player
@@ -161,12 +184,6 @@ const LessonMaterialsTab: React.FC<LessonMaterialsTabProps> = ({ lessonId, isTea
         <Grid container spacing={2}>
           {lessonMaterials.map((lessonMaterial: any) => (
             <Grid
-              size={{
-                  xs : 12,
-                  sm : 6,
-                  md : 4,
-                  lg : 3,
-              }}
               key={lessonMaterial.id}
             >
               <MaterialCard 
@@ -209,13 +226,23 @@ const LessonMaterialsTab: React.FC<LessonMaterialsTabProps> = ({ lessonId, isTea
       />
 
       {/* Listening Task Manager */}
-      {selectedMaterial && (
+      {selectedMaterial && selectedMaterial.type === 'VIDEO' && (
         <ListeningTaskManager
           material={selectedMaterial}
           open={isTaskManagerOpen}
           onClose={handleCloseTaskManager}
         />
       )}
+
+        {/* Grammar Viewer Dialog */}
+        {selectedMaterial && selectedMaterial.type === 'GRAMMAR' && (
+            <GrammarViewerDialog
+                open={isGrammarDialogOpen}
+                onClose={handleCloseGrammarDialog}
+                materialId={selectedMaterial.id}
+                title={selectedMaterial.title}
+            />
+        )}
     </Box>
   );
 };

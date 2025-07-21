@@ -17,7 +17,6 @@ import { useAuth } from "../context/AuthContext";
 import UpcomingLessonsSection from "../components/dashboard/UpcomingLessonsSection";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
 
 type StatCardProps = {
     title: string;
@@ -148,7 +147,9 @@ const Dashboard = () => {
                 bgcolor: '#fafbfd',
                 minHeight: '100dvh',
                 width: '100%',
-                overflowX: 'hidden'
+                overflowX: 'hidden',
+                overflow: 'hidden',
+                position: 'fixed',
             }}
         >
             {/* Header Section with Greeting */}

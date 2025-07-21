@@ -21,8 +21,9 @@ import ReactPlayer from 'react-player';
 import { MaterialFolderTree } from '../../types';
 import { MaterialType } from './MaterialCard';
 import { useFolderTree } from '../../hooks/useMaterials';
-import { createMaterial, updateMaterial, getMaterialTags } from '../../services/api';
+import { createMaterial, updateMaterial, getMaterialTags, createGrammarItem } from '../../services/api';
 import { Material } from './MaterialCard';
+import GrammarEditor from '../grammar/GrammarEditor';
 
 // Use the real API functions imported from services/api
 
@@ -52,6 +53,10 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
   // Keeps whatever the user is still typing in the autocomplete field
   const [tagInputValue, setTagInputValue] = useState('');
   const [createTask, setCreateTask] = useState(false);
+
+  // Grammar-specific state
+  const [grammarContent, setGrammarContent] = useState('');
+  const [grammarAnswer, setGrammarAnswer] = useState('');
 
   // Validation state
   const [urlError, setUrlError] = useState('');
@@ -95,6 +100,13 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
         setTitle(materialToEdit.title || '');
         setFolderId(materialToEdit.folderId || currentFolderId || '');
         setSelectedTags(materialToEdit.tags || []);
+
+        // For GRAMMAR type, we'll need to fetch the grammar content
+        // This would typically come from the backend, but for now we'll use placeholder
+        if (materialToEdit.type === 'GRAMMAR') {
+          setGrammarContent(materialToEdit.sourceUrl || '');
+          setGrammarAnswer('');
+        }
       } else {
         // Reset form for new material
         setMaterialType('VIDEO');
@@ -102,6 +114,8 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
         setTitle('');
         setFolderId(currentFolderId || '');
         setSelectedTags([]);
+        setGrammarContent('');
+        setGrammarAnswer('');
       }
       setTagInputValue('');
       setUrlError('');
@@ -112,6 +126,12 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
 
   // Validate URL based on material type
   const validateUrl = (url: string) => {
+    // Skip URL validation for GRAMMAR type
+    if (materialType === 'GRAMMAR') {
+      setUrlError('');
+      return true;
+    }
+
     if (!url) {
       setUrlError('URL is required');
       return false;
@@ -175,10 +195,20 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
   // Handle form submission
   const handleSubmit = async () => {
     // Validate form
-    const isUrlValid = validateUrl(sourceUrl);
+    const isUrlValid = materialType === 'GRAMMAR' ? true : validateUrl(sourceUrl);
     const isTitleValid = validateTitle(title);
 
-    if (!isUrlValid || !isTitleValid) {
+    // For GRAMMAR type, validate that we have content and at least one gap
+    let isGrammarValid = true;
+    if (materialType === 'GRAMMAR') {
+      if (!grammarContent || !grammarContent.includes('{{')) {
+        isGrammarValid = false;
+        // We could show an error message here
+        return;
+      }
+    }
+
+    if (!isUrlValid || !isTitleValid || !isGrammarValid) {
       return;
     }
 
@@ -188,10 +218,12 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
       finalTags.push(tagInputValue.trim());
     }
 
+    const effectiveSourceUrl = materialType === 'GRAMMAR' ? '' : sourceUrl;
+
     const materialData = {
       type: materialType,
       title,
-      sourceUrl,
+      sourceUrl: effectiveSourceUrl,
       folderId: folderId || undefined,
       tags: finalTags
     };
@@ -206,6 +238,22 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
       } else {
         // Create new material
         updatedMaterial = await createMaterial(materialData);
+      }
+
+      // For GRAMMAR type, create a grammar item
+      if (materialType === 'GRAMMAR' && updatedMaterial) {
+        try {
+          // Create a grammar item with the content and answer
+          await createGrammarItem(updatedMaterial.id, {
+            sortOrder: 1,
+            type: 'GAP_FILL',
+            text: grammarContent,
+            answer: grammarAnswer,
+          });
+        } catch (grammarError) {
+          console.error('Failed to create grammar item', grammarError);
+          // Continue with the flow even if grammar item creation fails
+        }
       }
 
       // If the user wants to create a task and we have the task manager
@@ -263,18 +311,32 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
             sx={{ mb: 3 }}
           />
 
-          <TextField
-            fullWidth
-            label={materialType === 'VIDEO' || materialType === 'AUDIO' ? 'YouTube URL' : 'Source URL'}
-            value={sourceUrl}
-            onChange={(e) => {
-              setSourceUrl(e.target.value);
-              if (e.target.value) validateUrl(e.target.value);
-            }}
-            error={!!urlError}
-            helperText={urlError || (materialType === 'DOCUMENT' ? 'Enter URL to document or PDF' : '')}
-            sx={{ mb: 3 }}
-          />
+          {materialType !== 'GRAMMAR' && (
+            <TextField
+              fullWidth
+              label={materialType === 'VIDEO' || materialType === 'AUDIO' ? 'YouTube URL' : 'Source URL'}
+              value={sourceUrl}
+              onChange={(e) => {
+                setSourceUrl(e.target.value);
+                if (e.target.value) validateUrl(e.target.value);
+              }}
+              error={!!urlError}
+              helperText={urlError || (materialType === 'DOCUMENT' ? 'Enter URL to document or PDF' : '')}
+              sx={{ mb: 3 }}
+            />
+          )}
+
+          {materialType === 'GRAMMAR' && (
+            <Box sx={{ mb: 3 }}>
+              <GrammarEditor 
+                initialContent={grammarContent}
+                onSave={(content, answer) => {
+                  setGrammarContent(content);
+                  setGrammarAnswer(answer);
+                }}
+              />
+            </Box>
+          )}
 
           <FormControl fullWidth sx={{ mb: 3 }}>
             <InputLabel id="folder-label">Folder</InputLabel>
@@ -354,9 +416,11 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
           color="primary" 
           variant="contained"
           disabled={
-            (materialType === 'VIDEO' || materialType === 'AUDIO')
-              ? (!!urlError || !!titleError || isSubmitting)
-              : (!!urlError || !!titleError || !sourceUrl || !title || isSubmitting)
+            materialType === 'GRAMMAR'
+              ? (!!titleError || !title || isSubmitting)
+              : (materialType === 'VIDEO' || materialType === 'AUDIO')
+                ? (!!urlError || !!titleError || isSubmitting)
+                : (!!urlError || !!titleError || !sourceUrl || !title || isSubmitting)
           }
         >
           {isSubmitting ? 'Saving...' : materialToEdit ? 'Update' : 'Save'}

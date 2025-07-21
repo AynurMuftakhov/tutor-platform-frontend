@@ -24,6 +24,7 @@ import AddMaterialModal from '../components/materials/AddMaterialModal';
 import MoveToFolderModal from '../components/materials/MoveToFolderModal';
 import { useFolderTree, useMaterials } from '../hooks/useMaterials';
 import StandaloneMediaPlayer from '../components/lessonDetail/StandaloneMediaPlayer';
+import GrammarViewerDialog from '../components/grammar/GrammarViewerDialog';
 import { extractVideoId } from '../utils/videoUtils';
 import { deleteMaterial, updateMaterialFolder, deleteMaterialFolder } from '../services/api';
 
@@ -52,6 +53,7 @@ const LearningMaterialsPage: React.FC = () => {
   const [isAddFolderModalOpen, setIsAddFolderModalOpen] = useState(false);
   const [isAddMaterialModalOpen, setIsAddMaterialModalOpen] = useState(false);
   const [currentMaterial, setCurrentMaterial] = useState<Material | null>(null);
+  const [isGrammarDialogOpen, setIsGrammarDialogOpen] = useState(false);
   const [isTaskManagerOpen, setIsTaskManagerOpen] = useState(false);
   const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null);
   const [materialToEdit, setMaterialToEdit] = useState<Material | null>(null);
@@ -63,7 +65,7 @@ const LearningMaterialsPage: React.FC = () => {
   const { data: materialsData = { content: [] }, isLoading: materialsLoading } = useMaterials({
     folderId: selectedFolderId === ROOT_FOLDER_ID || selectedFolderId === 'all' ? undefined : selectedFolderId,
     search: searchTerm,
-    type: selectedType === 'all' ? undefined : selectedType,
+    type: selectedType === 'all' ? undefined : selectedType === 'grammar' ? 'GRAMMAR' : selectedType,
     tags: selectedTags.length > 0 ? selectedTags : undefined,
   });
 
@@ -127,12 +129,23 @@ const LearningMaterialsPage: React.FC = () => {
 
   // Handle play button click
   const handlePlay = (material: Material) => {
-    setCurrentMaterial(material);
+    if (material.type === 'GRAMMAR') {
+      setSelectedMaterial(material);
+      setIsGrammarDialogOpen(true);
+    } else {
+      setCurrentMaterial(material);
+    }
   };
 
   // Close the player
   const handleClosePlayer = () => {
     setCurrentMaterial(null);
+  };
+
+  // Close the grammar dialog
+  const handleCloseGrammarDialog = () => {
+    setIsGrammarDialogOpen(false);
+    setSelectedMaterial(null);
   };
 
   // Handle managing tasks for a material
@@ -410,6 +423,16 @@ const LearningMaterialsPage: React.FC = () => {
         folderTree={folderTree}
         currentFolderId={selectedFolderId}
       />
+
+      {/* Grammar Viewer Dialog */}
+      {selectedMaterial && selectedMaterial.type === 'GRAMMAR' && (
+        <GrammarViewerDialog
+          open={isGrammarDialogOpen}
+          onClose={handleCloseGrammarDialog}
+          materialId={selectedMaterial.id}
+          title={selectedMaterial.title}
+        />
+      )}
     </Box>
   );
 };

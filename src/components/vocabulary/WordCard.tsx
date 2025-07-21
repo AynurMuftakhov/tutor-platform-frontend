@@ -9,7 +9,6 @@ import {
     Box,
     Chip,
     Tooltip,
-    Collapse,
     Button,
     styled,
     useTheme,
@@ -64,7 +63,6 @@ interface WordCardProps {
     isSelected?: boolean;
     onToggleSelection?: (id: string) => void;
     readOnly?: boolean;
-    compact?: boolean;
     initialExpanded?: boolean;
 }
 
@@ -91,7 +89,6 @@ const WordCard: React.FC<WordCardProps> = ({
     isSelected = false,
     onToggleSelection,
     readOnly = false,
-    compact = false,
     initialExpanded = false
 }) => {
     const [expanded, setExpanded] = useState(initialExpanded);
@@ -551,7 +548,7 @@ const WordCard: React.FC<WordCardProps> = ({
                                                 borderLeft: `2px solid ${alpha(theme.palette.secondary.main, 0.3)}`
                                             }}
                                         >
-                                            "{word.exampleSentence}"
+                                            &#39;{word.exampleSentence}&#39;
                                         </Typography>
                                     </Box>
                                 )}
@@ -745,7 +742,7 @@ const WordCard: React.FC<WordCardProps> = ({
                 <DialogTitle>Confirm Deletion</DialogTitle>
                 <DialogContent>
                     <DialogContentText>
-                        Are you sure you want to delete the word "{word.text}"? This action cannot be undone.
+                        Are you sure you want to delete the word &#39;{word.text}&#39;? This action cannot be undone.
                     </DialogContentText>
                 </DialogContent>
                 <DialogActions>

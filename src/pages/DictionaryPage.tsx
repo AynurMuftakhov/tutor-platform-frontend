@@ -294,27 +294,32 @@ const DictionaryPage: React.FC = () => {
 
     return (
         <Box 
-            sx={{ 
-                p: { xs: 2, sm: 4 },
+            sx={{
+                p: { xs: 1, sm: 1 },
                 bgcolor: '#fafbfd',
-                minHeight: '100vh'
+                height: '100dvh',
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+                position: 'relative'
             }}
         >
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5 }}
+                style={{ display: 'flex', flexDirection: 'column', flex: 1, position: 'relative', zIndex: 1, overflow: 'hidden' }}
             >
-                <Stack 
-                    direction={{ xs: 'column', sm: 'row' }} 
-                    justifyContent="space-between" 
-                    alignItems={{ xs: 'flex-start', sm: 'center' }} 
+                <Stack
+                    direction={{ xs: 'column', sm: 'row' }}
+                    justifyContent="space-between"
+                    alignItems={{ xs: 'flex-start', sm: 'center' }}
                     mb={3}
                     spacing={2}
                 >
-                    <Typography 
-                        variant="h4" 
-                        sx={{ 
+                    <Typography
+                        variant="h4"
+                        sx={{
                             fontWeight: 600,
                             color: '#2573ff',
                             display: 'flex',
@@ -333,7 +338,7 @@ const DictionaryPage: React.FC = () => {
                                     <Button
                                         variant="outlined"
                                         onClick={toggleSelectionMode}
-                                        sx={{ 
+                                        sx={{
                                             borderRadius: 2,
                                             borderColor: 'error.main',
                                             color: 'error.main',
@@ -348,7 +353,7 @@ const DictionaryPage: React.FC = () => {
                                         variant="contained"
                                         onClick={() => setAssignOpen(true)}
                                         disabled={selectedWords.length === 0}
-                                        sx={{ 
+                                        sx={{
                                             borderRadius: 2,
                                             bgcolor: '#2573ff',
                                             '&:hover': {
@@ -365,7 +370,7 @@ const DictionaryPage: React.FC = () => {
                                         variant="outlined"
                                         onClick={toggleSelectionMode}
                                         startIcon={<PersonAddIcon />}
-                                        sx={{ 
+                                        sx={{
                                             borderRadius: 2,
                                             borderColor: '#00d7c2',
                                             color: '#00d7c2',
@@ -381,7 +386,7 @@ const DictionaryPage: React.FC = () => {
                                         variant="contained"
                                         onClick={() => setGenOpen(true)}
                                         startIcon={<AddIcon />}
-                                        sx={{ 
+                                        sx={{
                                             borderRadius: 2,
                                             bgcolor: '#2573ff',
                                             '&:hover': {
@@ -401,7 +406,7 @@ const DictionaryPage: React.FC = () => {
                                 variant="outlined"
                                 onClick={() => setQuizOpen(true)}
                                 startIcon={<SchoolIcon />}
-                                sx={{ 
+                                sx={{
                                     borderRadius: 2,
                                     borderColor: '#00d7c2',
                                     color: '#00d7c2',
@@ -420,10 +425,10 @@ const DictionaryPage: React.FC = () => {
                 {/* Student tabs for switching between My Vocabulary and Library */}
                 {!isTeacher && (
                     <Box sx={{ mb: 3 }}>
-                        <Tabs 
-                            value={activeTab} 
+                        <Tabs
+                            value={activeTab}
                             onChange={(_, newValue) => setActiveTab(newValue)}
-                            sx={{ 
+                            sx={{
                                 mb: 2,
                                 '& .MuiTab-root': {
                                     minWidth: 'auto',
@@ -443,22 +448,22 @@ const DictionaryPage: React.FC = () => {
                                 }
                             }}
                         >
-                            <Tab 
-                                value="my-vocabulary" 
-                                label="My Vocabulary" 
-                                icon={<BookmarkIcon />} 
+                            <Tab
+                                value="my-vocabulary"
+                                label="My Vocabulary"
+                                icon={<BookmarkIcon />}
                                 iconPosition="start"
                             />
-                            <Tab 
-                                value="library" 
-                                label="Vocabulary Library" 
-                                icon={<LibraryBooksIcon />} 
+                            <Tab
+                                value="library"
+                                label="Vocabulary Library"
+                                icon={<LibraryBooksIcon />}
                                 iconPosition="start"
                             />
                         </Tabs>
 
                         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                            {activeTab === 'my-vocabulary' 
+                            {activeTab === 'my-vocabulary'
                                 ? 'Words assigned to you by your teacher. Practice these to improve your vocabulary.'
                                 : 'Browse all available vocabulary words. Add interesting words to your personal vocabulary.'}
                         </Typography>
@@ -466,8 +471,8 @@ const DictionaryPage: React.FC = () => {
                 )}
 
                 {/* Search & Filters */}
-                <Box 
-                    sx={{ 
+                <Box
+                    sx={{
                         mb: 3,
                         p: 2,
                         borderRadius: 2,
@@ -476,9 +481,9 @@ const DictionaryPage: React.FC = () => {
                         border: '1px solid rgba(0,0,0,0.08)'
                     }}
                 >
-                    <Stack 
-                        direction={{ xs: 'column', sm: 'row' }} 
-                        spacing={2} 
+                    <Stack
+                        direction={{ xs: 'column', sm: 'row' }}
+                        spacing={2}
                         mb={2}
                         alignItems={{ xs: 'stretch', sm: 'center' }}
                     >
@@ -495,7 +500,7 @@ const DictionaryPage: React.FC = () => {
                                     </InputAdornment>
                                 )
                             }}
-                            sx={{ 
+                            sx={{
                                 '& .MuiOutlinedInput-root': {
                                     borderRadius: 2
                                 }
@@ -512,7 +517,7 @@ const DictionaryPage: React.FC = () => {
                             }}
                             aria-label="view mode"
                             size="small"
-                            sx={{ 
+                            sx={{
                                 border: '1px solid rgba(0,0,0,0.12)',
                                 borderRadius: 2,
                                 '& .MuiToggleButton-root': {
@@ -543,18 +548,18 @@ const DictionaryPage: React.FC = () => {
                         <Chip
                             icon={<FilterListIcon />}
                             label={
-                                filterState === 'all' 
-                                    ? "All words" 
-                                    : filterState === 'learned' 
-                                        ? "Learned words" 
+                                filterState === 'all'
+                                    ? "All words"
+                                    : filterState === 'learned'
+                                        ? "Learned words"
                                         : "Words to learn"
                             }
                             clickable
                             color={
-                                filterState === 'all' 
-                                    ? "default" 
-                                    : filterState === 'learned' 
-                                        ? "success" 
+                                filterState === 'all'
+                                    ? "default"
+                                    : filterState === 'learned'
+                                        ? "success"
                                         : "primary"
                             }
                             onClick={() => {
@@ -565,26 +570,26 @@ const DictionaryPage: React.FC = () => {
                                     return 'all';
                                 });
                             }}
-                            sx={{ 
+                            sx={{
                                 borderRadius: 2,
-                                bgcolor: 
-                                    filterState === 'all' 
-                                        ? 'transparent' 
-                                        : filterState === 'learned' 
-                                            ? 'rgba(0, 215, 194, 0.1)' 
+                                bgcolor:
+                                    filterState === 'all'
+                                        ? 'transparent'
+                                        : filterState === 'learned'
+                                            ? 'rgba(0, 215, 194, 0.1)'
                                             : 'rgba(37, 115, 255, 0.1)',
-                                border: 
-                                    filterState === 'all' 
-                                        ? '1px solid rgba(0,0,0,0.12)' 
-                                        : filterState === 'learned' 
-                                            ? '1px solid #00d7c2' 
+                                border:
+                                    filterState === 'all'
+                                        ? '1px solid rgba(0,0,0,0.12)'
+                                        : filterState === 'learned'
+                                            ? '1px solid #00d7c2'
                                             : '1px solid #2573ff',
                                 '& .MuiChip-icon': {
-                                    color: 
-                                        filterState === 'all' 
-                                            ? 'inherit' 
-                                            : filterState === 'learned' 
-                                                ? '#00d7c2' 
+                                    color:
+                                        filterState === 'all'
+                                            ? 'inherit'
+                                            : filterState === 'learned'
+                                                ? '#00d7c2'
                                                 : '#2573ff'
                                 }
                             }}
@@ -596,50 +601,66 @@ const DictionaryPage: React.FC = () => {
                     <CategoryTabs value={category} onChange={(v) => setCategory(v as '0' | '1' | '2' | '3' | '4' | '5')} />
                 </Box>
 
-                {/* Vocabulary Display - Grid or List */}
-                {viewMode === 'grid' ? (
+                {/* ───── Scrollable Vocabulary Display ───── */}
+                <Box
+                  sx={{
+                    flex: 1,
+                    minHeight: 0,
+                    overflowY: 'auto',
+                    pr: 0.5, mb: '100px'
+                  }}
+                >
+                  {viewMode === 'grid' ? (
                     <WordGrid
-                        data={paginated}
-                        onDelete={isTeacher && !selectionMode ? id => deleteWord.mutate(id) : undefined}
-                        onEdit={isTeacher && !selectionMode ? handleWordEdit : undefined}
-                        onToggleLearned={!selectionMode ? handleToggleLearned : undefined}
-                        onAddToMyVocabulary={!isTeacher && activeTab === 'library' && !selectionMode ? handleAddToMyVocabulary : undefined}
-                        learnedWords={learnedWords}
-                        readOnly={!isTeacher && activeTab === 'library'}
-                        selectionMode={selectionMode}
-                        selectedWords={selectedWords}
-                        onToggleSelection={handleToggleSelection}
+                      data={paginated}
+                      onDelete={isTeacher && !selectionMode ? id => deleteWord.mutate(id) : undefined}
+                      onEdit={isTeacher && !selectionMode ? handleWordEdit : undefined}
+                      onToggleLearned={!selectionMode ? handleToggleLearned : undefined}
+                      onAddToMyVocabulary={!isTeacher && activeTab === 'library' && !selectionMode ? handleAddToMyVocabulary : undefined}
+                      learnedWords={learnedWords}
+                      readOnly={!isTeacher && activeTab === 'library'}
+                      selectionMode={selectionMode}
+                      selectedWords={selectedWords}
+                      onToggleSelection={handleToggleSelection}
                     />
-                ) : (
+                  ) : (
                     <VocabularyList
-                        data={paginated}
-                        onDelete={isTeacher && !selectionMode ? id => deleteWord.mutate(id) : undefined}
-                        onEdit={isTeacher && !selectionMode ? handleWordEdit : undefined}
-                        onToggleLearned={!selectionMode ? handleToggleLearned : undefined}
-                        onAddToMyVocabulary={!isTeacher && activeTab === 'library' && !selectionMode ? handleAddToMyVocabulary : undefined}
-                        learnedWords={learnedWords}
-                        readOnly={!isTeacher && activeTab === 'library'}
-                        selectionMode={selectionMode}
-                        selectedWords={selectedWords}
-                        onToggleSelection={handleToggleSelection}
+                      data={paginated}
+                      onDelete={isTeacher && !selectionMode ? id => deleteWord.mutate(id) : undefined}
+                      onEdit={isTeacher && !selectionMode ? handleWordEdit : undefined}
+                      onToggleLearned={!selectionMode ? handleToggleLearned : undefined}
+                      onAddToMyVocabulary={!isTeacher && activeTab === 'library' && !selectionMode ? handleAddToMyVocabulary : undefined}
+                      learnedWords={learnedWords}
+                      readOnly={!isTeacher && activeTab === 'library'}
+                      selectionMode={selectionMode}
+                      selectedWords={selectedWords}
+                      onToggleSelection={handleToggleSelection}
                     />
-                )}
+                  )}
+                </Box>
 
-                {/* Pagination */}
                 {filtered.length > 0 && (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+                    <Box
+                        sx={{
+                            bottom: 0,
+                            py: 1,
+                            backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                            borderTop: '1px solid rgba(0, 0, 0, 0.05)',
+                            position: 'fixed',
+                            width: '100%',
+                        }}
+                    >
                         <Pagination
                             count={Math.ceil(filtered.length / ITEMS_PER_PAGE)}
                             page={page}
                             onChange={(_, p) => setPage(p)}
                             color="primary"
-                            size={isMobile ? "small" : "medium"}
+                            size={isMobile ? 'small' : 'medium'}
                             showFirstButton
                             showLastButton
                             sx={{
-                                '& .MuiPaginationItem-root': {
-                                    borderRadius: 2,
-                                },
+                                ml: '35%',
+                                '& .MuiPaginationItem-root': { borderRadius: 2 },
                                 '& .Mui-selected': {
                                     bgcolor: '#2573ff !important',
                                     color: 'white'
@@ -648,6 +669,7 @@ const DictionaryPage: React.FC = () => {
                         />
                     </Box>
                 )}
+
             </motion.div>
 
             {/* Dialogs */}

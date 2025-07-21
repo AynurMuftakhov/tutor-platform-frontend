@@ -31,7 +31,7 @@ import {
   Videocam as VideoIcon,
   Description as DocumentIcon,
   Code as GrammarIcon,
-  Assignment as TasksIcon,
+  Assignment as TasksIcon, OpenInFull, Start, StartOutlined, School,
 } from '@mui/icons-material';
 import { useListeningTasks } from '../../hooks/useListeningTasks';
 
@@ -72,9 +72,8 @@ const MaterialCard: React.FC<MaterialCardProps> = ({
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
   const theme = useTheme();
-
-  // Only fetch tasks if the new API is enabled and we have a material ID
-  const shouldFetchTasks = !!material.id;
+  const isVideo = material.type === 'VIDEO';
+  const shouldFetchTasks = isVideo && !!material.id;
   const { data: tasks = [] } = useListeningTasks(shouldFetchTasks ? material.id : '');
 
   // Format duration if available
@@ -187,20 +186,21 @@ const MaterialCard: React.FC<MaterialCardProps> = ({
           }
         }}
       >
-        <CardMedia
-          component="img"
-          sx={{
-            width: viewMode === 'list' 
-              ? { xs: '100%', sm: 150 } 
-              : '100%',
-            height: viewMode === 'list' 
-              ? { xs: 180, sm: '100%' } 
-              : 180,
-            objectFit: 'cover'
-          }}
-          image={getThumbnail()}
-          alt={material.title}
-        />
+        {isVideo && (
+          <CardMedia
+            component="img"
+            sx={{
+              width: viewMode === 'list'
+                ? { xs: '100%', sm: 150 }
+                : '100%',
+              height: viewMode === 'list'
+                ? { xs: 180, sm: '100%' }
+                : 180,
+              objectFit: 'cover'
+            }}
+            image={getThumbnail()}
+            alt={material.title}
+          />)}
         <Box
           sx={{
             display: 'flex',
@@ -294,8 +294,8 @@ const MaterialCard: React.FC<MaterialCardProps> = ({
 
               {/* Action buttons */}
               <Box sx={{ display: 'flex', gap: 1, ml: 'auto' }}>
-                {(material.type === 'AUDIO' || material.type === 'VIDEO') && onPlay && (
-                  <Tooltip title="Play">
+                {(material.type === 'AUDIO' || material.type === 'VIDEO' || material.type === 'GRAMMAR') && onPlay && (
+                  <Tooltip title= {isVideo ? "Play" : "Start Excercise"} >
                     <IconButton
                       size="small"
                       onClick={() => onPlay(material)}
@@ -309,7 +309,7 @@ const MaterialCard: React.FC<MaterialCardProps> = ({
                         }
                       }}
                     >
-                      <PlayIcon fontSize="small" />
+                      {isVideo ? ( <PlayIcon fontSize="small" />) : ( <School/>)}
                     </IconButton>
                   </Tooltip>
                 )}
@@ -339,7 +339,7 @@ const MaterialCard: React.FC<MaterialCardProps> = ({
         open={Boolean(menuAnchorEl)}
         onClose={handleMenuClose}
       >
-        { onManageTasks && (
+        { onManageTasks && isVideo && (
           <MenuItem onClick={handleManageTasks}>
             <ListItemIcon>
               <TasksIcon fontSize="small" />

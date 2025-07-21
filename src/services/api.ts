@@ -2,6 +2,7 @@ import axios from 'axios';
 import {Student} from "../pages/MyStudentsPage";
 import { NotificationMessage} from "../context/NotificationsSocketContext";
 import { ApiError } from '../context/ApiErrorContext';
+import {GenerateExerciseRequest, GenerateExerciseResponse} from "../types";
 
 const api = axios.create({
     baseURL: import.meta.env.VITE_API_URL,
@@ -44,7 +45,7 @@ export const getUpcomingLessons = async (tutorId: string, studentId: string, cur
     if (tutorId) params.append("tutorId", tutorId);
     if (studentId) params.append("studentId", studentId);
     if (currentDate) params.append("currentDate", currentDate);
-    params.append("status", "SCHEDULED,RESCHEDULED");
+    params.append("status", "SCHEDULED,RESCHEDULED,IN_PROGRESS");
 
     const response = await api.get(`/lessons-service/api/lessons/upcoming?${params}`);
     return response.data;
@@ -451,5 +452,71 @@ api.interceptors.response.use(
         return Promise.reject(error);
     }
 );
+
+// Grammar items
+export interface GrammarItemDto {
+  id: string;
+  sortOrder: number;
+  type: 'GAP_FILL';      // room for future
+  text: string;          // contains {{1}} etc.
+  metadata?: string;     // JSON string
+  answer: string;        // canonical answers list
+}
+
+// GET all items for a material
+export const fetchGrammarItems = (materialId: string) =>
+  api.get<GrammarItemDto[]>(`/lessons-service/api/materials/${materialId}/grammar-items`)
+     .then(r => r.data);
+
+// POST score request/response
+export interface GrammarScoreRequest {
+  attempts: {
+    grammarItemId: string;
+    gapAnswers: string[];
+  }[];
+}
+
+export interface GrammarScoreResponse {
+  materialId: string;
+  totalItems: number;
+  correctItems: number;
+  totalGaps: number;
+  correctGaps: number;
+  details: {
+    grammarItemId: string;
+    gapResults: {
+      index: number;
+      student: string;
+      correct: string;
+      isCorrect: boolean;
+    }[];
+    itemCorrect: boolean;
+  }[];
+}
+
+export const scoreGrammar = (
+  materialId: string,
+  payload: GrammarScoreRequest
+) =>
+  api.post<GrammarScoreResponse>(
+    `/lessons-service/api/materials/${materialId}/score`,
+    payload
+  ).then(r => r.data);
+
+// Create a grammar item for a material
+export const createGrammarItem = (
+  materialId: string,
+  item: Omit<GrammarItemDto, 'id'>
+) =>
+  api.post<GrammarItemDto>(
+    `/lessons-service/api/materials/${materialId}/grammar-items`,
+    item
+  ).then(r => r.data);
+
+
+export const generateAiExercise = async (payload: GenerateExerciseRequest): Promise<GenerateExerciseResponse> => {
+    const response = await api.post(`/lessons-service/api/ai/exercises`, payload);
+    return response.data;
+};
 
 export default api;

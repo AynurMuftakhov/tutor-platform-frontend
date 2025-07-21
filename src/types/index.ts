@@ -32,3 +32,22 @@ export interface VocabularyWord {
     popularity?: number; // 1 = almost unused, 5 = very frequent (daily)
     exampleSentence?: string; // Short, realistic sentence
 }
+
+export interface GenerateExerciseRequest {
+  grammarFocus: 'articles' | 'prepositions' | 'tenses' | string;
+  topic: string;
+  level: 'beginner' | 'intermediate' | 'advanced';
+  sentences: number;
+  language?: 'en' | 'es' | 'de';
+  tokenStyle?: 'doubleBraces';
+}
+
+export interface GenerateExerciseResponse {
+  html: string;
+  answers: Record<number, string[]>;
+  meta?: {
+    model: string;
+    temp: number;
+    tokensUsed: number;
+  };
+}
