@@ -6,6 +6,7 @@ import GapToken from './GapToken';
 import { gapTokensToNodes, GAP_REGEX } from '../../utils/grammarUtils';
 import { useGrammarItems, useScoreGrammar } from '../../hooks/useGrammarItems';
 import {GrammarScoreResponse} from '../../services/api';
+import MultipleChoicePlayer from './MultipleChoicePlayer';
 
 interface GrammarPlayerProps {
     materialId: string;
@@ -19,6 +20,7 @@ const GrammarPlayer: React.FC<GrammarPlayerProps> = ({
                                                          onClose,
                                                      }) => {
     const [answers, setAnswers] = useState<Record<string, Record<number, string>>>({});
+    const [mcAnswers, setMcAnswers] = useState<Record<string, number>>({});
     const [scoreResult, setScoreResult] = useState<GrammarScoreResponse | null>(null);
     const [showScoreFeedback, setShowScoreFeedback] = useState(false);
 
@@ -99,12 +101,15 @@ const GrammarPlayer: React.FC<GrammarPlayerProps> = ({
 
             // Create content for each item separately
             grammarItems.forEach((item, index) => {
-                const itemAnswers = answers[item.id] || {};
-                const content = gapTokensToNodes(item.text, itemAnswers);
+                // Only process GAP_FILL items with the editor
+                if (item.type === 'GAP_FILL') {
+                    const itemAnswers = answers[item.id] || {};
+                    const content = gapTokensToNodes(item.text, itemAnswers);
 
-                // If this is the first item, set the content directly
-                if (index === 0) {
-                    editor.commands.setContent(content);
+                    // If this is the first GAP_FILL item, set the content directly
+                    if (index === 0) {
+                        editor.commands.setContent(content);
+                    }
                 }
             });
 
@@ -170,24 +175,49 @@ const GrammarPlayer: React.FC<GrammarPlayerProps> = ({
             [itemId]: { ...(prev[itemId] || {}), [idx]: val },
         }));
 
+    // Handler for multiple choice answers
+    const handleMultipleChoiceChange = (itemId: string, chosenIndex: number) =>
+        setMcAnswers(prev => ({
+            ...prev,
+            [itemId]: chosenIndex,
+        }));
 
-    const allGapsFilled = useMemo(() => {
+
+    const allQuestionsAnswered = useMemo(() => {
         return grammarItems.every(item => {
-            const itemAnswers = answers[item.id] || {};
-            const gaps = [...item.text.matchAll(GAP_REGEX)].map(m => Number(m[1]));
-            return gaps.every(g => itemAnswers[g] && itemAnswers[g].trim() !== '');
+            if (item.type === 'GAP_FILL') {
+                const itemAnswers = answers[item.id] || {};
+                const gaps = [...item.text.matchAll(GAP_REGEX)].map(m => Number(m[1]));
+                return gaps.every(g => itemAnswers[g] && itemAnswers[g].trim() !== '');
+            } else if (item.type === 'MULTIPLE_CHOICE') {
+                // For multiple choice, check if an answer has been selected
+                return mcAnswers[item.id] !== undefined;
+            }
+            return false;
         });
-    }, [answers, grammarItems]);
+    }, [answers, mcAnswers, grammarItems]);
 
     const handleCheck = () => {
-        if (!allGapsFilled) return;
+        if (!allQuestionsAnswered) return;
 
         const payload = {
             attempts: grammarItems.map(item => {
-                const gaps = [...item.text.matchAll(GAP_REGEX)].map(m => Number(m[1]));
+                if (item.type === 'GAP_FILL') {
+                    const gaps = [...item.text.matchAll(GAP_REGEX)].map(m => Number(m[1]));
+                    return {
+                        grammarItemId: item.id,
+                        gapAnswers: gaps.map(g => answers[item.id]?.[g] || ''),
+                    };
+                } else if (item.type === 'MULTIPLE_CHOICE') {
+                    // For multiple choice, we send the chosen index as a single-element array
+                    return {
+                        grammarItemId: item.id,
+                        gapAnswers: [mcAnswers[item.id].toString()],
+                    };
+                }
                 return {
                     grammarItemId: item.id,
-                    gapAnswers: gaps.map(g => answers[item.id]?.[g] || ''),
+                    gapAnswers: [],
                 };
             }),
         };
@@ -215,8 +245,19 @@ const GrammarPlayer: React.FC<GrammarPlayerProps> = ({
             {grammarItems.map((item, i) => (
                 <Paper key={item.id} sx={{ p:2, mb:2 }} data-item-id={item.id}>
                     <Typography variant="subtitle1" gutterBottom>Exercise {i + 1}</Typography>
-                    {i === 0 && (
+                    {item.type === 'GAP_FILL' && i === 0 && (
                         <EditorContent editor={editor} />
+                    )}
+                    {item.type === 'MULTIPLE_CHOICE' && (
+                        <MultipleChoicePlayer
+                            question={item.text}
+                            options={item.options || []}
+                            chosenIndex={mcAnswers[item.id] || -1}
+                            correctIndex={scoreResult ? parseInt(scoreResult.details.find(d => d.grammarItemId === item.id)?.gapResults[0]?.correct || '-1') : undefined}
+                            showResults={!!scoreResult}
+                            onChange={(index) => handleMultipleChoiceChange(item.id, index)}
+                            itemId={item.id}
+                        />
                     )}
                 </Paper>
             ))}
@@ -239,7 +280,7 @@ const GrammarPlayer: React.FC<GrammarPlayerProps> = ({
                     <Button
                         variant="contained"
                         onClick={handleCheck}
-                        disabled={!allGapsFilled || scoreMutation.isPending}
+                        disabled={!allQuestionsAnswered || scoreMutation.isPending}
                     >
                         {scoreMutation.isPending ? 'Checking…' : 'Check'}
                     </Button>

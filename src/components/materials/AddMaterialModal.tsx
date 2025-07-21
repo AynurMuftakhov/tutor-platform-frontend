@@ -24,6 +24,7 @@ import { useFolderTree } from '../../hooks/useMaterials';
 import { createMaterial, updateMaterial, getMaterialTags, createGrammarItem } from '../../services/api';
 import { Material } from './MaterialCard';
 import GrammarEditor from '../grammar/GrammarEditor';
+import MultipleChoiceEditor from '../grammar/MultipleChoiceEditor';
 
 // Use the real API functions imported from services/api
 
@@ -57,6 +58,10 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
   // Grammar-specific state
   const [grammarContent, setGrammarContent] = useState('');
   const [grammarAnswer, setGrammarAnswer] = useState('');
+  const [grammarType, setGrammarType] = useState<'GAP_FILL' | 'MULTIPLE_CHOICE'>('GAP_FILL');
+  const [mcQuestion, setMcQuestion] = useState('');
+  const [mcOptions, setMcOptions] = useState<string[]>(['', '', '', '']);
+  const [mcCorrectIndex, setMcCorrectIndex] = useState<number>(-1);
 
   // Validation state
   const [urlError, setUrlError] = useState('');
@@ -116,6 +121,10 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
         setSelectedTags([]);
         setGrammarContent('');
         setGrammarAnswer('');
+        setGrammarType('GAP_FILL');
+        setMcQuestion('');
+        setMcOptions(['', '', '', '']);
+        setMcCorrectIndex(-1);
       }
       setTagInputValue('');
       setUrlError('');
@@ -198,13 +207,30 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
     const isUrlValid = materialType === 'GRAMMAR' ? true : validateUrl(sourceUrl);
     const isTitleValid = validateTitle(title);
 
-    // For GRAMMAR type, validate that we have content and at least one gap
+    // For GRAMMAR type, validate based on grammar type
     let isGrammarValid = true;
     if (materialType === 'GRAMMAR') {
-      if (!grammarContent || !grammarContent.includes('{{')) {
-        isGrammarValid = false;
-        // We could show an error message here
-        return;
+      if (grammarType === 'GAP_FILL') {
+        // For GAP_FILL, validate that we have content and at least one gap
+        if (!grammarContent || !grammarContent.includes('{{')) {
+          isGrammarValid = false;
+          // We could show an error message here
+          return;
+        }
+      } else if (grammarType === 'MULTIPLE_CHOICE') {
+        // For MULTIPLE_CHOICE, validate that we have a question, all options are filled, and a correct answer is selected
+        if (!mcQuestion.trim()) {
+          isGrammarValid = false;
+          return;
+        }
+        if (mcOptions.some(option => !option.trim())) {
+          isGrammarValid = false;
+          return;
+        }
+        if (mcCorrectIndex === -1) {
+          isGrammarValid = false;
+          return;
+        }
       }
     }
 
@@ -243,13 +269,24 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
       // For GRAMMAR type, create a grammar item
       if (materialType === 'GRAMMAR' && updatedMaterial) {
         try {
-          // Create a grammar item with the content and answer
-          await createGrammarItem(updatedMaterial.id, {
-            sortOrder: 1,
-            type: 'GAP_FILL',
-            text: grammarContent,
-            answer: grammarAnswer,
-          });
+          if (grammarType === 'GAP_FILL') {
+            // Create a gap-fill grammar item with the content and answer
+            await createGrammarItem(updatedMaterial.id, {
+              sortOrder: 1,
+              type: 'GAP_FILL',
+              text: grammarContent,
+              answer: grammarAnswer,
+            });
+          } else if (grammarType === 'MULTIPLE_CHOICE') {
+            // Create a multiple-choice grammar item with the question, options, and correct answer
+            await createGrammarItem(updatedMaterial.id, {
+              sortOrder: 1,
+              type: 'MULTIPLE_CHOICE',
+              text: mcQuestion,
+              answer: mcCorrectIndex.toString(),
+              options: mcOptions,
+            });
+          }
         } catch (grammarError) {
           console.error('Failed to create grammar item', grammarError);
           // Continue with the flow even if grammar item creation fails
@@ -328,13 +365,41 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
 
           {materialType === 'GRAMMAR' && (
             <Box sx={{ mb: 3 }}>
-              <GrammarEditor 
-                initialContent={grammarContent}
-                onSave={(content, answer) => {
-                  setGrammarContent(content);
-                  setGrammarAnswer(answer);
-                }}
-              />
+              <FormControl fullWidth sx={{ mb: 3 }}>
+                <InputLabel id="grammar-type-label">Grammar Exercise Type</InputLabel>
+                <Select
+                  labelId="grammar-type-label"
+                  value={grammarType}
+                  label="Grammar Exercise Type"
+                  onChange={(e) => setGrammarType(e.target.value as 'GAP_FILL' | 'MULTIPLE_CHOICE')}
+                >
+                  <MenuItem value="GAP_FILL">Gap-Fill</MenuItem>
+                  <MenuItem value="MULTIPLE_CHOICE">Multiple-Choice</MenuItem>
+                </Select>
+              </FormControl>
+
+              {grammarType === 'GAP_FILL' && (
+                <GrammarEditor 
+                  initialContent={grammarContent}
+                  onSave={(content, answer) => {
+                    setGrammarContent(content);
+                    setGrammarAnswer(answer);
+                  }}
+                />
+              )}
+
+              {grammarType === 'MULTIPLE_CHOICE' && (
+                <MultipleChoiceEditor
+                  initialQuestion={mcQuestion}
+                  initialOptions={mcOptions}
+                  initialCorrectIndex={mcCorrectIndex}
+                  onSave={(question, options, correctIndex) => {
+                    setMcQuestion(question);
+                    setMcOptions(options);
+                    setMcCorrectIndex(correctIndex);
+                  }}
+                />
+              )}
             </Box>
           )}
 

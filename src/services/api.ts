@@ -457,10 +457,11 @@ api.interceptors.response.use(
 export interface GrammarItemDto {
   id: string;
   sortOrder: number;
-  type: 'GAP_FILL';      // room for future
-  text: string;          // contains {{1}} etc.
+  type: 'GAP_FILL' | 'MULTIPLE_CHOICE';      // supports gap fill and multiple choice
+  text: string;          // contains {{1}} etc. for GAP_FILL or question text for MULTIPLE_CHOICE
   metadata?: string;     // JSON string
-  answer: string;        // canonical answers list
+  answer: string;        // canonical answers list for GAP_FILL or correct option index for MULTIPLE_CHOICE
+  options?: string[];    // options for MULTIPLE_CHOICE
 }
 
 // GET all items for a material
@@ -507,11 +508,26 @@ export const scoreGrammar = (
 export const createGrammarItem = (
   materialId: string,
   item: Omit<GrammarItemDto, 'id'>
-) =>
-  api.post<GrammarItemDto>(
-    `/lessons-service/api/materials/${materialId}/grammar-items`,
-    item
-  ).then(r => r.data);
+) => {
+  // Use different endpoints based on the item type
+  if (item.type === 'MULTIPLE_CHOICE') {
+    return api.post<GrammarItemDto>(
+      `/lessons-service/api/materials/${materialId}/multiple-choice-items`,
+      {
+        sortOrder: item.sortOrder,
+        type: item.type,
+        question: item.text,
+        options: item.options,
+        correctIndex: parseInt(item.answer)
+      }
+    ).then(r => r.data);
+  } else {
+    return api.post<GrammarItemDto>(
+      `/lessons-service/api/materials/${materialId}/grammar-items`,
+      item
+    ).then(r => r.data);
+  }
+};
 
 
 export const generateAiExercise = async (payload: GenerateExerciseRequest): Promise<GenerateExerciseResponse> => {

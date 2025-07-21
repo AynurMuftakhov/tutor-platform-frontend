@@ -8,6 +8,10 @@ import { useGrammarItems, useScoreGrammar } from '../../hooks/useGrammarItems';
 import { GrammarScoreResponse } from '../../services/api';
 import { UseSyncedGrammarResult } from '../../hooks/useSyncedGrammar';
 import { StyledChat } from '../lessonDetail/StyledChat';
+import MultipleChoicePlayer from './MultipleChoicePlayer';
+
+// Define a numeric constant for the multiple choice answer key
+const MC_CHOICE_KEY = -1; // Using -1 as it's unlikely to conflict with gap indices
 
 interface SyncedGrammarPlayerProps {
   useSyncedGrammar: UseSyncedGrammarResult;
@@ -100,13 +104,16 @@ const SyncedGrammarPlayer: React.FC<SyncedGrammarPlayerProps> = ({ useSyncedGram
 
       // Create content for each item separately
       grammarItems.forEach((item, index) => {
-        // Use synced answers from the state
-        const itemAnswers = state.answers[item.id] || {};
-        const content = gapTokensToNodes(item.text, itemAnswers);
+        // Only process GAP_FILL items with the editor
+        if (item.type === 'GAP_FILL') {
+          // Use synced answers from the state
+          const itemAnswers = state.answers[item.id] || {};
+          const content = gapTokensToNodes(item.text, itemAnswers);
 
-        // If this is the first item, set the content directly
-        if (index === 0) {
-          editor.commands.setContent(content);
+          // If this is the first GAP_FILL item, set the content directly
+          if (index === 0) {
+            editor.commands.setContent(content);
+          }
         }
       });
 
@@ -170,23 +177,49 @@ const SyncedGrammarPlayer: React.FC<SyncedGrammarPlayerProps> = ({ useSyncedGram
     updateAnswer(itemId, idx, val);
   };
 
-  const allGapsFilled = useMemo(() => {
+  // Handler for multiple choice answers
+  const handleMultipleChoiceChange = (itemId: string, chosenIndex: number) => {
+    // Use the updateAnswer method from useSyncedGrammar with a special key for multiple choice
+    updateAnswer(itemId, MC_CHOICE_KEY, chosenIndex.toString());
+  };
+
+  const allQuestionsAnswered = useMemo(() => {
     return grammarItems.every(item => {
       const itemAnswers = state.answers[item.id] || {};
-      const gaps = [...item.text.matchAll(GAP_REGEX)].map(m => Number(m[1]));
-      return gaps.every(g => itemAnswers[g] && itemAnswers[g].trim() !== '');
+
+      if (item.type === 'GAP_FILL') {
+        const gaps = [...item.text.matchAll(GAP_REGEX)].map(m => Number(m[1]));
+        return gaps.every(g => itemAnswers[g] && itemAnswers[g].trim() !== '');
+      } else if (item.type === 'MULTIPLE_CHOICE') {
+        // For multiple choice, check if an answer has been selected
+        return itemAnswers[MC_CHOICE_KEY] !== undefined;
+      }
+
+      return false;
     });
   }, [state.answers, grammarItems]);
 
   const handleCheck = () => {
-    if (!allGapsFilled) return;
+    if (!allQuestionsAnswered) return;
 
     const payload = {
       attempts: grammarItems.map(item => {
-        const gaps = [...item.text.matchAll(GAP_REGEX)].map(m => Number(m[1]));
+        if (item.type === 'GAP_FILL') {
+          const gaps = [...item.text.matchAll(GAP_REGEX)].map(m => Number(m[1]));
+          return {
+            grammarItemId: item.id,
+            gapAnswers: gaps.map(g => state.answers[item.id]?.[g] || ''),
+          };
+        } else if (item.type === 'MULTIPLE_CHOICE') {
+          // For multiple choice, we send the chosen index as a single-element array
+          return {
+            grammarItemId: item.id,
+            gapAnswers: [state.answers[item.id]?.[MC_CHOICE_KEY] || ''],
+          };
+        }
         return {
           grammarItemId: item.id,
-          gapAnswers: gaps.map(g => state.answers[item.id]?.[g] || ''),
+          gapAnswers: [],
         };
       }),
     };
@@ -230,8 +263,19 @@ const SyncedGrammarPlayer: React.FC<SyncedGrammarPlayerProps> = ({ useSyncedGram
         {grammarItems.map((item, i) => (
           <Paper key={item.id} sx={{ p: 2, mb: 2 }} data-item-id={item.id}>
             <Typography variant="subtitle1" gutterBottom>Exercise {i + 1}</Typography>
-            {i === 0 && (
+            {item.type === 'GAP_FILL' && i === 0 && (
               <EditorContent editor={editor} />
+            )}
+            {item.type === 'MULTIPLE_CHOICE' && (
+              <MultipleChoicePlayer
+                question={item.text}
+                options={item.options || []}
+                chosenIndex={state.answers[item.id]?.[MC_CHOICE_KEY] ? parseInt(state.answers[item.id][MC_CHOICE_KEY]) : -1}
+                correctIndex={scoreResult ? parseInt(scoreResult.details.find(d => d.grammarItemId === item.id)?.gapResults[0]?.correct || '-1') : undefined}
+                showResults={!!scoreResult}
+                onChange={(index) => handleMultipleChoiceChange(item.id, index)}
+                itemId={item.id}
+              />
             )}
           </Paper>
         ))}
@@ -253,7 +297,7 @@ const SyncedGrammarPlayer: React.FC<SyncedGrammarPlayerProps> = ({ useSyncedGram
             <Button
               variant="contained"
               onClick={handleCheck}
-              disabled={!allGapsFilled || scoreMutation.isPending}
+              disabled={!allQuestionsAnswered || scoreMutation.isPending}
             >
               {scoreMutation.isPending ? 'Checking…' : 'Check'}
             </Button>
