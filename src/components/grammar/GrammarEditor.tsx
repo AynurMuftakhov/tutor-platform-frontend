@@ -136,6 +136,7 @@ const GrammarEditor: React.FC<GrammarEditorProps> = ({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [answers, setAnswers] = useState<Record<number, string[]>>({});
+  const [aiGenerated, setAiGenerated] = useState(false);
   const { enqueueSnackbar } = useSnackbar();
 
   const editor = useEditor({
@@ -150,6 +151,8 @@ const GrammarEditor: React.FC<GrammarEditorProps> = ({
 
       // Update the state with the renumbered HTML
       setHtml(renumberedHtml);
+      setContent(renumberedHtml);
+      setAiGenerated(false);
 
       // If the HTML changed after renumbering, update the editor content
       if (renumberedHtml !== newHtml) {
@@ -189,6 +192,7 @@ const GrammarEditor: React.FC<GrammarEditorProps> = ({
     try {
       const data = await generateAiExercise(req);
       editor?.commands.setContent(gapTokensToNodes(data.html));
+      setAiGenerated(true);
       setContent(data.html);
       setAnswers(data.answers);
       setDialogOpen(false);
@@ -201,14 +205,10 @@ const GrammarEditor: React.FC<GrammarEditorProps> = ({
 
   useEffect(() => {
     // If we have answers from AI, use those, otherwise extract from HTML
-    const answersMap = Object.keys(answers).length > 0 ? answers : extractAnswers(html);
+    const answersMap = Object.keys(answers).length > 0 && aiGenerated ? answers : extractAnswers(html);
     const answerString = formatAnswersString(answersMap);
-    // Reset answers state after saving to ensure future edits extract from HTML
-    if (Object.keys(answers).length > 0) {
-      setAnswers({});
-      onSave(content, answerString);
-    }
-  }, [answers])
+    onSave(content, answerString);
+  }, [html, answers])
 
   return (
       <Box sx={{ width: '100%' }}>

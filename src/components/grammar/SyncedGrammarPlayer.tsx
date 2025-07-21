@@ -84,19 +84,14 @@ const SyncedGrammarPlayer: React.FC<SyncedGrammarPlayerProps> = ({ useSyncedGram
   // Update editor content when items or answers change
   useEffect(() => {
     if (editor && grammarItems.length > 0) {
-      // Get the currently focused element before updating content
-      const activeElement = document.activeElement;
-      let focusedInput: HTMLInputElement | null = null;
-      let focusedInputValue = '';
-      let focusedInputSelectionStart = 0;
-      let focusedInputSelectionEnd = 0;
-
-      if (activeElement instanceof HTMLInputElement && activeElement.classList.contains('gap-token-input')) {
-        focusedInput = activeElement;
-        focusedInputValue = focusedInput.value;
-        focusedInputSelectionStart = focusedInput.selectionStart || 0;
-        focusedInputSelectionEnd = focusedInput.selectionEnd || 0;
-      }
+      // Track focus by position rather than value to handle duplicate gap values
+      const allInputsBefore = Array.from(document.querySelectorAll<HTMLInputElement>('.gap-token-input'));
+      const activeEl = document.activeElement as HTMLInputElement | null;
+      const activeIndex = activeEl && activeEl.classList.contains('gap-token-input')
+          ? allInputsBefore.indexOf(activeEl)
+          : -1;
+      const selStart = activeEl?.selectionStart ?? 0;
+      const selEnd = activeEl?.selectionEnd ?? 0;
 
       // Create content for each item separately
       grammarItems.forEach((item, index) => {
@@ -111,20 +106,15 @@ const SyncedGrammarPlayer: React.FC<SyncedGrammarPlayerProps> = ({ useSyncedGram
       });
 
       // Restore focus after content update
-      if (focusedInput) {
+      if (activeIndex !== -1) {
         requestAnimationFrame(() => {
-          // Find the input with the same value and position
-          const inputs = document.querySelectorAll('.gap-token-input');
-          for (const input of inputs) {
-            if (input instanceof HTMLInputElement && input.value === focusedInputValue) {
-              input.focus();
-              try {
-                input.setSelectionRange(focusedInputSelectionStart, focusedInputSelectionEnd);
-              } catch (e) {
-                console.error('Failed to set selection range:', e);
-              }
-              break;
-            }
+          const allInputsAfter = document.querySelectorAll<HTMLInputElement>('.gap-token-input');
+          const sameSpotInput = allInputsAfter[activeIndex];
+          if (sameSpotInput) {
+            sameSpotInput.focus();
+            try {
+              sameSpotInput.setSelectionRange(selStart, selEnd);
+            } catch (_) {/* ignore */}
           }
         });
       }

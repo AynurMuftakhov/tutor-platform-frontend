@@ -80,52 +80,41 @@ const GrammarPlayer: React.FC<GrammarPlayerProps> = ({
         [extensions]
     );
 
-    // Update editor content when items or answers change
     useEffect(() => {
-        if (editor && grammarItems.length > 0) {
-            // Get the currently focused element before updating content
-            const activeElement = document.activeElement;
-            let focusedInput: HTMLInputElement | null = null;
-            let focusedInputValue = '';
-            let focusedInputSelectionStart = 0;
-            let focusedInputSelectionEnd = 0;
+        if (!editor || grammarItems.length === 0) return;
 
-            if (activeElement instanceof HTMLInputElement && activeElement.classList.contains('gap-token-input')) {
-                focusedInput = activeElement;
-                focusedInputValue = focusedInput.value;
-                focusedInputSelectionStart = focusedInput.selectionStart || 0;
-                focusedInputSelectionEnd = focusedInput.selectionEnd || 0;
-            }
+        /* ---------- remember which actual element is focused ---------- */
+        const allInputsBefore = Array.from(
+            document.querySelectorAll<HTMLInputElement>('.gap-token-input')
+        );
+        const activeEl       = document.activeElement as HTMLInputElement | null;
+        const activeIndex    = activeEl && activeEl.classList.contains('gap-token-input')
+            ? allInputsBefore.indexOf(activeEl)
+            : -1;
+        const selStart       = activeEl?.selectionStart ?? 0;
+        const selEnd         = activeEl?.selectionEnd   ?? 0;
 
-            // Create content for each item separately
-            grammarItems.forEach((item, index) => {
-                const itemAnswers = answers[item.id] || {};
-                const content = gapTokensToNodes(item.text, itemAnswers);
+        /* ---------- rebuild the editor’s content ---------- */
+        grammarItems.forEach((item, idx) => {
+            const itemAnswers = answers[item.id] ?? {};
+            const content     = gapTokensToNodes(item.text, itemAnswers);
+            if (idx === 0) editor.commands.setContent(content);
+        });
 
-                // If this is the first item, set the content directly
-                if (index === 0) {
-                    editor.commands.setContent(content);
+        /* ---------- restore focus on the *same position* gap ---------- */
+        if (activeIndex !== -1) {
+            requestAnimationFrame(() => {
+                const allInputsAfter = document.querySelectorAll<HTMLInputElement>(
+                    '.gap-token-input'
+                );
+                const sameSpotInput = allInputsAfter[activeIndex];
+                if (sameSpotInput) {
+                    sameSpotInput.focus();
+                    try {
+                        sameSpotInput.setSelectionRange(selStart, selEnd);
+                    } catch (_) {/* ignore */}
                 }
             });
-
-            // Restore focus after content update
-            if (focusedInput) {
-                requestAnimationFrame(() => {
-                    // Find the input with the same value and position
-                    const inputs = document.querySelectorAll('.gap-token-input');
-                    for (const input of inputs) {
-                        if (input instanceof HTMLInputElement && input.value === focusedInputValue) {
-                            input.focus();
-                            try {
-                                input.setSelectionRange(focusedInputSelectionStart, focusedInputSelectionEnd);
-                            } catch (e) {
-                                console.error('Failed to set selection range:', e);
-                            }
-                            break;
-                        }
-                    }
-                });
-            }
         }
     }, [editor, grammarItems, answers]);
 
