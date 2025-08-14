@@ -29,7 +29,11 @@ import MenuBookIcon from "@mui/icons-material/MenuBook";
 import { ENGLISH_LEVELS, EnglishLevel } from "../types/ENGLISH_LEVELS";
 import { deleteUser, fetchUserById, resetPasswordEmail, updateCurrentUser } from "../services/api";
 import { useAuth } from "../context/AuthContext";
-import StudentVocabularyModal from "../components/vocabulary/StudentVocabularyModal";
+import VocabularyList from "../components/vocabulary/VocabularyList";
+import { useDictionary } from "../hooks/useVocabulary";
+import { useAssignments } from "../hooks/useAssignments";
+import SearchIcon from "@mui/icons-material/Search";
+import { TextField, InputAdornment } from "@mui/material";
 
 // Reuse Student type shape from MyStudentsPage where possible
 export interface StudentProfile {
@@ -69,6 +73,17 @@ const StudentPage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
 
   const isTeacher = user?.role === "tutor";
+
+  // Dictionary data for this student (list view)
+  const { data: allWords = [] } = useDictionary();
+  const { data: assignments = [] } = useAssignments(student?.id || "");
+  const assignedIds = useMemo(() => new Set<string>(assignments.map((a: any) => a.vocabularyWordId)), [assignments]);
+  const assignedWords = useMemo(() => allWords.filter((w: any) => assignedIds.has(w.id)), [allWords, assignedIds]);
+  const [dictSearch, setDictSearch] = useState("");
+  const filteredAssigned = useMemo(
+    () => assignedWords.filter((w: any) => w.text?.toLowerCase().includes(dictSearch.toLowerCase())),
+    [assignedWords, dictSearch]
+  );
 
   useEffect(() => {
     const load = async () => {
@@ -203,11 +218,6 @@ const StudentPage: React.FC = () => {
                 <EditIcon />
               </IconButton>
             </Tooltip>
-            <Tooltip title="Vocabulary">
-              <IconButton color="info" onClick={() => setActiveTab(2)}>
-                <MenuBookIcon />
-              </IconButton>
-            </Tooltip>
             <Tooltip title="Send Reset Password Link">
               <IconButton color="info" onClick={() => setResetDialogOpen(true)}>
                 <RestartAltIcon />
@@ -263,8 +273,25 @@ const StudentPage: React.FC = () => {
         {activeTab === 2 && (
           <SectionCard title="Dictionary">
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>Manage student vocabulary.</Typography>
-            {/* Inline modal trigger */}
-            <StudentVocabularyModal open={true} onClose={() => setActiveTab(0)} student={student as any} />
+            <Box sx={{ mb: 2, maxWidth: 360 }}>
+              <TextField
+                fullWidth
+                size="small"
+                placeholder="Search words…"
+                value={dictSearch}
+                onChange={(e) => setDictSearch(e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon />
+                    </InputAdornment>
+                  )
+                }}
+              />
+            </Box>
+            <Box sx={{ maxHeight: 480, overflowY: 'auto' }}>
+              <VocabularyList data={filteredAssigned} readOnly />
+            </Box>
           </SectionCard>
         )}
 
@@ -276,25 +303,35 @@ const StudentPage: React.FC = () => {
       </Box>
 
       {/* Edit Dialog */}
-      <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)}>
+      <Dialog
+        open={editDialogOpen}
+        onClose={() => setEditDialogOpen(false)}
+        fullWidth
+        maxWidth="sm"
+        PaperProps={{
+          sx: {
+            borderRadius: 1,
+          }
+        }}
+      >
         <DialogTitle>Edit Student</DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
             <Typography variant="caption" color="text.secondary">Name</Typography>
             <input
-              style={{ padding: 10, borderRadius: 8, border: '1px solid #e0e0e0' }}
+              style={{ padding: 12, borderRadius: 8, border: '1px solid #e0e0e0', width: '100%' }}
               value={form?.name || ''}
               onChange={(e) => setForm((prev) => ({ ...(prev as any), name: e.target.value }))}
             />
             <Typography variant="caption" color="text.secondary">Email</Typography>
             <input
-              style={{ padding: 10, borderRadius: 8, border: '1px solid #e0e0e0' }}
+              style={{ padding: 12, borderRadius: 8, border: '1px solid #e0e0e0', width: '100%' }}
               value={form?.email || ''}
               onChange={(e) => setForm((prev) => ({ ...(prev as any), email: e.target.value }))}
             />
             <Typography variant="caption" color="text.secondary">Level</Typography>
             <select
-              style={{ padding: 10, borderRadius: 8, border: '1px solid #e0e0e0' }}
+              style={{ padding: 12, borderRadius: 8, border: '1px solid #e0e0e0', width: '100%' }}
               value={form?.level || ("Beginner" as EnglishLevel)}
               onChange={(e) => setForm((prev) => ({ ...(prev as any), level: e.target.value as EnglishLevel }))}
             >
