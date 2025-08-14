@@ -27,13 +27,15 @@ import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
 import { ENGLISH_LEVELS, EnglishLevel } from "../types/ENGLISH_LEVELS";
-import { deleteUser, fetchUserById, resetPasswordEmail, updateCurrentUser } from "../services/api";
+import { deleteUser, fetchUserById, resetPasswordEmail, updateCurrentUser, getUpcomingLessons } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import VocabularyList from "../components/vocabulary/VocabularyList";
 import { useDictionary } from "../hooks/useVocabulary";
 import { useAssignments } from "../hooks/useAssignments";
 import SearchIcon from "@mui/icons-material/Search";
 import { TextField, InputAdornment } from "@mui/material";
+import { Lesson } from "../types/Lesson";
+import NextLessonCard from "../components/dashboard/NextLessonCard";
 
 // Reuse Student type shape from MyStudentsPage where possible
 export interface StudentProfile {
@@ -61,6 +63,10 @@ const StudentPage: React.FC = () => {
   const [student, setStudent] = useState<StudentProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState(0);
+
+  // Next lesson state
+  const [upcoming, setUpcoming] = useState<Lesson[] | null>(null);
+  const [upcomingError, setUpcomingError] = useState<string | null>(null);
 
   // Actions state (dialogs/snackbar)
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -109,6 +115,26 @@ const StudentPage: React.FC = () => {
     };
     load();
   }, [studentId]);
+
+  // Load upcoming lessons for this student
+  useEffect(() => {
+    const fetchUpcoming = async () => {
+      if (!user || !studentId) return;
+      try {
+        setUpcomingError(null);
+        setUpcoming(null);
+        const tutorId = user.id; // assume tutorId is always the same
+        const now = new Date().toISOString();
+        const res = await getUpcomingLessons(tutorId, studentId, now);
+        setUpcoming(Array.isArray(res) ? res : []);
+      } catch (err) {
+        console.error("Failed to fetch upcoming lessons", err);
+        setUpcoming([]);
+        setUpcomingError("Failed to load next lesson");
+      }
+    };
+    fetchUpcoming();
+  }, [user, studentId]);
 
   const levelInfo = useMemo(() => (student?.level ? ENGLISH_LEVELS[student.level] : undefined), [student?.level]);
 
@@ -253,7 +279,15 @@ const StudentPage: React.FC = () => {
           <Grid container spacing={2}>
             <Grid size={{ xs: 12, md: 8 }}>
               <SectionCard title="Next lesson">
-                <Typography variant="body2" color="text.secondary">No next lesson scheduled. This area will show upcoming lesson details.</Typography>
+                {upcoming === null ? (
+                  <Typography variant="body2" color="text.secondary">Loading next lesson…</Typography>
+                ) : upcomingError ? (
+                  <Typography variant="body2" color="error.main">{upcomingError}</Typography>
+                ) : upcoming.length > 0 ? (
+                  <NextLessonCard lesson={upcoming[0]} />
+                ) : (
+                  <Typography variant="body2" color="text.secondary">No next lesson scheduled.</Typography>
+                )}
               </SectionCard>
             </Grid>
             <Grid size={{ xs: 12, md: 4 }}>
