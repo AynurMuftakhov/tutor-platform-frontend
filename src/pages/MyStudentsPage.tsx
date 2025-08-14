@@ -16,7 +16,7 @@ import {
 import MenuItem from "@mui/material/MenuItem";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
 
-import { DataGrid, GridColDef, GridRenderCellParams, GridToolbar } from "@mui/x-data-grid";
+import { DataGrid, GridColDef, GridRenderCellParams, GridToolbarContainer, GridToolbarColumnsButton, GridToolbarDensitySelector, GridToolbarExport } from "@mui/x-data-grid";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
@@ -27,6 +27,15 @@ import Alert from '@mui/material/Alert';
 import {ENGLISH_LEVELS, EnglishLevel} from "../types/ENGLISH_LEVELS";
 import StudentVocabularyModal from "../components/vocabulary/StudentVocabularyModal";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
+
+// Custom DataGrid toolbar without Filters and Quick Filter — only Columns, Density, Export
+const CustomToolbar: React.FC = () => (
+    <GridToolbarContainer>
+        <GridToolbarColumnsButton />
+        <GridToolbarDensitySelector />
+        <GridToolbarExport />
+    </GridToolbarContainer>
+);
 
 // Extended Student type
 export interface Student {
@@ -359,7 +368,7 @@ const MyStudentsPage: React.FC = () => {
                 </Box>
 
                 {/* DataGrid */}
-                <Box sx={{ width: '100%', overflowX: 'auto', backgroundColor: (theme) => theme.palette.background.paper }}>
+                <Box sx={{ width: '100%', overflowX: 'auto', overflowY: 'auto', maxHeight: { xs: 'calc(100dvh - 240px)', md: 'calc(100dvh - 260px)' }, backgroundColor: (theme) => theme.palette.background.paper }}>
                   <Box sx={{ minWidth: 600 }}>
                     <DataGrid<Student>
                         rows={students}
@@ -374,8 +383,7 @@ const MyStudentsPage: React.FC = () => {
                         }}
                         pageSizeOptions={[5, 10, 25]}
                         disableRowSelectionOnClick
-                        slots={{ toolbar: GridToolbar }}
-                        slotProps={{ toolbar: { showQuickFilter: false } }}
+                        slots={{ toolbar: CustomToolbar }}
                         autoHeight
                         sx={{
                             border: 'none',

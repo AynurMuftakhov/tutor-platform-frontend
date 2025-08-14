@@ -859,7 +859,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                             zIndex: 1,
                             flexGrow: 1,
                             overflowX: 'hidden',
-                            overflowY: 'auto',
+                            overflowY: 'hidden',
                         }}
                     >
                         {children}
