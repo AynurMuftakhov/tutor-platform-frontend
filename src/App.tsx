@@ -12,6 +12,7 @@ import LessonsPage from "./pages/LessonsPage";
 import LessonDetailPage from "./pages/LessonDetailsPage";
 import DictionaryPage from "./pages/DictionaryPage";
 import StudentVocabularyPage from "./pages/StudentVocabularyPage";
+import StudentPage from "./pages/StudentPage";
 import VideoCallPage from "./pages/VideoCallPage";
 import LandingPage from "./pages/landing/LandingPage";
 import LearningMaterialsPage from "./pages/LearningMaterialsPage";
@@ -75,6 +76,16 @@ const App: React.FC = () => {
                                 <PrivateRoute>
                                     <AppWrapper>
                                         <MyStudentsPage />
+                                    </AppWrapper>
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/students/:studentId"
+                            element={
+                                <PrivateRoute>
+                                    <AppWrapper>
+                                        <StudentPage />
                                     </AppWrapper>
                                 </PrivateRoute>
                             }

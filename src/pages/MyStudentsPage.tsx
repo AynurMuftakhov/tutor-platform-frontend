@@ -11,12 +11,12 @@ import {
     DialogContent,
     DialogContentText,
     DialogActions,
-    Chip, Tooltip,
+    Chip, Tooltip, Paper,
 } from "@mui/material";
 import MenuItem from "@mui/material/MenuItem";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
 
-import { DataGrid, GridColDef, GridRenderCellParams } from "@mui/x-data-grid";
+import { DataGrid, GridColDef, GridRenderCellParams, GridToolbarContainer, GridToolbarColumnsButton, GridToolbarDensitySelector, GridToolbarExport } from "@mui/x-data-grid";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
@@ -27,6 +27,16 @@ import Alert from '@mui/material/Alert';
 import {ENGLISH_LEVELS, EnglishLevel} from "../types/ENGLISH_LEVELS";
 import StudentVocabularyModal from "../components/vocabulary/StudentVocabularyModal";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
+import { useNavigate } from "react-router-dom";
+
+// Custom DataGrid toolbar without Filters and Quick Filter — only Columns, Density, Export
+const CustomToolbar: React.FC = () => (
+    <GridToolbarContainer>
+        <GridToolbarColumnsButton />
+        <GridToolbarDensitySelector />
+        <GridToolbarExport />
+    </GridToolbarContainer>
+);
 
 // Extended Student type
 export interface Student {
@@ -39,6 +49,7 @@ export interface Student {
     nextLesson?: string;
 }
 const MyStudentsPage: React.FC = () => {
+    const navigate = useNavigate();
     const { user }  = useAuth();
     const [students, setStudents] = useState<Student[]>([]);
     const [searchText, setSearchText] = useState("");
@@ -282,7 +293,7 @@ const MyStudentsPage: React.FC = () => {
                         <Tooltip title="Edit">
                             <IconButton
                                 color="primary"
-                                onClick={() => handleEditStudent(student)}
+                                onClick={(e) => { e.stopPropagation(); handleEditStudent(student); }}
                                 size="small"
                             >
                                 <EditIcon fontSize="small" />
@@ -291,7 +302,7 @@ const MyStudentsPage: React.FC = () => {
                         <Tooltip title="Vocabulary">
                             <IconButton
                                 color="info"
-                                onClick={() => handleViewVocabulary(student)}
+                                onClick={(e) => { e.stopPropagation(); handleViewVocabulary(student); }}
                                 size="small"
                             >
                                 <MenuBookIcon fontSize="small" />
@@ -300,7 +311,7 @@ const MyStudentsPage: React.FC = () => {
                         <Tooltip title="Send Reset Password Link">
                             <IconButton
                                 color="info"
-                                onClick={() => handleConfirmResetPassword(student)}
+                                onClick={(e) => { e.stopPropagation(); handleConfirmResetPassword(student); }}
                                 size="small"
                             >
                                 <RestartAltIcon fontSize="small" />
@@ -309,7 +320,7 @@ const MyStudentsPage: React.FC = () => {
                         <Tooltip title="Delete">
                             <IconButton
                                 color="error"
-                                onClick={() => handleConfirmDelete(student)}
+                                onClick={(e) => { e.stopPropagation(); handleConfirmDelete(student); }}
                                 size="small"
                             >
                                 <DeleteIcon fontSize="small" />
@@ -345,6 +356,7 @@ const MyStudentsPage: React.FC = () => {
                     </Button>
                 </Box>
 
+                <Paper elevation={1} sx={{ p: 2, borderRadius: 3 }}>
                 {/* Search */}
                 <Box sx={{ mb: 2, maxWidth: 300 }}>
                     <TextField
@@ -358,7 +370,7 @@ const MyStudentsPage: React.FC = () => {
                 </Box>
 
                 {/* DataGrid */}
-                <Box sx={{ width: '100%', overflowX: 'auto', backgroundColor: '#fff' }}>
+                <Box sx={{ width: '100%', overflowX: 'auto', overflowY: 'auto', maxHeight: { xs: 'calc(100dvh - 240px)', md: 'calc(100dvh - 260px)' }, backgroundColor: (theme) => theme.palette.background.paper }}>
                   <Box sx={{ minWidth: 600 }}>
                     <DataGrid<Student>
                         rows={students}
@@ -371,12 +383,22 @@ const MyStudentsPage: React.FC = () => {
                             setPage(model.page);
                             setPageSize(model.pageSize);
                         }}
+                        onRowClick={(params) => navigate(`/students/${params.row.id}`)}
                         pageSizeOptions={[5, 10, 25]}
                         disableRowSelectionOnClick
+                        slots={{ toolbar: CustomToolbar }}
                         autoHeight
+                        sx={{
+                            border: 'none',
+                            cursor: 'pointer',
+                            '& .MuiDataGrid-columnHeaders': {
+                                backgroundColor: (theme) => theme.palette.action.hover,
+                            },
+                        }}
                     />
                   </Box>
                 </Box>
+                </Paper>
 
                 {/* Confirm Delete Dialog */}
                 <Dialog open={deleteDialogOpen} onClose={handleDeleteClose}>
