@@ -343,7 +343,6 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return (
         <>
             <NotificationToasterWrapper/>
-            <GlobalStyles styles={{ body: { overflow: 'hidden' } }} />
             <Box sx={{  display: 'flex', width: '100%', height: '100dvh', overflow: 'hidden' }}>
                 <CssBaseline />
                 {!isVideoCallPage && (<AppBar
@@ -859,7 +858,8 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                             position: 'relative',
                             zIndex: 1,
                             flexGrow: 1,
-                            overflow: 'hidden',
+                            overflowX: 'hidden',
+                            overflowY: 'auto',
                         }}
                     >
                         {children}

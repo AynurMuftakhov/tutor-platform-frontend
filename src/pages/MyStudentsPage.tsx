@@ -11,12 +11,12 @@ import {
     DialogContent,
     DialogContentText,
     DialogActions,
-    Chip, Tooltip,
+    Chip, Tooltip, Paper,
 } from "@mui/material";
 import MenuItem from "@mui/material/MenuItem";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
 
-import { DataGrid, GridColDef, GridRenderCellParams } from "@mui/x-data-grid";
+import { DataGrid, GridColDef, GridRenderCellParams, GridToolbar } from "@mui/x-data-grid";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
@@ -345,6 +345,7 @@ const MyStudentsPage: React.FC = () => {
                     </Button>
                 </Box>
 
+                <Paper elevation={1} sx={{ p: 2, borderRadius: 3 }}>
                 {/* Search */}
                 <Box sx={{ mb: 2, maxWidth: 300 }}>
                     <TextField
@@ -358,7 +359,7 @@ const MyStudentsPage: React.FC = () => {
                 </Box>
 
                 {/* DataGrid */}
-                <Box sx={{ width: '100%', overflowX: 'auto', backgroundColor: '#fff' }}>
+                <Box sx={{ width: '100%', overflowX: 'auto', backgroundColor: (theme) => theme.palette.background.paper }}>
                   <Box sx={{ minWidth: 600 }}>
                     <DataGrid<Student>
                         rows={students}
@@ -373,10 +374,19 @@ const MyStudentsPage: React.FC = () => {
                         }}
                         pageSizeOptions={[5, 10, 25]}
                         disableRowSelectionOnClick
+                        slots={{ toolbar: GridToolbar }}
+                        slotProps={{ toolbar: { showQuickFilter: false } }}
                         autoHeight
+                        sx={{
+                            border: 'none',
+                            '& .MuiDataGrid-columnHeaders': {
+                                backgroundColor: (theme) => theme.palette.action.hover,
+                            },
+                        }}
                     />
                   </Box>
                 </Box>
+                </Paper>
 
                 {/* Confirm Delete Dialog */}
                 <Dialog open={deleteDialogOpen} onClose={handleDeleteClose}>
