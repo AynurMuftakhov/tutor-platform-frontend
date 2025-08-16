@@ -26,6 +26,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
+import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import { ENGLISH_LEVELS, EnglishLevel } from "../types/ENGLISH_LEVELS";
 import { deleteUser, fetchUserById, resetPasswordEmail, updateCurrentUser, getUpcomingLessons } from "../services/api";
 import { useAuth } from "../context/AuthContext";
@@ -36,6 +37,7 @@ import SearchIcon from "@mui/icons-material/Search";
 import { TextField, InputAdornment } from "@mui/material";
 import { Lesson } from "../types/Lesson";
 import NextLessonCard from "../components/dashboard/NextLessonCard";
+import AssignModal from "../components/vocabulary/AssignModal";
 
 // Reuse Student type shape from MyStudentsPage where possible
 export interface StudentProfile {
@@ -90,6 +92,9 @@ const StudentPage: React.FC = () => {
     () => assignedWords.filter((w: any) => w.text?.toLowerCase().includes(dictSearch.toLowerCase())),
     [assignedWords, dictSearch]
   );
+
+  // Assign modal state
+  const [assignOpen, setAssignOpen] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -306,8 +311,20 @@ const StudentPage: React.FC = () => {
 
         {activeTab === 2 && (
           <SectionCard title="Dictionary">
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>Manage student vocabulary.</Typography>
-            <Box sx={{ mb: 2, maxWidth: 360 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 2, flexWrap: 'wrap' }}>
+              <Typography variant="body2" color="text.secondary">Manage student vocabulary.</Typography>
+              {isTeacher && (
+                <Button
+                  variant="contained"
+                  startIcon={<PersonAddIcon />}
+                  onClick={() => setAssignOpen(true)}
+                  sx={{ borderRadius: 2 }}
+                >
+                  Assign words
+                </Button>
+              )}
+            </Box>
+            <Box sx={{ mb: 2, maxWidth: 420 }}>
               <TextField
                 fullWidth
                 size="small"
@@ -326,6 +343,13 @@ const StudentPage: React.FC = () => {
             <Box sx={{ maxHeight: 480, overflowY: 'auto' }}>
               <VocabularyList data={filteredAssigned} readOnly />
             </Box>
+
+            {/* Assign words modal */}
+            <AssignModal
+              open={assignOpen}
+              studentId={student.id}
+              onClose={() => setAssignOpen(false)}
+            />
           </SectionCard>
         )}
 

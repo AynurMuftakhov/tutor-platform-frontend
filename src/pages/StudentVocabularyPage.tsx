@@ -2,14 +2,13 @@
 import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Box, Typography, Button } from '@mui/material';
-import { useAssignments, useAssignWords, useUpdateAssignment } from '../hooks/useAssignments';
+import { useAssignments, useUpdateAssignment } from '../hooks/useAssignments';
 import AssignmentTable from '../components/vocabulary/AssignmentTable';
 import AssignModal from '../components/vocabulary/AssignModal';
 
 const StudentVocabularyPage: React.FC = () => {
     const { studentId = '' } = useParams<{ studentId: string }>();
     const { data: assignments = [], isLoading, error } = useAssignments(studentId);
-    const assignWords = useAssignWords();
     const updateAssignment = useUpdateAssignment();
 
     const [modalOpen, setModalOpen] = useState(false);
