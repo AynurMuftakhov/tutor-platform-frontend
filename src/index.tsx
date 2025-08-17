@@ -7,6 +7,7 @@ import { createTheme, ThemeProvider, responsiveFontSizes, CssBaseline } from '@m
 
 // 2025 Modern Design System
 let theme = createTheme({
+    spacing: 8,
     palette: {
         mode: 'light',
         primary: {

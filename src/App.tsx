@@ -16,6 +16,9 @@ import StudentPage from "./pages/StudentPage";
 import VideoCallPage from "./pages/VideoCallPage";
 import LandingPage from "./pages/landing/LandingPage";
 import LearningMaterialsPage from "./pages/LearningMaterialsPage";
+import LessonContentsListPage from './pages/lessonContents/LessonContentsListPage';
+import LessonContentEditorPage from './pages/lessonContents/LessonContentEditorPage';
+import LessonContentViewPage from './pages/lessonContents/LessonContentViewPage';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ApiErrorProvider } from './context/ApiErrorContext';
 import Login from "./pages/Login";
@@ -156,6 +159,36 @@ const App: React.FC = () => {
                                 <PrivateRoute>
                                     <AppWrapper>
                                         <LearningMaterialsPage />
+                                    </AppWrapper>
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/lesson-contents"
+                            element={
+                                <PrivateRoute>
+                                    <AppWrapper>
+                                        <LessonContentsListPage />
+                                    </AppWrapper>
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/lesson-contents/:id/editor"
+                            element={
+                                <PrivateRoute>
+                                    <AppWrapper>
+                                        <LessonContentEditorPage />
+                                    </AppWrapper>
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/lesson-contents/:id/view"
+                            element={
+                                <PrivateRoute>
+                                    <AppWrapper>
+                                        <LessonContentViewPage />
                                     </AppWrapper>
                                 </PrivateRoute>
                             }

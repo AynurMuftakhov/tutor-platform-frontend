@@ -406,6 +406,102 @@ export const reorderLessonMaterial = (
 ) =>
   api.patch(`/lessons-service/api/lessons/${lessonId}/materials/${linkId}`, { sortOrder });
 
+// Lesson Contents (Compositions)
+export type LessonContentStatus = 'DRAFT' | 'PUBLISHED';
+
+export interface LessonContentDto {
+  id: string;
+  title: string;
+  status: LessonContentStatus;
+  tags: string[];
+  updatedAt: string;
+  ownerId?: string;
+  ownerName?: string;
+  coverUrl?: string | null;
+}
+
+export interface GetLessonContentsParams {
+  ownerId?: string;
+  search?: string;
+  status?: LessonContentStatus | 'ALL';
+  tags?: string[];
+  page?: number;
+  size?: number;
+}
+
+export interface PagedResponse<T> {
+  content: T[];
+  totalPages: number;
+  totalElements: number;
+  size: number;
+  number: number;
+}
+
+export const getLessonContents = async (params: GetLessonContentsParams = {}): Promise<PagedResponse<LessonContentDto>> => {
+  const queryParams = new URLSearchParams();
+  if (params.ownerId) queryParams.append('ownerId', params.ownerId);
+  if (params.search) queryParams.append('search', params.search);
+  if (params.status && params.status !== 'ALL') queryParams.append('status', params.status);
+  if (params.tags && params.tags.length > 0) params.tags.forEach(t => queryParams.append('tags', t));
+  if (params.page !== undefined) queryParams.append('page', String(params.page));
+  if (params.size !== undefined) queryParams.append('size', String(params.size));
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const response = await api.get(`/lessons-service/api/lesson-contents${query}`);
+  return response.data;
+}
+
+export interface CreateLessonContentPayload {
+  title?: string;
+  status?: LessonContentStatus;
+  ownerId?: string; // tutorId
+  layout?: any;
+  content?: Record<string, any>;
+}
+
+export const createLessonContent = async (payload: CreateLessonContentPayload): Promise<LessonContentDetailDto> => {
+  const body: CreateLessonContentPayload = {
+    title: payload.title ?? 'Untitled',
+    status: payload.status ?? 'DRAFT',
+    ownerId: payload.ownerId, // must be provided by caller
+    layout: payload.layout ?? { gridUnit: 8, snapToGrid: true, frames: {}, nodes: {} },
+    content: payload.content ?? {},
+  };
+  const response = await api.post(`/lessons-service/api/lesson-contents`, body);
+  return response.data;
+}
+
+export const deleteLessonContent = async (id: string) => {
+  const response = await api.delete(`/lessons-service/api/lesson-contents/${id}`);
+  return response.data;
+}
+
+export interface LessonContentDetailDto extends LessonContentDto {
+  layout?: any;
+  content?: Record<string, any>;
+  createdAt?: string;
+}
+
+export const getLessonContentById = async (id: string): Promise<LessonContentDetailDto> => {
+  const response = await api.get(`/lessons-service/api/lesson-contents/${id}`);
+  return response.data;
+}
+
+export const updateLessonContent = async (
+  id: string,
+  patch: Partial<LessonContentDetailDto>
+): Promise<LessonContentDetailDto> => {
+  const response = await api.patch(`/lessons-service/api/lesson-contents/${id}`, patch);
+  return response.data;
+}
+
+export const publishLessonContent = async (id: string): Promise<LessonContentDetailDto> => {
+  return updateLessonContent(id, { status: 'PUBLISHED' });
+}
+
+export const unpublishLessonContent = async (id: string): Promise<LessonContentDetailDto> => {
+  return updateLessonContent(id, { status: 'DRAFT' });
+}
+
 // Request interceptor to add authorization token
 api.interceptors.request.use((config) => {
     const token = sessionStorage.getItem("token");
