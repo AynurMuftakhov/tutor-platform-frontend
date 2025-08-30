@@ -26,6 +26,7 @@ import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
 
 import '../styles/livekit-custom.css';
+import { MicPermissionGate } from "../components/MicPermissionGate";
 
 interface VideoCallPageProps {
     identity?: string;
@@ -246,6 +247,7 @@ const RoomContent: React.FC<{
                         transition: 'width .25s ease',
                     }}
                 >
+                    <MicPermissionGate />
                     <VideoConference style={{ height: '100%', width: '100%' }} />
                 </Box>
 
