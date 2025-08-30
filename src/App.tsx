@@ -19,6 +19,9 @@ import LearningMaterialsPage from "./pages/LearningMaterialsPage";
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ApiErrorProvider } from './context/ApiErrorContext';
 import Login from "./pages/Login";
+import LessonContentsLibraryPage from './pages/lessonContents/LessonContentsLibraryPage';
+import LessonContentEditorPage from './pages/lessonContents/LessonContentEditorPage';
+import LessonContentViewPage from './pages/lessonContents/LessonContentViewPage';
 
 const App: React.FC = () => {
     const { isLoading } = useAuth();
@@ -156,6 +159,37 @@ const App: React.FC = () => {
                                 <PrivateRoute>
                                     <AppWrapper>
                                         <LearningMaterialsPage />
+                                    </AppWrapper>
+                                </PrivateRoute>
+                            }
+                        />
+
+                        <Route
+                            path="/lesson-contents"
+                            element={
+                                <PrivateRoute>
+                                    <AppWrapper>
+                                        <LessonContentsLibraryPage />
+                                    </AppWrapper>
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/lesson-contents/:id/editor"
+                            element={
+                                <PrivateRoute>
+                                    <AppWrapper>
+                                        <LessonContentEditorPage />
+                                    </AppWrapper>
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/lesson-contents/:id/view"
+                            element={
+                                <PrivateRoute>
+                                    <AppWrapper>
+                                        <LessonContentViewPage />
                                     </AppWrapper>
                                 </PrivateRoute>
                             }
