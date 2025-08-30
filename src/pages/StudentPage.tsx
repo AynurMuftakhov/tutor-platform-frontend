@@ -43,7 +43,7 @@ import AssignModal from "../components/vocabulary/AssignModal";
 export interface StudentProfile {
   id: string;
   name: string;
-  email: string;
+  email?: string;
   avatar?: string;
   level?: EnglishLevel;
 }
@@ -111,7 +111,7 @@ const StudentPage: React.FC = () => {
           level: (data.level as EnglishLevel) || undefined,
         };
         setStudent(mapped);
-        setForm({ name: mapped.name, email: mapped.email, level: mapped.level || ("Beginner" as EnglishLevel) });
+        setForm({ name: mapped.name, email: mapped.email ?? "", level: mapped.level || ("Beginner" as EnglishLevel) });
       } catch (e) {
         console.error("Failed to load student", e);
       } finally {
@@ -183,6 +183,13 @@ const StudentPage: React.FC = () => {
 
   const handleResetPassword = async () => {
     if (!student) return;
+    if (!student.email) {
+      setResetDialogOpen(false);
+      setSnackbarMessage("This student has no email.");
+      setSnackbarSeverity("error");
+      setSnackbarOpen(true);
+      return;
+    }
     try {
       setSubmitting(true);
       await resetPasswordEmail(student.email);
@@ -238,7 +245,7 @@ const StudentPage: React.FC = () => {
                   />
                 </Tooltip>
               )}
-              <Typography variant="body2" color="text.secondary">{student.email}</Typography>
+              <Typography variant="body2" color="text.secondary">{student.email || '—'}</Typography>
             </Box>
           </Box>
         </Box>
@@ -249,11 +256,13 @@ const StudentPage: React.FC = () => {
                 <EditIcon />
               </IconButton>
             </Tooltip>
-            <Tooltip title="Send Reset Password Link">
-              <IconButton color="info" onClick={() => setResetDialogOpen(true)}>
-                <RestartAltIcon />
-              </IconButton>
-            </Tooltip>
+            {student.email && (
+              <Tooltip title="Send password reset email">
+                <IconButton color="info" onClick={() => setResetDialogOpen(true)}>
+                  <RestartAltIcon />
+                </IconButton>
+              </Tooltip>
+            )}
             <Tooltip title="Delete">
               <IconButton color="error" onClick={() => setDeleteDialogOpen(true)}>
                 <DeleteIcon />

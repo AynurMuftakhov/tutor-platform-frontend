@@ -59,7 +59,7 @@ const Profile: React.FC = () => {
 
         setLoading(true);
         try {
-            const response = await updateUserProfile(user.email, formData.name, formData.email, newAvatar);
+            const response = await updateUserProfile(user.id, formData.name, formData.email, newAvatar);
 
             // Update user context and reset new avatar state
             updateUser({ avatar: response.avatar });
@@ -89,7 +89,7 @@ const Profile: React.FC = () => {
 
         setLoading(true);
         try {
-            const updatedUser = await updateUserProfile(user.email, formData.name, formData.email);
+            const updatedUser = await updateUserProfile(user.id, formData.name, formData.email);
             updateUser({ name: updatedUser.name });
 
             setSnackbarMessage('Profile updated successfully!');
@@ -172,9 +172,9 @@ const Profile: React.FC = () => {
                         </Box>
                     )}
 
-                    <Typography variant="subtitle2" color="text.primary">
+                    {user?.email && ( <Typography variant="subtitle2" color="text.primary">
                         email: {user?.email}
-                    </Typography>
+                    </Typography>)}
 
                     {/* Editable Name Field */}
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, marginBottom: 2 }}>

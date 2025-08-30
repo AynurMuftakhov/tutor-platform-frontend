@@ -184,7 +184,7 @@ const AddLessonModal: React.FC<AddLessonModalProps> = ({ open, onClose, onCreate
                     >
                         {students.map((student) => (
                             <MenuItem key={student.id} value={student.id}>
-                                {student.name} ({student.email})
+                                {student.name}
                             </MenuItem>
                         ))}
                     </TextField>
