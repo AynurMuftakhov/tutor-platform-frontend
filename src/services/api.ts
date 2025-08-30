@@ -3,6 +3,8 @@ import {Student} from "../pages/MyStudentsPage";
 import { NotificationMessage} from "../context/NotificationsSocketContext";
 import { ApiError } from '../context/ApiErrorContext';
 import {GenerateExerciseRequest, GenerateExerciseResponse} from "../types";
+import { LESSON_CONTENTS_BASE } from '../constants/api';
+import type { PageModel, BlockContentPayload } from '../types/lessonContent';
 
 const api = axios.create({
     baseURL: import.meta.env.VITE_API_URL,
@@ -328,6 +330,50 @@ export const updateListeningTask = async (materialId: string, taskId: string, ta
 
 export const deleteListeningTask = async (materialId: string, taskId: string) => {
   const response = await api.delete(`/lessons-service/api/materials/${materialId}/tasks/${taskId}`);
+  return response.data;
+};
+
+// Lesson Contents API
+export const getLessonContents = async (params: { ownerId?: string; q?: string; tags?: string[]; status?: 'DRAFT' | 'PUBLISHED'; page?: number; size?: number; }) => {
+  const queryParams = new URLSearchParams();
+  if (params.ownerId) queryParams.append('ownerId', params.ownerId);
+  if (params.q) queryParams.append('q', params.q);
+  if (params.status) queryParams.append('status', params.status);
+  if (params.page !== undefined) queryParams.append('page', String(params.page));
+  if (params.size !== undefined) queryParams.append('size', String(params.size));
+  if (params.tags && params.tags.length) params.tags.forEach(t => queryParams.append('tags', t));
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const response = await api.get(`${LESSON_CONTENTS_BASE}${query}`);
+  return response.data;
+};
+
+export const getLessonContent = async (id: string) => {
+  const response = await api.get(`${LESSON_CONTENTS_BASE}/${id}`);
+  return response.data;
+};
+
+export const createLessonContent = async (payload: { ownerId: string; title?: string; tags?: string[]; layout: PageModel; content: Record<string, BlockContentPayload>; }) => {
+  const response = await api.post(`${LESSON_CONTENTS_BASE}`, payload);
+  return response.data;
+};
+
+export const updateLessonContent = async (id: string, payload: { title?: string; tags?: string[]; layout: PageModel; content: Record<string, BlockContentPayload>; updatedAt?: string; }) => {
+  const response = await api.put(`${LESSON_CONTENTS_BASE}/${id}`, payload);
+  return response.data;
+};
+
+export const publishLessonContent = async (id: string) => {
+  const response = await api.post(`${LESSON_CONTENTS_BASE}/${id}/publish`);
+  return response.data;
+};
+
+export const unpublishLessonContent = async (id: string) => {
+  const response = await api.post(`${LESSON_CONTENTS_BASE}/${id}/unpublish`);
+  return response.data;
+};
+
+export const deleteLessonContent = async (id: string) => {
+  const response = await api.delete(`${LESSON_CONTENTS_BASE}/${id}`);
   return response.data;
 };
 
