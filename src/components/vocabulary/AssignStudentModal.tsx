@@ -51,7 +51,7 @@ const AssignStudentModal: React.FC<Props> = ({ open, onClose, selectedWords }) =
     // Filter students based on search
     const filteredStudents = students.filter(student => 
         student.name.toLowerCase().includes(search.toLowerCase()) ||
-        student.email.toLowerCase().includes(search.toLowerCase())
+        (student.email ? student.email.toLowerCase().includes(search.toLowerCase()) : false)
     );
 
     const toggleStudent = (id: string) =>
@@ -132,7 +132,7 @@ const AssignStudentModal: React.FC<Props> = ({ open, onClose, selectedWords }) =
                                     </ListItemIcon>
                                     <ListItemText 
                                         primary={student.name} 
-                                        secondary={student.email} 
+                                        secondary={student.email || '—'} 
                                     />
                                 </ListItemButton>
                             </ListItem>

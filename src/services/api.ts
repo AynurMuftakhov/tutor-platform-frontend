@@ -100,7 +100,7 @@ export const updateCurrentUser = async (userId: string, data: Partial<any>) => {
 };
 
 export const updateUserProfile = async (
-    username: string,
+    id: string,
     name: string,
     email: string,
     avatarFile?: File | null
@@ -112,7 +112,7 @@ export const updateUserProfile = async (
         formData.append('avatar', avatarFile);
     }
 
-    const response = await api.patch(`/users-service/api/users/profile?username=${username}`, formData, {
+    const response = await api.patch(`/users-service/api/users/profile?id=${id}`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
     });
 
@@ -136,12 +136,18 @@ export const fetchStudents = async (
     return response.data;
 };
 
-export const createStudent = async (teacherMail: string, studentData: { name: string; email: string; level: string }) => {
-    const response = await api.post(`/users-service/api/students?teacherEmail=${teacherMail}`, {
-        ...studentData,
-        teacherMail,
-    });
-    return response.data;
+export const createStudent = async (
+  teacherMail: string,
+  studentData: { name: string; email?: string; level: string }
+) => {
+  const response = await api.post(`/users-service/api/students?teacherEmail=${teacherMail}`,[
+    {
+      ...studentData,
+      teacherMail,
+    }
+  ].length === 1 ? { ...studentData, teacherMail } : { ...studentData, teacherMail });
+  // Return created student (expects backend to return created entity)
+  return response.data;
 };
 
 export const createLesson = async (lessonData: any) => {
@@ -517,6 +523,29 @@ export const createGrammarItem = (
 export const generateAiExercise = async (payload: GenerateExerciseRequest): Promise<GenerateExerciseResponse> => {
     const response = await api.post(`/lessons-service/api/ai/exercises`, payload);
     return response.data;
+};
+
+// Onboarding magic-link APIs
+export const generateMagicLink = async (studentId: string): Promise<{ link: string }> => {
+  const response = await api.post(`/users-service/api/onboarding/generate-link`, { studentId });
+  return response.data;
+};
+
+export const validateOnboardingToken = async (
+  token: string
+): Promise<{ valid: boolean; username?: string; displayName?: string }> => {
+  const response = await api.get(`/users-service/api/onboarding/validate`, {
+    params: { token },
+  });
+  return response.data;
+};
+
+export const consumeOnboardingToken = async (
+  token: string,
+  newPassword: string,
+  username: string,
+): Promise<void> => {
+  await api.post(`/users-service/api/onboarding/consume`, { token, password: newPassword, username });
 };
 
 export default api;

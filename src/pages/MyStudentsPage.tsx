@@ -20,7 +20,8 @@ import { DataGrid, GridColDef, GridRenderCellParams, GridToolbarContainer, GridT
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
-import {createStudent, deleteUser, fetchStudents, resetPasswordEmail, updateCurrentUser} from "../services/api";
+import LinkIcon from "@mui/icons-material/Link";
+import {createStudent, deleteUser, fetchStudents, resetPasswordEmail, updateCurrentUser, generateMagicLink} from "../services/api";
 import { useAuth } from '../context/AuthContext';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
@@ -43,11 +44,13 @@ export interface Student {
     id: string;
     avatar?: string;
     name: string;
-    email: string;
+    email?: string;
     level: EnglishLevel;
     homeworkDone: boolean;
     nextLesson?: string;
 }
+
+type NewStudentForm = { name: string; email?: string; level: EnglishLevel };
 const MyStudentsPage: React.FC = () => {
     const navigate = useNavigate();
     const { user }  = useAuth();
@@ -58,7 +61,7 @@ const MyStudentsPage: React.FC = () => {
     const [studentToDelete, setStudentToDelete] = useState<Student | null>(null);
     const [emailToReset, setEmailToReset] = useState("");
     const [addDialogOpen, setAddDialogOpen] = useState(false);
-    const [newStudent, setNewStudent] = useState({ name: "", email: "", level: "Beginner" as EnglishLevel });
+    const [newStudent, setNewStudent] = useState<NewStudentForm>({ name: "", email: "", level: "Beginner" as EnglishLevel });
     const [addLoading, setAddLoading] = useState(false);
     const [editingStudentId, setEditingStudentId] = useState<string | null>(null);
     const [deleteLoading, setDeleteLoading] = useState(false);
@@ -66,6 +69,10 @@ const MyStudentsPage: React.FC = () => {
     const [snackbarOpen, setSnackbarOpen] = useState(false);
     const [snackbarMessage, setSnackbarMessage] = useState('');
     const [snackbarSeverity, setSnackbarSeverity] = useState<'success' | 'error'>('success');
+
+    // Invite link dialog
+    const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
+    const [inviteLink, setInviteLink] = useState<string>('');
 
     const [totalStudents, setTotalStudents] = useState(0);
     const [page, setPage] = useState(0);
@@ -87,7 +94,7 @@ const MyStudentsPage: React.FC = () => {
     };
 
     const handleEditStudent = (student: Student) => {
-        setNewStudent({ name: student.name, email: student.email, level: student.level });
+        setNewStudent({ name: student.name, email: student.email ?? "", level: student.level });
         setEditingStudentId(student.id);
         setAddDialogOpen(true);
     };
@@ -103,6 +110,14 @@ const MyStudentsPage: React.FC = () => {
     };
 
     const handleConfirmResetPassword = (student: Student) => {
+        if (!student.email) {
+            setSnackbarMessage("This student has no email.");
+            setSnackbarSeverity('error');
+            setSnackbarOpen(true);
+            setResetPasswordDialogOpen(false);
+            setEmailToReset("");
+            return;
+        }
         setEmailToReset(student.email);
         setResetPasswordDialogOpen(true);
     };
@@ -164,8 +179,20 @@ const MyStudentsPage: React.FC = () => {
     const handleCreateStudent = async () => {
         try {
             setAddLoading(true);
+            // Validate email if present
+            const trimmedEmail = (newStudent.email || '').trim();
+            if (trimmedEmail.length > 0) {
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!emailRegex.test(trimmedEmail)) {
+                    setSnackbarMessage("Please enter a valid email or leave it empty.");
+                    setSnackbarSeverity('error');
+                    setSnackbarOpen(true);
+                    return;
+                }
+            }
+
             if (editingStudentId) {
-                await updateCurrentUser(editingStudentId, newStudent);
+                await updateCurrentUser(editingStudentId, { ...newStudent, email: trimmedEmail || undefined });
                 const data = await fetchStudents(user!.id, searchText, page, pageSize);
                 setStudents(data.content);
                 setTotalStudents(data.totalElements);
@@ -173,13 +200,29 @@ const MyStudentsPage: React.FC = () => {
                 setSnackbarSeverity('success');
                 setSnackbarOpen(true);
             } else {
-                await createStudent(user!.email, newStudent);
+                const created = await createStudent(user!.email, { name: newStudent.name, email: trimmedEmail || undefined, level: newStudent.level });
                 const data = await fetchStudents(user!.id, searchText, page, pageSize);
                 setStudents(data.content);
                 setTotalStudents(data.totalElements);
-                setSnackbarMessage("Student successfully added. Please remind them to check the email to set the password.");
-                setSnackbarSeverity('success');
-                setSnackbarOpen(true);
+
+                if (!trimmedEmail) {
+                    try {
+                        const { link } = await generateMagicLink(created.id);
+                        setInviteLink(link);
+                        setInviteDialogOpen(true);
+                        setSnackbarMessage("Invite link ready — copy and send to the student.");
+                    } catch (err) {
+                        console.error('Failed to generate link after creation', err);
+                        setSnackbarMessage('Student added. Failed to generate invite link. You can retry from actions.');
+                    } finally {
+                        setSnackbarSeverity('success');
+                        setSnackbarOpen(true);
+                    }
+                } else {
+                    setSnackbarMessage("Email sent to set password.");
+                    setSnackbarSeverity('success');
+                    setSnackbarOpen(true);
+                }
             }
             setAddDialogOpen(false);
             setNewStudent({ name: "", email: "", level: "Beginner" as EnglishLevel });
@@ -200,7 +243,7 @@ const MyStudentsPage: React.FC = () => {
         return students.filter(
             (s) =>
                 s.name.toLowerCase().includes(lower) ||
-                s.email.toLowerCase().includes(lower)
+                (s.email ? s.email.toLowerCase().includes(lower) : false)
         );
     }, [students, searchText]);
 
@@ -230,7 +273,7 @@ const MyStudentsPage: React.FC = () => {
             headerName: "Name",
             flex: 1,
             renderCell: (params: GridRenderCellParams<Student>) => (
-                <Tooltip title={params.row.email}>
+                <Tooltip title={params.row.email || ''}>
                     <Box display="flex" alignItems="center">
                         <Avatar
                             src={params.row.avatar}
@@ -252,9 +295,19 @@ const MyStudentsPage: React.FC = () => {
             field: "email",
             headerName: "Email",
             flex: 1,
-            renderCell: (params: GridRenderCellParams<Student>) => (
-                <Typography variant="body2">{params.row.email}</Typography>
-            )
+            renderCell: (params: GridRenderCellParams<Student>) => {
+                const email = params.row.email;
+                if (!email) {
+                    return (
+                        <Chip
+                            label="link-only"
+                            size="small"
+                            sx={{ bgcolor: (theme) => theme.palette.action.hover, color: (theme) => theme.palette.text.secondary }}
+                        />
+                    );
+                }
+                return <Typography variant="body2">{email}</Typography>;
+            }
         },
         {
             field: "level",
@@ -308,13 +361,36 @@ const MyStudentsPage: React.FC = () => {
                                 <MenuBookIcon fontSize="small" />
                             </IconButton>
                         </Tooltip>
-                        <Tooltip title="Send Reset Password Link">
+                        {student.email && (
+                            <Tooltip title="Send password reset email">
+                                <IconButton
+                                    color="info"
+                                    onClick={(e) => { e.stopPropagation(); handleConfirmResetPassword(student); }}
+                                    size="small"
+                                >
+                                    <RestartAltIcon fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                        )}
+                        <Tooltip title="Invite / Copy link (single-use)">
                             <IconButton
-                                color="info"
-                                onClick={(e) => { e.stopPropagation(); handleConfirmResetPassword(student); }}
+                                color="primary"
+                                onClick={async (e) => {
+                                    e.stopPropagation();
+                                    try {
+                                        const { link } = await generateMagicLink(student.id);
+                                        setInviteLink(link);
+                                        setInviteDialogOpen(true);
+                                    } catch (err) {
+                                        console.error('Failed to generate link', err);
+                                        setSnackbarMessage('Failed to generate link. Please try again.');
+                                        setSnackbarSeverity('error');
+                                        setSnackbarOpen(true);
+                                    }
+                                }}
                                 size="small"
                             >
-                                <RestartAltIcon fontSize="small" />
+                                <LinkIcon fontSize="small" />
                             </IconButton>
                         </Tooltip>
                         <Tooltip title="Delete">
@@ -444,6 +520,45 @@ const MyStudentsPage: React.FC = () => {
                     </DialogActions>
                 </Dialog>
             </Box>
+
+            {/* Invite / Copy Link Dialog */}
+            <Dialog open={inviteDialogOpen} onClose={() => setInviteDialogOpen(false)}>
+                <DialogTitle>Student Invite Link</DialogTitle>
+                <DialogContent>
+                    <DialogContentText sx={{ mb: 2 }}>
+                        Share this link with the student (WhatsApp/Telegram). The link can be used once.
+                    </DialogContentText>
+                    <TextField
+                        fullWidth
+                        label="Magic link"
+                        value={inviteLink}
+                        InputProps={{ readOnly: true }}
+                        margin="dense"
+                    />
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setInviteDialogOpen(false)}>Close</Button>
+                    <Button
+                        variant="contained"
+                        onClick={async () => {
+                            try {
+                                await navigator.clipboard.writeText(inviteLink);
+                                setSnackbarMessage('Link copied to clipboard');
+                                setSnackbarSeverity('success');
+                                setSnackbarOpen(true);
+                            } catch {
+                                setSnackbarMessage('Failed to copy. Select and copy manually.');
+                                setSnackbarSeverity('error');
+                                setSnackbarOpen(true);
+                            }
+                        }}
+                        disabled={!inviteLink}
+                    >
+                        Copy
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
             <Dialog open={addDialogOpen} onClose={() => setAddDialogOpen(false)}>
                 <DialogTitle>{editingStudentId ? "Edit Student" : "Add New Student"}</DialogTitle>
                 <DialogContent>
@@ -455,11 +570,12 @@ const MyStudentsPage: React.FC = () => {
                         onChange={(e) => setNewStudent({ ...newStudent, name: e.target.value })}
                     />
                     <TextField
-                        label="Email"
+                        label="Email (optional)"
                         fullWidth
                         margin="dense"
-                        value={newStudent.email}
+                        value={newStudent.email ?? ""}
                         onChange={(e) => setNewStudent({ ...newStudent, email: e.target.value })}
+                        helperText="Leave empty if inviting via direct link."
                     />
                     <TextField
                         label="Level"

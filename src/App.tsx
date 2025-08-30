@@ -19,6 +19,7 @@ import LearningMaterialsPage from "./pages/LearningMaterialsPage";
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ApiErrorProvider } from './context/ApiErrorContext';
 import Login from "./pages/Login";
+import OnboardingLinkPage from './pages/OnboardingLinkPage';
 
 const App: React.FC = () => {
     const { isLoading } = useAuth();
@@ -39,6 +40,7 @@ const App: React.FC = () => {
                         <Route path="/book-trial" element={<LandingPage />} /> {/* Placeholder - will be implemented later */}
                         <Route path="/pricing" element={<LandingPage />} /> {/* Placeholder - will be implemented later */}
                         <Route path="/login" element={<Login />} />
+                        <Route path="/onboard/:token" element={<OnboardingLinkPage />} />
 
                         {/* Protected routes - wrapped in AppWrapper */}
                         <Route path="/onboarding"

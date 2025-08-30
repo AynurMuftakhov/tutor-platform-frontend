@@ -227,7 +227,7 @@ const LessonSidePanel: React.FC<LessonSidePanelProps> = ({
                 >
                     {students.map((student) => (
                         <MenuItem key={student.id} value={student.id}>
-                            {student.name} ({student.email})
+                            {student.name}
                         </MenuItem>
                     ))}
                 </TextField>

@@ -684,9 +684,6 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                                         <Typography variant="subtitle2" fontWeight={600}>
                                             {user?.name || "Tutor"}
                                         </Typography>
-                                        <Typography variant="caption" color="text.secondary">
-                                            {user?.email || "tutor@example.com"}
-                                        </Typography>
                                     </Box>
 
                                     <MenuItem
