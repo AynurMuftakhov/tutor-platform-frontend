@@ -600,4 +600,21 @@ export const consumeOnboardingToken = async (
   await api.post(`/users-service/api/onboarding/consume`, { token, password: newPassword, username });
 };
 
+// Diagnostics: microphone/logs
+export interface MicDiagPayload {
+  ts: string;
+  event: string;
+  room?: string;
+  identity?: string;
+  userRole?: string;
+  ua?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  details?: any;
+}
+
+export const postMicDiag = async (payload: MicDiagPayload) => {
+  const res = await api.post(`/users-service/api/diag/mic-log`, payload);
+  return res.data;
+};
+
 export default api;
