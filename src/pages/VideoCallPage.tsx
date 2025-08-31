@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef} from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
     Box,
@@ -6,12 +6,14 @@ import {
     Button,
     CircularProgress,
     IconButton,
-    Tooltip
+    Tooltip,
+    Alert
 } from '@mui/material';
 import { LiveKitRoom, VideoConference, useRoomContext } from '@livekit/components-react';
 import '@livekit/components-styles';
+import { RoomEvent, RemoteParticipant, createLocalAudioTrack } from 'livekit-client';
 import { useAuth } from '../context/AuthContext';
-import { fetchLiveKitToken } from '../services/api';
+import {fetchLiveKitToken, MicDiagPayload, postMicDiag} from '../services/api';
 import WorkZone from '../components/lessonDetail/WorkZone';
 import DraggableDivider from '../components/lessonDetail/DraggableDivider';
 import { useSyncedVideo } from '../hooks/useSyncedVideo';
@@ -21,7 +23,6 @@ import { useWorkspaceSync } from '../hooks/useWorkspaceSync';
 import { WorkspaceProvider } from '../context/WorkspaceContext';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DoneIcon from "@mui/icons-material/Done";
-import { LibraryBooks as LibraryBooksIcon } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
 
@@ -136,6 +137,201 @@ const RoomContent: React.FC<{
 }> = ({ lessonId, studentId }) => {
     const { user } = useAuth();
     const room = useRoomContext(); // existing LiveKit room
+    const statsTimerRef = useRef<number | null>(null);
+
+    const [showUnmutePrompt, setShowUnmutePrompt] = useState(false);
+
+    // ---------- Lightweight diagnostics logger ----------
+    const postDiag = async (event: string, details?: any) => {
+        const payload: MicDiagPayload = {
+            ts: new Date().toISOString(),
+            event,
+            room: room?.name,
+            identity: room?.localParticipant?.identity,
+            userRole: user?.role,
+            ua: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
+            details,
+        };
+
+        // mirror to console
+        console.log('[MicDiag]', payload);
+
+        // send to backend with token
+        try {
+            await postMicDiag(payload);
+        } catch {
+            /* ignore network errors for diagnostics */
+        }
+    };
+
+    // ---- helpers to describe publications/tracks and attach listeners ----
+    const describePub = (pub: any) => ({
+        sid: pub?.trackSid,
+        kind: pub?.kind,
+        source: pub?.source,
+        muted: pub?.isMuted,
+        subscribed: pub?.isSubscribed,
+        trackReadyState: pub?.track?.mediaStreamTrack?.readyState,
+        deviceId: (pub?.track?.getDeviceId?.() || pub?.track?.mediaStreamTrack?.getSettings?.().deviceId),
+        settings: pub?.track?.mediaStreamTrack?.getSettings?.(),
+    });
+
+    const tapLocalTrackEvents = () => {
+        try {
+            const pubs = Array.from(room.localParticipant.audioTrackPublications.values());
+            const tr = pubs[0]?.track?.mediaStreamTrack as MediaStreamTrack | undefined;
+            if (!tr) return;
+            postDiag('local_mediaStreamTrack_settings', tr.getSettings?.());
+            tr.onended = () => postDiag('local_mediaStreamTrack_ended');
+            tr.onmute = () => postDiag('local_mediaStreamTrack_muted');
+            tr.onunmute = () => postDiag('local_mediaStreamTrack_unmuted');
+        } catch (e) {
+            postDiag('tapLocalTrackEvents_error', { error: String(e) });
+        }
+    };
+
+    const startStatsTimer = () => {
+        if (statsTimerRef.current) return;
+        statsTimerRef.current = window.setInterval(async () => {
+            try {
+                const pubs = Array.from(room.localParticipant.audioTrackPublications.values());
+                const track: any = pubs[0]?.track;
+                const sender: RTCRtpSender | undefined = (track?.sender || track?._sender);
+                if (!sender || !sender.getStats) return;
+                const report = await sender.getStats();
+                report.forEach((stat: any) => {
+                    if (stat.type === 'outbound-rtp' && stat.kind === 'audio') {
+                        postDiag('webrtc_outbound_audio', {
+                            timestamp: stat.timestamp,
+                            bytesSent: stat.bytesSent,
+                            packetsSent: stat.packetsSent,
+                            packetsLost: stat.packetsLost,
+                            roundTripTime: stat.roundTripTime,
+                            jitter: stat.jitter,
+                            audioLevel: stat.audioLevel,
+                            totalAudioEnergy: stat.totalAudioEnergy,
+                            mimeType: stat.mimeType,
+                        });
+                    }
+                });
+            } catch (e) {
+                postDiag('webrtc_outbound_audio_stats_error', { error: String(e) });
+            }
+        }, 5000);
+    };
+
+    // helper: find the student remote participant (1:1 room)
+    const getStudentRemote = (): RemoteParticipant | undefined => {
+      if (!room) return undefined;
+      // room.participants is a Map<sid, RemoteParticipant>
+      for (const p of room.remoteParticipants.values()) {
+        if (p.identity === studentId) return p;
+      }
+      return undefined;
+    };
+
+    // Ask the student to unmute via LiveKit data channel
+    const requestStudentUnmute = async () => {
+      try {
+        const payload = new TextEncoder().encode(JSON.stringify({ t: 'REQUEST_UNMUTE', from: user?.name || 'tutor' }));
+        const target = getStudentRemote();
+        // diagnostics
+        postDiag('requestStudentUnmute_clicked', { targetFound: !!target, targetSid: target?.sid });
+        // If we know who to target, send directly; otherwise broadcast
+        if (target) {
+          await room.localParticipant.publishData(payload, { reliable: true, destinationIdentities: [target.identity] });
+        } else {
+          await room.localParticipant.publishData(payload, { reliable: true });
+        }
+      } catch (e) {
+        console.warn('Failed to send unmute request', e);
+      }
+    };
+
+    // Local unmute flow that the student triggers
+    const enableMicLocal = async () => {
+      postDiag('enableMicLocal_start', {
+        pubsCount: Array.from(room.localParticipant.audioTrackPublications.values()).length,
+        micEnabled: room.localParticipant.isMicrophoneEnabled,
+      });
+      try {
+        // ensure audio playback is unlocked (needed on Safari/Chrome autoplay policies)
+        await room.startAudio();
+        postDiag('startAudio_called');
+      } catch (e) {
+        console.debug('startAudio() failed or already started', e);
+      }
+        try {
+            // proactively (re)open mic device to poke Safari issues
+            const constraints: MediaStreamConstraints = { audio: true };
+            const gum = await navigator.mediaDevices.getUserMedia(constraints);
+            const t = gum.getAudioTracks?.()[0];
+            postDiag('getUserMedia_audio_success', {
+                constraints,
+                settings: t?.getSettings?.(),
+                label: t?.label,
+                readyState: t?.readyState,
+            });
+            // stop temp tracks to avoid duplicate capture
+            gum.getTracks?.().forEach(tr => tr.stop());
+        } catch (e) {
+            console.warn('getUserMedia audio failed', e);
+            postDiag('getUserMedia_audio_failed', { error: String(e) });
+        }
+      // attempt normal enable first
+      try {
+        await room.localParticipant.setMicrophoneEnabled(true);
+        postDiag('setMicrophoneEnabled_called');
+      } catch (e) {
+        console.debug('setMicrophoneEnabled(true) threw, will verify/publish manually', e);
+        postDiag('setMicrophoneEnabled_threw', { error: String(e) });
+      }
+      // verify we have a published local audio track; if not, create & publish one
+      try {
+        const pubs = Array.from(room.localParticipant.audioTrackPublications.values());
+        const current = pubs[0];
+        postDiag('verify_audio_pub', { hasPub: !!current, hasTrack: !!current?.track });
+        if (!current || !current.track) {
+          const track = await createLocalAudioTrack();
+          await room.localParticipant.publishTrack(track);
+          postDiag('publishTrack_success', { trackId: track.mediaStreamTrack.id });
+        } else {
+          // ensure it is unmuted
+          await room.localParticipant.setMicrophoneEnabled(true);
+        }
+      } catch (e) {
+        console.error('Manual audio publish/enable failed', e);
+        postDiag('manual_publish_failed', { error: String(e) });
+        return;
+      }
+      try {
+          // attach MediaStreamTrack listeners and start periodic stats collection
+          tapLocalTrackEvents();
+          startStatsTimer();
+
+        // sample local track amplitude once for diagnostics
+        const pubs = Array.from(room.localParticipant.audioTrackPublications.values());
+        const tr = pubs[0]?.track?.mediaStreamTrack as MediaStreamTrack | undefined;
+        if (tr) {
+          const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const src = ctx.createMediaStreamSource(new MediaStream([tr]));
+          const analyser = ctx.createAnalyser();
+          analyser.fftSize = 512;
+          src.connect(analyser);
+          const data = new Uint8Array(analyser.frequencyBinCount);
+          analyser.getByteTimeDomainData(data);
+          const variance = data.reduce((acc, v) => acc + Math.abs(v - 128), 0) / data.length;
+          postDiag('local_waveform_variance', { variance });
+          setTimeout(() => { try { ctx.close(); } catch {console.log("")} }, 200);
+        } else {
+          postDiag('local_waveform_no_track');
+        }
+      } catch (e) {
+        postDiag('local_waveform_error', { error: String(e) });
+      }
+      setShowUnmutePrompt(false);
+    };
+
     const [copied, setIsCopied] = useState(false);
 
     // Hook to manage workspace toggle and split ratio
@@ -169,6 +365,233 @@ const RoomContent: React.FC<{
         }
     }, [workspaceOpen, syncedVideo]);
 
+    useEffect(() => {
+      if (!room) return;
+
+      const onData = (payload: Uint8Array) => {
+        try {
+          const msg = JSON.parse(new TextDecoder().decode(payload));
+          if (msg?.t === 'REQUEST_UNMUTE' && !isTutor) {
+            postDiag('request_unmute_received', msg);
+            setShowUnmutePrompt(true);
+          }
+        } catch {
+          /* ignore non-JSON data packets */
+        }
+      };
+
+      room.on(RoomEvent.DataReceived, onData);
+      return () => {
+        room.off(RoomEvent.DataReceived, onData);
+      };
+    }, [room, isTutor]);
+
+    // Diagnostics: log environment, permissions, devices, and active speakers
+    useEffect(() => {
+      if (!room) return;
+
+      postDiag('room_ready', { connectionState: room.state, roomName: room.name });
+
+        if (navigator.permissions?.query) {
+          navigator.permissions.query({ name: 'microphone' }).then((status: any) => {
+            postDiag('permissions_microphone', { state: status.state });
+            status.onchange = () => postDiag('permissions_microphone_change', { state: status.state });
+          }).catch(() => {console.warn('Failed to query microphone permissions')});
+        }
+
+      // enumerate devices
+      navigator.mediaDevices?.enumerateDevices?.()
+        .then((devices) => {
+          postDiag('enumerateDevices', devices.map(d => ({
+            kind: d.kind,
+            label: d.label,
+            deviceId: d.deviceId ? d.deviceId.substring(0, 6) + '…' : undefined,
+            groupId: d.groupId ? d.groupId.substring(0, 6) + '…' : undefined,
+          })));
+        })
+        .catch((e) => postDiag('enumerateDevices_failed', { error: String(e) }));
+
+      const onActive = (speakers: any[]) => {
+        postDiag('activeSpeakers', speakers.map(s => ({ id: s.identity, level: s.audioLevel })));
+      };
+      room.on(RoomEvent.ActiveSpeakersChanged, onActive);
+
+      return () => {
+        room.off(RoomEvent.ActiveSpeakersChanged, onActive);
+      };
+    }, [room]);
+
+    useEffect(() => {
+        if (!room) return;
+
+        // environment snapshot
+        postDiag('env_snapshot', {
+            ua: navigator.userAgent,
+            platform: (navigator as any).platform,
+            hardwareConcurrency: (navigator as any).hardwareConcurrency,
+            isSecureContext: (window as any).isSecureContext,
+            visibility: document.visibilityState,
+            supportedConstraints: navigator.mediaDevices?.getSupportedConstraints?.(),
+        });
+
+        const onVis = () => postDiag('document_visibilitychange', { visibility: document.visibilityState });
+        document.addEventListener('visibilitychange', onVis);
+
+        const onDeviceChange = async () => {
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                postDiag('devicechange_enumerate', devices.map(d => ({
+                    kind: d.kind, label: d.label,
+                    deviceId: d.deviceId ? d.deviceId.substring(0, 6) + '…' : undefined
+                })));
+            } catch (e) {
+                postDiag('devicechange_enumerate_failed', { error: String(e) });
+            }
+        };
+        navigator.mediaDevices?.addEventListener?.('devicechange', onDeviceChange);
+
+        // LiveKit signals
+        const onLocalPub = (publication: any) => {
+            postDiag('lk_LocalTrackPublished', describePub(publication));
+            tapLocalTrackEvents();
+            startStatsTimer();
+        };
+        const onLocalUnpub = (publication: any) => postDiag('lk_LocalTrackUnpublished', describePub(publication));
+        const onTrackSub = (track: any, publication: any, participant: any) => {
+            if (publication?.kind === 'audio') {
+                postDiag('lk_TrackSubscribed_audio_remote', { pub: describePub(publication), participant: participant?.identity });
+            }
+        };
+        const onTrackUnsub = (track: any, publication: any, participant: any) => {
+            if (publication?.kind === 'audio') {
+                postDiag('lk_TrackUnsubscribed_audio_remote', { pub: describePub(publication), participant: participant?.identity });
+            }
+        };
+        const onMuted = (publication: any, participant: any) =>
+            postDiag('lk_TrackMuted', { pub: describePub(publication), participant: participant?.identity, isLocal: !!participant?.isLocal });
+        const onUnmuted = (publication: any, participant: any) =>
+            postDiag('lk_TrackUnmuted', { pub: describePub(publication), participant: participant?.identity, isLocal: !!participant?.isLocal });
+        const onAudioPlayback = (playing: boolean) => postDiag('lk_AudioPlaybackStatusChanged', { playing });
+        const onDevicesChanged = (devices?: any) => {
+            void postDiag('lk_MediaDevicesChanged', devices);
+        };
+        const onConnQual = (participant: any, quality: any) => {
+            if (participant?.isLocal) postDiag('lk_ConnectionQualityChanged_local', { quality });
+        };
+
+        room.on(RoomEvent.LocalTrackPublished, onLocalPub);
+        room.on(RoomEvent.LocalTrackUnpublished, onLocalUnpub);
+        room.on(RoomEvent.TrackSubscribed, onTrackSub);
+        room.on(RoomEvent.TrackUnsubscribed, onTrackUnsub);
+        room.on(RoomEvent.TrackMuted, onMuted);
+        room.on(RoomEvent.TrackUnmuted, onUnmuted);
+        room.on(RoomEvent.AudioPlaybackStatusChanged, onAudioPlayback);
+        room.on(RoomEvent.MediaDevicesChanged, onDevicesChanged);
+        room.on(RoomEvent.ConnectionQualityChanged, onConnQual);
+
+        return () => {
+            document.removeEventListener('visibilitychange', onVis);
+            navigator.mediaDevices?.removeEventListener?.('devicechange', onDeviceChange);
+            room.off(RoomEvent.LocalTrackPublished, onLocalPub);
+            room.off(RoomEvent.LocalTrackUnpublished, onLocalUnpub);
+            room.off(RoomEvent.TrackSubscribed, onTrackSub);
+            room.off(RoomEvent.TrackUnsubscribed, onTrackUnsub);
+            room.off(RoomEvent.TrackMuted, onMuted);
+            room.off(RoomEvent.TrackUnmuted, onUnmuted);
+            room.off(RoomEvent.AudioPlaybackStatusChanged, onAudioPlayback);
+            room.off(RoomEvent.MediaDevicesChanged, onDevicesChanged);
+            room.off(RoomEvent.ConnectionQualityChanged, onConnQual);
+            if (statsTimerRef.current) {
+                clearInterval(statsTimerRef.current);
+                statsTimerRef.current = null;
+            }
+        };
+    }, [room]);useEffect(() => {
+        if (!room) return;
+
+        // environment snapshot
+        postDiag('env_snapshot', {
+            ua: navigator.userAgent,
+            platform: (navigator as any).platform,
+            hardwareConcurrency: (navigator as any).hardwareConcurrency,
+            isSecureContext: (window as any).isSecureContext,
+            visibility: document.visibilityState,
+            supportedConstraints: navigator.mediaDevices?.getSupportedConstraints?.(),
+        });
+
+        const onVis = () => postDiag('document_visibilitychange', { visibility: document.visibilityState });
+        document.addEventListener('visibilitychange', onVis);
+
+        const onDeviceChange = async () => {
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                postDiag('devicechange_enumerate', devices.map(d => ({
+                    kind: d.kind, label: d.label,
+                    deviceId: d.deviceId ? d.deviceId.substring(0, 6) + '…' : undefined
+                })));
+            } catch (e) {
+                postDiag('devicechange_enumerate_failed', { error: String(e) });
+            }
+        };
+        navigator.mediaDevices?.addEventListener?.('devicechange', onDeviceChange);
+
+        // LiveKit signals
+        const onLocalPub = (publication: any) => {
+            postDiag('lk_LocalTrackPublished', describePub(publication));
+            tapLocalTrackEvents();
+            startStatsTimer();
+        };
+        const onLocalUnpub = (publication: any) => postDiag('lk_LocalTrackUnpublished', describePub(publication));
+        const onTrackSub = (track: any, publication: any, participant: any) => {
+            if (publication?.kind === 'audio') {
+                postDiag('lk_TrackSubscribed_audio_remote', { pub: describePub(publication), participant: participant?.identity });
+            }
+        };
+        const onTrackUnsub = (track: any, publication: any, participant: any) => {
+            if (publication?.kind === 'audio') {
+                postDiag('lk_TrackUnsubscribed_audio_remote', { pub: describePub(publication), participant: participant?.identity });
+            }
+        };
+        const onMuted = (publication: any, participant: any) =>
+            postDiag('lk_TrackMuted', { pub: describePub(publication), participant: participant?.identity, isLocal: !!participant?.isLocal });
+        const onUnmuted = (publication: any, participant: any) =>
+            postDiag('lk_TrackUnmuted', { pub: describePub(publication), participant: participant?.identity, isLocal: !!participant?.isLocal });
+        const onAudioPlayback = (playing: boolean) => postDiag('lk_AudioPlaybackStatusChanged', { playing });
+        const onDevicesChanged = (devices?: any) => {
+            void postDiag('lk_MediaDevicesChanged', devices);
+        };
+        const onConnQual = (participant: any, quality: any) => {
+            if (participant?.isLocal) postDiag('lk_ConnectionQualityChanged_local', { quality });
+        };
+
+        room.on(RoomEvent.LocalTrackPublished, onLocalPub);
+        room.on(RoomEvent.LocalTrackUnpublished, onLocalUnpub);
+        room.on(RoomEvent.TrackSubscribed, onTrackSub);
+        room.on(RoomEvent.TrackUnsubscribed, onTrackUnsub);
+        room.on(RoomEvent.TrackMuted, onMuted);
+        room.on(RoomEvent.TrackUnmuted, onUnmuted);
+        room.on(RoomEvent.AudioPlaybackStatusChanged, onAudioPlayback);
+        room.on(RoomEvent.MediaDevicesChanged, onDevicesChanged);
+        room.on(RoomEvent.ConnectionQualityChanged, onConnQual);
+
+        return () => {
+            document.removeEventListener('visibilitychange', onVis);
+            navigator.mediaDevices?.removeEventListener?.('devicechange', onDeviceChange);
+            room.off(RoomEvent.LocalTrackPublished, onLocalPub);
+            room.off(RoomEvent.LocalTrackUnpublished, onLocalUnpub);
+            room.off(RoomEvent.TrackSubscribed, onTrackSub);
+            room.off(RoomEvent.TrackUnsubscribed, onTrackUnsub);
+            room.off(RoomEvent.TrackMuted, onMuted);
+            room.off(RoomEvent.TrackUnmuted, onUnmuted);
+            room.off(RoomEvent.AudioPlaybackStatusChanged, onAudioPlayback);
+            room.off(RoomEvent.MediaDevicesChanged, onDevicesChanged);
+            room.off(RoomEvent.ConnectionQualityChanged, onConnQual);
+            if (statsTimerRef.current) {
+                clearInterval(statsTimerRef.current);
+                statsTimerRef.current = null;
+            }
+        };
+    }, [room]);
 
     return (
         <WorkspaceProvider>
@@ -216,26 +639,23 @@ const RoomContent: React.FC<{
                     </Box>
                 )}
 
-                {/* ---------- Button to open workspace (always visible when workspace is closed) */}
-                {!workspaceOpen && isTutor && (
-                    <Tooltip title="Open materials">
-                        <IconButton
-                            onClick={openWorkspace}
-                            sx={{
-                                position: 'absolute',
-                                top: 64,
-                                left: 8,
-                                right: 'auto',
-                                zIndex: 1000,
-                                bgcolor: 'primary.main',
-                                color: 'white',
-                                '&:hover': { bgcolor: 'primary.dark' },
-                            }}
-                            aria-label="Open workspace"
-                        >
-                            <LibraryBooksIcon />
-                        </IconButton>
-                    </Tooltip>
+                {isTutor && (
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      top: 56,
+                      left: 8,
+                      zIndex: 1000,
+                      backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                      borderRadius: 1,
+                      px: 1,
+                      py: 0.5,
+                    }}
+                  >
+                    <Button variant="contained" size="small" onClick={requestStudentUnmute}>
+                      Ask to unmute
+                    </Button>
+                  </Box>
                 )}
 
                 {/* ---------- Left pane: VideoConference ----------------------- */}
@@ -245,10 +665,37 @@ const RoomContent: React.FC<{
                         minWidth: 280,
                         overflow: 'hidden',
                         transition: 'width .25s ease',
+                        position: 'relative',
                     }}
                 >
                     <MicPermissionGate />
                     <VideoConference style={{ height: '100%', width: '100%' }} />
+                    {!isTutor && showUnmutePrompt && (
+                      <Box
+                        sx={{
+                          position: 'absolute',
+                          top: 8,
+                          left: '50%',
+                          transform: 'translateX(-50%)',
+                          zIndex: 1200,
+                          maxWidth: 520,
+                          width: 'calc(100% - 16px)',
+                        }}
+                      >
+                        <Alert
+                          severity="info"
+                          variant="filled"
+                          sx={{ display: 'flex', alignItems: 'center' }}
+                          action={
+                            <Button color="inherit" size="small" onClick={enableMicLocal}>
+                              Unmute now
+                            </Button>
+                          }
+                        >
+                          Your teacher asked you to unmute your microphone. Click “Unmute now” to start speaking.
+                        </Alert>
+                      </Box>
+                    )}
                 </Box>
 
                 {/* ---------- Draggable divider (only when workspace is open) -- */}
