@@ -408,6 +408,12 @@ export const deleteMaterialFolder = async (id: string) => {
   return response.data;
 };
 
+// Fetch single material by id
+export const getMaterial = async (id: string) => {
+  const response = await api.get(`/lessons-service/api/materials/${id}`);
+  return response.data;
+};
+
 export const getMaterials = async (params: {
   folderId?: string;
   page?: number;

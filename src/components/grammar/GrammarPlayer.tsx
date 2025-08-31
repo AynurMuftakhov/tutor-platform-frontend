@@ -10,6 +10,7 @@ import {GrammarScoreResponse} from '../../services/api';
 interface GrammarPlayerProps {
     materialId: string;
     onClose?: () => void;
+    itemIds?: string[];
 }
 /* ------------------------------------------------------------------ */
 /* Main GrammarPlayer                                                 */
@@ -17,12 +18,17 @@ interface GrammarPlayerProps {
 const GrammarPlayer: React.FC<GrammarPlayerProps> = ({
                                                          materialId,
                                                          onClose,
+                                                         itemIds,
                                                      }) => {
     const [answers, setAnswers] = useState<Record<string, Record<number, string>>>({});
     const [scoreResult, setScoreResult] = useState<GrammarScoreResponse | null>(null);
     const [showScoreFeedback, setShowScoreFeedback] = useState(false);
 
-    const { data: grammarItems = [], isLoading, error } = useGrammarItems(materialId);
+    const { data: allItems = [], isLoading, error } = useGrammarItems(materialId);
+    const grammarItems = useMemo(
+        () => (itemIds && itemIds.length ? allItems.filter(it => itemIds.includes(it.id)) : allItems),
+        [allItems, itemIds]
+    );
     const scoreMutation = useScoreGrammar();
 
     // Create a ref to track the currently focused item
