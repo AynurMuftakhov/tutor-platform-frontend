@@ -1,5 +1,8 @@
 import React from 'react';
 import { Box, Stack, Typography } from '@mui/material';
+import ImageIcon from '@mui/icons-material/Image';
+import AudiotrackIcon from '@mui/icons-material/Audiotrack';
+import SmartDisplayIcon from '@mui/icons-material/SmartDisplay';
 import type {
   PageModel,
   BlockContentPayload,
@@ -16,8 +19,18 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchGrammarItems, GrammarItemDto } from '../../../services/api';
 
 function sanitizeHtml(input: string): string {
-  // Minimal sanitizer: strip scripts. For production, integrate DOMPurify.
-  return (input || '').replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+  if (!input) return '';
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(input, 'text/html');
+  doc.querySelectorAll('script,style').forEach((el) => el.remove());
+  doc.querySelectorAll('*').forEach((el) => {
+    [...el.attributes].forEach((attr) => {
+      if (/^on/i.test(attr.name)) {
+        el.removeAttribute(attr.name);
+      }
+    });
+  });
+  return doc.body.innerHTML;
 }
 
 // Block renderers
@@ -32,9 +45,12 @@ const ImageBlockView: React.FC<{ payload: ImageBlockPayload }> = ({ payload }) =
   const { url, alt, caption, materialId } = payload;
   if (!url) {
     return (
-      <Box sx={{ border: (t) => `1px dashed ${t.palette.divider}`, p: 2, borderRadius: 1, color: 'text.secondary' }}>
-        <Typography variant="caption">{materialId ? 'Image material selected — preview requires URL support.' : 'No image selected'}</Typography>
-      </Box>
+      <Stack spacing={1} alignItems="center" sx={{ border: (t) => `1px dashed ${t.palette.divider}`, p: 2, borderRadius: 1, color: 'text.secondary', textAlign: 'center' }}>
+        <ImageIcon fontSize="small" color="disabled" />
+        <Typography variant="caption">
+          {materialId ? 'Image material selected — preview requires URL support.' : 'No image selected'}
+        </Typography>
+      </Stack>
     );
   }
   return (
@@ -47,20 +63,21 @@ const ImageBlockView: React.FC<{ payload: ImageBlockPayload }> = ({ payload }) =
   );
 };
 
-const AudioBlockView: React.FC<{ payload: AudioBlockPayload }> = ({ payload }) => {
-  // We only have materialId; no URL resolution yet.
+const AudioBlockView: React.FC<{ payload: AudioBlockPayload }> = ({ payload: _ }) => {
   return (
-    <Box sx={{ border: (t) => `1px dashed ${t.palette.divider}`, p: 2, borderRadius: 1, color: 'text.secondary' }}>
+    <Stack spacing={1} alignItems="center" sx={{ border: (t) => `1px dashed ${t.palette.divider}`, p: 2, borderRadius: 1, color: 'text.secondary', textAlign: 'center' }}>
+      <AudiotrackIcon fontSize="small" color="disabled" />
       <Typography variant="caption">Audio preview unavailable — select a material and preview in class.</Typography>
-    </Box>
+    </Stack>
   );
 };
 
-const VideoBlockView: React.FC<{ payload: VideoBlockPayload }> = ({ payload }) => {
+const VideoBlockView: React.FC<{ payload: VideoBlockPayload }> = ({ payload: _ }) => {
   return (
-    <Box sx={{ border: (t) => `1px dashed ${t.palette.divider}`, p: 2, borderRadius: 1, color: 'text.secondary' }}>
+    <Stack spacing={1} alignItems="center" sx={{ border: (t) => `1px dashed ${t.palette.divider}`, p: 2, borderRadius: 1, color: 'text.secondary', textAlign: 'center' }}>
+      <SmartDisplayIcon fontSize="small" color="disabled" />
       <Typography variant="caption">Video preview unavailable — select a material and preview in class.</Typography>
-    </Box>
+    </Stack>
   );
 };
 
