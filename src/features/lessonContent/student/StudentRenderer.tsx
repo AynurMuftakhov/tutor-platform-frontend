@@ -3,6 +3,7 @@ import { Box, Stack, Typography } from '@mui/material';
 import ImageIcon from '@mui/icons-material/Image';
 import AudiotrackIcon from '@mui/icons-material/Audiotrack';
 import SmartDisplayIcon from '@mui/icons-material/SmartDisplay';
+import ReactPlayer from 'react-player';
 import type {
   PageModel,
   BlockContentPayload,
@@ -16,7 +17,9 @@ import type {
   Column,
 } from '../../../types/lessonContent';
 import { useQuery } from '@tanstack/react-query';
-import { fetchGrammarItems, GrammarItemDto } from '../../../services/api';
+import { getMaterial } from '../../../services/api';
+import type { Material } from '../../../types/material';
+import GrammarPlayer from '../../../components/grammar/GrammarPlayer';
 
 function sanitizeHtml(input: string): string {
   if (!input) return '';
@@ -63,57 +66,68 @@ const ImageBlockView: React.FC<{ payload: ImageBlockPayload }> = ({ payload }) =
   );
 };
 
-const AudioBlockView: React.FC<{ payload: AudioBlockPayload }> = ({ payload: _ }) => {
-  return (
-    <Stack spacing={1} alignItems="center" sx={{ border: (t) => `1px dashed ${t.palette.divider}`, p: 2, borderRadius: 1, color: 'text.secondary', textAlign: 'center' }}>
-      <AudiotrackIcon fontSize="small" color="disabled" />
-      <Typography variant="caption">Audio preview unavailable — select a material and preview in class.</Typography>
-    </Stack>
-  );
+const AudioBlockView: React.FC<{ payload: AudioBlockPayload }> = ({ payload }) => {
+  const hasMaterial = Boolean(payload.materialId);
+  const { data, isLoading, isError } = useQuery<Material>({
+    queryKey: ['material', payload.materialId],
+    queryFn: () => getMaterial(payload.materialId),
+    enabled: hasMaterial,
+  });
+
+  if (!hasMaterial) {
+    return (
+      <Stack spacing={1} alignItems="center" sx={{ border: (t) => `1px dashed ${t.palette.divider}`, p: 2, borderRadius: 1, color: 'text.secondary', textAlign: 'center' }}>
+        <AudiotrackIcon fontSize="small" color="disabled" />
+        <Typography variant="caption">No audio material selected.</Typography>
+      </Stack>
+    );
+  }
+  if (isLoading) return <Typography variant="caption" color="text.secondary">Loading audio…</Typography>;
+  if (isError || !data?.sourceUrl) return <Typography variant="caption" color="error">Failed to load audio.</Typography>;
+
+  return <ReactPlayer url={data.sourceUrl} controls width="100%" height="80px" playing={payload.autoplay} />;
 };
 
-const VideoBlockView: React.FC<{ payload: VideoBlockPayload }> = ({ payload: _ }) => {
+const VideoBlockView: React.FC<{ payload: VideoBlockPayload }> = ({ payload }) => {
+  const hasMaterial = Boolean(payload.materialId);
+  const { data, isLoading, isError } = useQuery<Material>({
+    queryKey: ['material', payload.materialId],
+    queryFn: () => getMaterial(payload.materialId),
+    enabled: hasMaterial,
+  });
+
+  if (!hasMaterial) {
+    return (
+      <Stack spacing={1} alignItems="center" sx={{ border: (t) => `1px dashed ${t.palette.divider}`, p: 2, borderRadius: 1, color: 'text.secondary', textAlign: 'center' }}>
+        <SmartDisplayIcon fontSize="small" color="disabled" />
+        <Typography variant="caption">No video material selected.</Typography>
+      </Stack>
+    );
+  }
+  if (isLoading) return <Typography variant="caption" color="text.secondary">Loading video…</Typography>;
+  if (isError || !data?.sourceUrl) return <Typography variant="caption" color="error">Failed to load video.</Typography>;
+
   return (
-    <Stack spacing={1} alignItems="center" sx={{ border: (t) => `1px dashed ${t.palette.divider}`, p: 2, borderRadius: 1, color: 'text.secondary', textAlign: 'center' }}>
-      <SmartDisplayIcon fontSize="small" color="disabled" />
-      <Typography variant="caption">Video preview unavailable — select a material and preview in class.</Typography>
-    </Stack>
+    <Box sx={{ position: 'relative', pt: '56.25%' }}>
+      <ReactPlayer
+        url={data.sourceUrl}
+        controls
+        width="100%"
+        height="100%"
+        style={{ position: 'absolute', top: 0, left: 0 }}
+      />
+    </Box>
   );
 };
 
 const GrammarView: React.FC<{ payload: GrammarMaterialBlockPayload }> = ({ payload }) => {
-  const hasMaterial = Boolean(payload.materialId);
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ['grammar-items', payload.materialId],
-    queryFn: () => fetchGrammarItems(payload.materialId),
-    enabled: hasMaterial,
-    staleTime: 10_000,
-  });
-
-  if (!hasMaterial) {
+  if (!payload.materialId) {
     return <Typography variant="caption" color="text.secondary">No grammar material selected.</Typography>;
   }
-  if (isLoading) return <Typography variant="caption" color="text.secondary">Loading grammar…</Typography>;
-  if (isError) return <Typography variant="caption" color="error">Failed to load grammar tasks.</Typography>;
-
-  const items: GrammarItemDto[] = Array.isArray(data) ? data : [];
-  let shown = items;
-  if (Array.isArray(payload.itemIds) && payload.itemIds.length > 0) {
-    shown = items.filter(it => payload.itemIds!.includes(it.id));
-  }
-
   return (
-    <Stack spacing={1}>
-      {shown.map((it, idx) => (
-        <Box key={it.id} sx={{ p: 1.25, border: (t) => `1px solid ${t.palette.divider}`, borderRadius: 1 }}>
-          <Typography variant="caption" color="text.secondary">Task {idx + 1}</Typography>
-          <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{it.text}</Typography>
-        </Box>
-      ))}
-      {shown.length === 0 && (
-        <Typography variant="caption" color="text.secondary">No tasks to show.</Typography>
-      )}
-    </Stack>
+    <Box sx={{ mt: 1 }}>
+      <GrammarPlayer materialId={payload.materialId} itemIds={payload.itemIds} />
+    </Box>
   );
 };
 
