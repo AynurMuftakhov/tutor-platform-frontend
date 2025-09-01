@@ -822,6 +822,9 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                         background: `linear-gradient(180deg, ${alpha(theme.palette.background.default, 0.8)} 0%, ${alpha(theme.palette.background.default, 1)} 100%)`,
                         position: 'relative',
                         width: isVideoCallPage ? '100%' : 'auto',
+                        overflowY: 'auto',
+                        overflowX: 'hidden',
+                        overscrollBehaviorY: 'contain',
                         '&::before': {
                             content: '""',
                             position: 'absolute',
@@ -906,8 +909,8 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                             position: 'relative',
                             zIndex: 1,
                             flexGrow: 1,
-                            overflowX: 'hidden',
-                            overflowY: 'hidden',
+                            minHeight: 0,
+                            overflow: 'visible',
                         }}
                     >
                         {children}

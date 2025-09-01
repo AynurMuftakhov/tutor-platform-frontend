@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 
 // Define the types of tools that can be displayed in the workspace
-export type WorkspaceTool = 'materials' | 'video' | 'whiteboard' | null;
+export type WorkspaceTool = 'materials' | 'video' | 'content' | 'whiteboard' | null;
 
 interface WorkspaceContextType {
   currentTool: WorkspaceTool;

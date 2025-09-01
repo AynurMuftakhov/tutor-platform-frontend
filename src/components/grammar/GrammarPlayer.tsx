@@ -11,6 +11,7 @@ interface GrammarPlayerProps {
     materialId: string;
     onClose?: () => void;
     itemIds?: string[];
+    onAttempt?: (itemId: string, gapIndex: number, value: string) => void;
 }
 /* ------------------------------------------------------------------ */
 /* Main GrammarPlayer                                                 */
@@ -19,6 +20,7 @@ const GrammarPlayer: React.FC<GrammarPlayerProps> = ({
                                                          materialId,
                                                          onClose,
                                                          itemIds,
+                                                         onAttempt,
                                                      }) => {
     const [answers, setAnswers] = useState<Record<string, Record<number, string>>>({});
     const [scoreResult, setScoreResult] = useState<GrammarScoreResponse | null>(null);
@@ -68,6 +70,7 @@ const GrammarPlayer: React.FC<GrammarPlayerProps> = ({
                 onGapChange: (idx, val, itemId) => {
                     if (itemId) {
                         handleGapChange(itemId, idx, val);
+                        onAttempt?.(itemId, idx, val);
                     }
                 },
                 disabled: false,
@@ -198,6 +201,22 @@ const GrammarPlayer: React.FC<GrammarPlayerProps> = ({
             },
         );
     };
+
+    // Listen for remote attempts (e.g., from student -> tutor mirroring)
+    useEffect(() => {
+        const handler = (evt: any) => {
+            const d = evt.detail || {};
+            if (d?.materialId !== materialId) return;
+            const { itemId, gapIndex, value } = d;
+            if (!itemId || typeof gapIndex !== 'number') return;
+            setAnswers(prev => ({
+                ...prev,
+                [itemId]: { ...(prev[itemId] || {}), [gapIndex]: value }
+            }));
+        };
+        window.addEventListener('GRAMMAR_BLOCK_ATTEMPT', handler as any);
+        return () => window.removeEventListener('GRAMMAR_BLOCK_ATTEMPT', handler as any);
+    }, [materialId]);
 
     /* -------------- renders ---------------- */
     if (isLoading) return (<Box sx={{ p:4, textAlign:'center' }}><CircularProgress/></Box>);

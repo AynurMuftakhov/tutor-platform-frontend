@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Box, Button, FormControlLabel, Snackbar, Stack, Switch, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, FormControlLabel, Snackbar, Stack, Switch, TextField, Typography, Tooltip } from '@mui/material';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { getLessonContent, updateLessonContent } from '../../services/api';
+import { getLessonContent, updateLessonContent, publishLessonContent } from '../../services/api';
 import { EditorProvider, useEditorStore } from '../../features/lessonContent/editorStore';
 import SectionCard from '../../features/lessonContent/components/SectionCard';
 import BlocksPalette from '../../features/lessonContent/components/BlocksPalette';
@@ -52,6 +52,16 @@ const InnerEditor: React.FC<{ id: string }> = ({ id }) => {
     }
   });
 
+  const publishMutation = useMutation({
+    mutationFn: () => publishLessonContent(id),
+    onError: () => {
+      actions.setError?.('Failed to publish. Please try again.');
+    },
+    onSuccess: () => {
+      navigate(`/lesson-contents/${id}/view`);
+    },
+  });
+
   // Debounced autosave (waits until layout is valid)
   useEffect(() => {
     if (!state.id || state.status !== 'DRAFT') return;
@@ -80,8 +90,26 @@ const InnerEditor: React.FC<{ id: string }> = ({ id }) => {
       <Stack direction="row" alignItems="center" justifyContent="space-between" mb={2}>
         <Typography variant="h5">Lesson Content Editor</Typography>
         <Stack direction="row" spacing={1} alignItems="center">
+          <FormControlLabel control={<Switch checked={!state.overlaysVisible} onChange={(e) => actions.setOverlaysVisible(!e.target.checked)} />} label="Clean Mode" />
           <FormControlLabel control={<Switch checked={preview} onChange={(e) => setPreview(e.target.checked)} />} label="Preview" />
-          <Button variant="contained" disabled={!state.isLayoutValid || Boolean(state.inspectorInvalid)}>Publish</Button>
+          {(() => {
+            const issues = Object.entries(state.invalidById || {}).filter(([, msg]) => Boolean(msg)).slice(0, 5).map(([id, msg]) => `• ${msg as string} (block ${id})`);
+            const disabled = !state.isLayoutValid || Boolean(state.inspectorInvalid) || (state.invalidCount ?? 0) > 0;
+            const tip = !state.isLayoutValid ? 'Fix layout: columns exceed 12 in some rows.' : (state.invalidCount ?? 0) > 0 ? `Fix invalid blocks (${state.invalidCount}).\n${issues.join('\n')}` : (state.inspectorInvalid ? 'Fix inspector errors.' : '');
+            return (
+              <Tooltip title={disabled ? tip : 'publish content when you finished with this page'} disableHoverListener={!disabled}>
+                <span>
+                  <Button
+                    variant="contained"
+                    disabled={disabled || publishMutation.isPending}
+                    onClick={() => publishMutation.mutate()}
+                  >
+                    {publishMutation.isPending ? 'Publishing…' : 'Publish'}
+                  </Button>
+                </span>
+              </Tooltip>
+            );
+          })()}
           <Button variant="text" onClick={() => navigate('/lesson-contents')}>Back to Library</Button>
         </Stack>
       </Stack>
@@ -143,10 +171,10 @@ const LessonContentEditorPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   if (!id) return null;
   return (
-    <Box p={3}>
-      <EditorProvider>
-        <InnerEditor id={id} />
-      </EditorProvider>
+    <Box p={3} sx={{ minHeight: 0, pb: 6 }}>
+            <EditorProvider>
+                <InnerEditor id={id} />
+          </EditorProvider>
     </Box>
   );
 };
