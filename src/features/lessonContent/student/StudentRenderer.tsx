@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Stack, Typography } from '@mui/material';
+import { Box, Stack, Typography, Dialog, DialogContent, IconButton } from '@mui/material';
 import ImageIcon from '@mui/icons-material/Image';
 import AudiotrackIcon from '@mui/icons-material/Audiotrack';
 import SmartDisplayIcon from '@mui/icons-material/SmartDisplay';
@@ -68,6 +68,7 @@ const TextBlockView: React.FC<{ payload: TextBlockPayload }> = ({ payload }) => 
 
 const ImageBlockView: React.FC<{ payload: ImageBlockPayload }> = ({ payload }) => {
   const { url, alt, caption, materialId } = payload;
+  const [open, setOpen] = React.useState(false);
   if (!url) {
     return (
       <Stack spacing={1} alignItems="center" sx={{ border: (t) => `1px dashed ${t.palette.divider}`, p: 2, borderRadius: 1, color: 'text.secondary', textAlign: 'center' }}>
@@ -79,12 +80,28 @@ const ImageBlockView: React.FC<{ payload: ImageBlockPayload }> = ({ payload }) =
     );
   }
   return (
-    <Stack spacing={0.5}>
-      <Box component="img" src={url} alt={alt || ''} sx={{ width: '100%', height: 'auto', borderRadius: 1 }} />
-      {caption && (
-        <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center' }}>{caption}</Typography>
-      )}
-    </Stack>
+    <>
+      <Stack spacing={0.5}>
+        <Box
+          component="img"
+          src={url}
+          alt={alt || ''}
+          onClick={() => setOpen(true)}
+          sx={{ width: '100%', height: 'auto', borderRadius: 1, cursor: 'zoom-in' }}
+        />
+        {caption && (
+          <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center' }}>{caption}</Typography>
+        )}
+      </Stack>
+      {/* Lightbox dialog */}
+      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="lg">
+        <DialogContent sx={{ p: 0 }}>
+          <Box sx={{ position: 'relative' }}>
+            <Box component="img" src={url} alt={alt || ''} sx={{ maxWidth: '90vw', maxHeight: '85vh', display: 'block' }} />
+          </Box>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
 
@@ -259,6 +276,21 @@ const GrammarView: React.FC<{ payload: GrammarMaterialBlockPayload; contentSync?
         itemIds={payload.itemIds}
         onAttempt={(itemId, gapIndex, value) => {
             emitAttemptThrottled(itemId, gapIndex, value);
+        }}
+        onScore={(score) => {
+            // Either party can publish score so the other mirrors
+            sync.emitScore({
+              materialId: score.materialId,
+              totalItems: score.totalItems,
+              correctItems: score.correctItems,
+              totalGaps: score.totalGaps,
+              correctGaps: score.correctGaps,
+              details: score.details.map(d => ({
+                grammarItemId: d.grammarItemId,
+                gapResults: d.gapResults.map(gr => ({ index: gr.index, student: gr.student, correct: gr.correct, isCorrect: gr.isCorrect })),
+                itemCorrect: d.itemCorrect,
+              })),
+            });
         }}
       />
     </Box>

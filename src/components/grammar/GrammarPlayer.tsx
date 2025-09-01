@@ -12,6 +12,7 @@ interface GrammarPlayerProps {
     onClose?: () => void;
     itemIds?: string[];
     onAttempt?: (itemId: string, gapIndex: number, value: string) => void;
+    onScore?: (score: GrammarScoreResponse) => void;
 }
 /* ------------------------------------------------------------------ */
 /* Main GrammarPlayer                                                 */
@@ -21,6 +22,7 @@ const GrammarPlayer: React.FC<GrammarPlayerProps> = ({
                                                          onClose,
                                                          itemIds,
                                                          onAttempt,
+                                                         onScore, 
                                                      }) => {
     const [answers, setAnswers] = useState<Record<string, Record<number, string>>>({});
     const [scoreResult, setScoreResult] = useState<GrammarScoreResponse | null>(null);
@@ -37,33 +39,10 @@ const GrammarPlayer: React.FC<GrammarPlayerProps> = ({
     const focusedItemRef = useRef<string | null>(null);
 
     // Create a single editor instance for all items
-    const extensions = useMemo(() => {
-        // Create a map of item IDs to their gap results
-        const gapResultsMap: Record<string, { index: number; isCorrect: boolean; correct: string }[]> = {};
-        if (scoreResult) {
-            scoreResult.details.forEach(detail => {
-                gapResultsMap[detail.grammarItemId] = detail.gapResults.map(r => ({
-                    index: r.index,
-                    isCorrect: r.isCorrect,
-                    correct: r.correct,
-                }));
-            });
-        }
-
-        // Get the current focused item ID
-        const currentItemId = focusedItemRef.current;
-
-        // Get the gap results for the current item
-        const currentGapResults = currentItemId && scoreResult
-            ? scoreResult.details.find(d => d.grammarItemId === currentItemId)?.gapResults.map(r => ({
-                index: r.index,
-                isCorrect: r.isCorrect, // This might be undefined in some API responses
-                student: r.student,
-                correct: r.correct,
-              }))
-            : [];
-
-        return [
+    const extensionsRef = useRef<any[] | null>(null);
+    if (extensionsRef.current === null) {
+        // initialize once; keep extensions stable to avoid editor re-creation loops
+        extensionsRef.current = [
             StarterKit,
             GapToken.configure({
                 mode: 'player',
@@ -74,10 +53,12 @@ const GrammarPlayer: React.FC<GrammarPlayerProps> = ({
                     }
                 },
                 disabled: false,
-                gapResults: currentGapResults || [],
+                // do not depend on scoreResult here; we will color via a side-effect
+                gapResults: [],
             }),
         ];
-    }, [scoreResult, focusedItemRef.current]);
+    }
+    const extensions = extensionsRef.current;
 
     // Create a single editor instance
     const editor = useEditor(
@@ -86,7 +67,7 @@ const GrammarPlayer: React.FC<GrammarPlayerProps> = ({
             content: '', // We'll set the content after initialization
             editable: false,
         },
-        [extensions]
+        []
     );
 
     useEffect(() => {
@@ -103,12 +84,19 @@ const GrammarPlayer: React.FC<GrammarPlayerProps> = ({
         const selStart       = activeEl?.selectionStart ?? 0;
         const selEnd         = activeEl?.selectionEnd   ?? 0;
 
-        /* ---------- rebuild the editor’s content ---------- */
-        grammarItems.forEach((item, idx) => {
-            const itemAnswers = answers[item.id] ?? {};
-            const content     = gapTokensToNodes(item.text, itemAnswers);
-            if (idx === 0) editor.commands.setContent(content);
-        });
+        /* ---------- rebuild the editor’s content (first item only) ---------- */
+        const first = grammarItems[0];
+        if (first) {
+            const itemAnswers = answers[first.id] ?? {};
+            const content     = gapTokensToNodes(first.text, itemAnswers);
+            // Only update if doc differs to prevent loops
+            const asJSON = editor.getJSON();
+            const currentText = JSON.stringify(asJSON);
+            const nextText = JSON.stringify(content);
+            if (currentText !== nextText) {
+                editor.commands.setContent(content);
+            }
+        }
 
         /* ---------- restore focus on the *same position* gap ---------- */
         if (activeIndex !== -1) {
@@ -121,7 +109,7 @@ const GrammarPlayer: React.FC<GrammarPlayerProps> = ({
                     sameSpotInput.focus();
                     try {
                         sameSpotInput.setSelectionRange(selStart, selEnd);
-                    } catch (_) {/* ignore */}
+                    } catch (e) { /* ignore */ }
                 }
             });
         }
@@ -163,10 +151,14 @@ const GrammarPlayer: React.FC<GrammarPlayerProps> = ({
     /* -------------- helpers ---------------- */
     // This handler correctly updates the state for a specific item and gap index
     const handleGapChange = (itemId: string, idx: number, val: string) =>
-        setAnswers(prev => ({
-            ...prev,
-            [itemId]: { ...(prev[itemId] || {}), [idx]: val },
-        }));
+        setAnswers(prev => {
+            const prevVal = prev[itemId]?.[idx];
+            if (prevVal === val) return prev; // no-op to avoid loops
+            return {
+                ...prev,
+                [itemId]: { ...(prev[itemId] || {}), [idx]: val },
+            };
+        });
 
 
     const allGapsFilled = useMemo(() => {
@@ -196,6 +188,7 @@ const GrammarPlayer: React.FC<GrammarPlayerProps> = ({
                 onSuccess: data => {
                     setScoreResult(data);
                     setShowScoreFeedback(true);
+                    try { onScore?.(data); } catch (_) { /* noop */ }
                 },
                 onError: err => console.error(err),
             },
@@ -216,6 +209,58 @@ const GrammarPlayer: React.FC<GrammarPlayerProps> = ({
         };
         window.addEventListener('GRAMMAR_BLOCK_ATTEMPT', handler as any);
         return () => window.removeEventListener('GRAMMAR_BLOCK_ATTEMPT', handler as any);
+    }, [materialId]);
+
+    // Apply red/green styles after scoring without recreating extensions
+    useEffect(() => {
+        const firstItemId = grammarItems[0]?.id;
+        if (!firstItemId) return;
+        // helper to apply styles
+        const applyStyles = () => {
+            const inputs = document.querySelectorAll<HTMLInputElement>(`[data-item-id="${firstItemId}"] .gap-token-input`);
+            const det = scoreResult?.details.find(d => d.grammarItemId === firstItemId);
+            inputs.forEach((input, idx) => {
+                const res = det?.gapResults.find(gr => gr.index === idx);
+                if (!res) {
+                    input.style.borderColor = '#ccc';
+                    input.style.backgroundColor = '';
+                    input.title = '';
+                    return;
+                }
+                const isCorrect = res.isCorrect ?? (res.student === res.correct);
+                if (isCorrect) {
+                    input.style.borderColor = '#4caf50';
+                    input.style.backgroundColor = 'rgba(76,175,80,0.1)';
+                    input.title = '';
+                } else {
+                    input.style.borderColor = '#f44336';
+                    input.style.backgroundColor = 'rgba(244,67,54,0.1)';
+                    input.title = `Correct answer: ${res.correct}`;
+                }
+            });
+        };
+        applyStyles();
+        // also on next tick in case inputs remount
+        const t = setTimeout(applyStyles, 0);
+        return () => clearTimeout(t);
+    }, [scoreResult, grammarItems]);
+
+    // Sync in score results from remote peer
+    useEffect(() => {
+        const handler = (evt: any) => {
+            const d = evt.detail || {};
+            if (d?.materialId !== materialId) return;
+            const score = d.score as GrammarScoreResponse | undefined;
+            if (!score) return;
+            setScoreResult(prev => {
+                // avoid triggering unnecessary re-renders if identical
+                try { if (JSON.stringify(prev) === JSON.stringify(score)) return prev; } catch (e) { /* ignore */ }
+                return score;
+            });
+            setShowScoreFeedback(true);
+        };
+        window.addEventListener('GRAMMAR_BLOCK_SCORE', handler as any);
+        return () => window.removeEventListener('GRAMMAR_BLOCK_SCORE', handler as any);
     }, [materialId]);
 
     /* -------------- renders ---------------- */
