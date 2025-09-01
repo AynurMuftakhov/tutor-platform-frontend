@@ -1,7 +1,7 @@
 import React from 'react';
-import { Box, List, ListItemButton, ListItemIcon, ListItemText, Paper, Typography } from '@mui/material';
-import { BlockRegistry } from '../blocks/registry';
+import { List, ListItemButton, ListItemIcon, ListItemText, Paper, Typography } from '@mui/material';
 import { useEditorStore } from '../editorStore';
+import {BlockRegistry} from "../blocks/registry";
 
 const DRAG_TYPE = 'application/lesson-block-type';
 

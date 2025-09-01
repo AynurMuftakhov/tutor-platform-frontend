@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Box, Button, Chip, Divider, FormControl, FormControlLabel, FormHelperText, InputLabel, MenuItem, Radio, RadioGroup, Select, Stack, Switch, TextField, Typography } from '@mui/material';
+import { Box, Button, Chip, FormControl, FormControlLabel, FormHelperText, InputLabel, MenuItem, Radio, RadioGroup, Select, Stack, Switch, TextField, Typography } from '@mui/material';
 import { useEditorStore } from '../editorStore';
-import { BlockRegistry } from '../blocks/registry';
 import type { BlockRef, Column, Row, Section } from '../../../types/lessonContent';
 import MaterialsPicker, { PickerMaterialType } from './MaterialsPicker';
 import GrammarTaskPicker from './GrammarTaskPicker';
@@ -102,7 +101,7 @@ const InspectorPanel: React.FC = () => {
         {!selected.blockRef && !selected.column && !selected.row && selected.section && (
           <SectionForm
             section={selected.section}
-            onChange={(patch) => actions.updateSectionMeta(selected.section.id, patch)}
+            onChange={(patch) => selected.section && actions.updateSectionMeta(selected.section.id, patch)}
           />
         )}
       </Stack>
