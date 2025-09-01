@@ -10,6 +10,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLessonContent, getLessonContents, deleteLessonContent } from '../../services/api';
 import { useNavigate } from 'react-router-dom';
 import type { LessonContent, PageModel, BlockContentPayload } from '../../types/lessonContent';
+import EditIcon from "@mui/icons-material/Edit";
+import LockOpenIcon from "@mui/icons-material/LockOpen";
 
 const LessonContentsLibraryPage: React.FC = () => {
   const navigate = useNavigate();
@@ -145,7 +147,7 @@ const LessonContentsLibraryPage: React.FC = () => {
               </Box>
               <Stack direction="row" spacing={1} alignItems="center">
                 <Chip size="small" label={it.status} color={it.status === 'PUBLISHED' ? 'success' : 'default'} />
-                <IconButton size="small" onClick={() => navigate(`/lesson-contents/${it.id}/editor`)} aria-label="Edit"><GridViewIcon fontSize="small" /></IconButton>
+                <IconButton size="small" onClick={() => navigate(`/lesson-contents/${it.id}/editor`)} aria-label="Edit"><EditIcon fontSize="small" /></IconButton>
                 <IconButton size="small" onClick={() => navigate(`/lesson-contents/${it.id}/view`)} aria-label="View"><ViewListIcon fontSize="small" /></IconButton>
                 <IconButton size="small" color="error" onClick={() => handleDelete(it.id)} aria-label="Delete" disabled={false}><DeleteOutline fontSize="small" /></IconButton>
               </Stack>

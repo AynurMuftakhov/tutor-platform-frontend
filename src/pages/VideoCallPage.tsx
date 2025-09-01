@@ -18,6 +18,7 @@ import WorkZone from '../components/lessonDetail/WorkZone';
 import DraggableDivider from '../components/lessonDetail/DraggableDivider';
 import { useSyncedVideo } from '../hooks/useSyncedVideo';
 import { useSyncedGrammar } from '../hooks/useSyncedGrammar';
+import { useSyncedContent } from '../hooks/useSyncedContent';
 import { useWorkspaceToggle } from '../hooks/useWorkspaceToggle';
 import { useWorkspaceSync } from '../hooks/useWorkspaceSync';
 import { WorkspaceProvider } from '../context/WorkspaceContext';
@@ -340,6 +341,7 @@ const RoomContent: React.FC<{
     // Hooks that encapsulate all playback sync
     const syncedVideo = useSyncedVideo(room, user?.role === 'tutor', workspaceOpen, openWorkspace);
     const syncedGrammar = useSyncedGrammar(room, user?.role === 'tutor', workspaceOpen, openWorkspace);
+    const syncedContent = useSyncedContent(room, user?.role === 'tutor');
 
     const isTutor = user?.role === 'tutor';
     const theme = useTheme();
@@ -714,8 +716,10 @@ const RoomContent: React.FC<{
                         <WorkZone
                             useSyncedVideo={syncedVideo}
                             useSyncedGrammar={syncedGrammar}
+                            useSyncedContent={syncedContent}
                             onClose={closeWorkspace}
                             lessonId={lessonId}
+                            room={room}
                         />
                     </Box>
                 )}
