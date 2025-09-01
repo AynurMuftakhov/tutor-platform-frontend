@@ -82,7 +82,7 @@ const MaterialsPicker: React.FC<MaterialsPickerProps> = ({ open, onClose, allowe
         ) : (
           <Grid container spacing={2}>
             {items.map((m) => (
-              <Grid item xs={12} sm={6} md={4} key={m.id}>
+              <Grid size={{ xs: 12, sm: 6, md:4 }} key={m.id}>
                 <Box p={1.5} border={(t) => `1px solid ${t.palette.divider}`} borderRadius={1.5}>
                   <Stack spacing={1}>
                     <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">

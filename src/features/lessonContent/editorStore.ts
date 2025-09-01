@@ -563,7 +563,7 @@ export const EditorProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }), []);
 
   return React.createElement(
-    EditorContext.Provider as unknown as React.JSXElementConstructor<{ children?: React.ReactNode }>,
+    EditorContext.Provider as unknown as React.JSXElementConstructor<React.ProviderProps<{ state: EditorState; actions: EditorActions }>>,
     { value: { state, actions } },
     children
   );
