@@ -507,6 +507,7 @@ const LessonsPage = () => {
                         plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
                         initialView={getDefaultCalendarView()}
                         headerToolbar={false} // We're creating our own header
+                        firstDay={1}
                         events={lessonsToEvents()}
                         selectable={user?.role === "tutor"}
                         select={handleDateSelect}
