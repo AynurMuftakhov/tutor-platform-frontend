@@ -9,7 +9,8 @@ import {
     Tooltip,
     Alert
 } from '@mui/material';
-import { LiveKitRoom, VideoConference, useRoomContext } from '@livekit/components-react';
+import {LiveKitRoom, VideoConference, useRoomContext} from '@livekit/components-react';
+import MicIcon from '@mui/icons-material/Mic';
 import '@livekit/components-styles';
 import { RoomEvent, RemoteParticipant, createLocalAudioTrack } from 'livekit-client';
 import { useAuth } from '../context/AuthContext';
@@ -29,6 +30,7 @@ import useMediaQuery from '@mui/material/useMediaQuery';
 
 import '../styles/livekit-custom.css';
 import { MicPermissionGate } from "../components/MicPermissionGate";
+import LibraryBooksIcon from "@mui/icons-material/LibraryBooks";
 
 interface VideoCallPageProps {
     identity?: string;
@@ -388,41 +390,6 @@ const RoomContent: React.FC<{
       };
     }, [room, isTutor]);
 
-    // Diagnostics: log environment, permissions, devices, and active speakers
-    useEffect(() => {
-      if (!room) return;
-
-      postDiag('room_ready', { connectionState: room.state, roomName: room.name });
-
-        if (navigator.permissions?.query) {
-          navigator.permissions.query({ name: 'microphone' }).then((status: any) => {
-            postDiag('permissions_microphone', { state: status.state });
-            status.onchange = () => postDiag('permissions_microphone_change', { state: status.state });
-          }).catch(() => {console.warn('Failed to query microphone permissions')});
-        }
-
-      // enumerate devices
-      navigator.mediaDevices?.enumerateDevices?.()
-        .then((devices) => {
-          postDiag('enumerateDevices', devices.map(d => ({
-            kind: d.kind,
-            label: d.label,
-            deviceId: d.deviceId ? d.deviceId.substring(0, 6) + '…' : undefined,
-            groupId: d.groupId ? d.groupId.substring(0, 6) + '…' : undefined,
-          })));
-        })
-        .catch((e) => postDiag('enumerateDevices_failed', { error: String(e) }));
-
-      const onActive = (speakers: any[]) => {
-        postDiag('activeSpeakers', speakers.map(s => ({ id: s.identity, level: s.audioLevel })));
-      };
-      room.on(RoomEvent.ActiveSpeakersChanged, onActive);
-
-      return () => {
-        room.off(RoomEvent.ActiveSpeakersChanged, onActive);
-      };
-    }, [room]);
-
     useEffect(() => {
         if (!room) return;
 
@@ -474,8 +441,9 @@ const RoomContent: React.FC<{
         const onUnmuted = (publication: any, participant: any) =>
             postDiag('lk_TrackUnmuted', { pub: describePub(publication), participant: participant?.identity, isLocal: !!participant?.isLocal });
         const onAudioPlayback = (playing: boolean) => postDiag('lk_AudioPlaybackStatusChanged', { playing });
-        const onDevicesChanged = (devices?: any) => {
-            void postDiag('lk_MediaDevicesChanged', devices);
+        const onDevicesChanged: (...args: unknown[]) => void = (...args) => {
+            // keep diagnostics identical: we log the first argument from LiveKit
+            void postDiag('lk_MediaDevicesChanged', args[0]);
         };
         const onConnQual = (participant: any, quality: any) => {
             if (participant?.isLocal) postDiag('lk_ConnectionQualityChanged_local', { quality });
@@ -488,7 +456,7 @@ const RoomContent: React.FC<{
         room.on(RoomEvent.TrackMuted, onMuted);
         room.on(RoomEvent.TrackUnmuted, onUnmuted);
         room.on(RoomEvent.AudioPlaybackStatusChanged, onAudioPlayback);
-        room.on(RoomEvent.MediaDevicesChanged, onDevicesChanged);
+        room.on(RoomEvent.MediaDevicesChanged, onDevicesChanged as unknown as (...args: any[]) => void);
         room.on(RoomEvent.ConnectionQualityChanged, onConnQual);
 
         return () => {
@@ -501,92 +469,7 @@ const RoomContent: React.FC<{
             room.off(RoomEvent.TrackMuted, onMuted);
             room.off(RoomEvent.TrackUnmuted, onUnmuted);
             room.off(RoomEvent.AudioPlaybackStatusChanged, onAudioPlayback);
-            room.off(RoomEvent.MediaDevicesChanged, onDevicesChanged);
-            room.off(RoomEvent.ConnectionQualityChanged, onConnQual);
-            if (statsTimerRef.current) {
-                clearInterval(statsTimerRef.current);
-                statsTimerRef.current = null;
-            }
-        };
-    }, [room]);useEffect(() => {
-        if (!room) return;
-
-        // environment snapshot
-        postDiag('env_snapshot', {
-            ua: navigator.userAgent,
-            platform: (navigator as any).platform,
-            hardwareConcurrency: (navigator as any).hardwareConcurrency,
-            isSecureContext: (window as any).isSecureContext,
-            visibility: document.visibilityState,
-            supportedConstraints: navigator.mediaDevices?.getSupportedConstraints?.(),
-        });
-
-        const onVis = () => postDiag('document_visibilitychange', { visibility: document.visibilityState });
-        document.addEventListener('visibilitychange', onVis);
-
-        const onDeviceChange = async () => {
-            try {
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                postDiag('devicechange_enumerate', devices.map(d => ({
-                    kind: d.kind, label: d.label,
-                    deviceId: d.deviceId ? d.deviceId.substring(0, 6) + '…' : undefined
-                })));
-            } catch (e) {
-                postDiag('devicechange_enumerate_failed', { error: String(e) });
-            }
-        };
-        navigator.mediaDevices?.addEventListener?.('devicechange', onDeviceChange);
-
-        // LiveKit signals
-        const onLocalPub = (publication: any) => {
-            postDiag('lk_LocalTrackPublished', describePub(publication));
-            tapLocalTrackEvents();
-            startStatsTimer();
-        };
-        const onLocalUnpub = (publication: any) => postDiag('lk_LocalTrackUnpublished', describePub(publication));
-        const onTrackSub = (track: any, publication: any, participant: any) => {
-            if (publication?.kind === 'audio') {
-                postDiag('lk_TrackSubscribed_audio_remote', { pub: describePub(publication), participant: participant?.identity });
-            }
-        };
-        const onTrackUnsub = (track: any, publication: any, participant: any) => {
-            if (publication?.kind === 'audio') {
-                postDiag('lk_TrackUnsubscribed_audio_remote', { pub: describePub(publication), participant: participant?.identity });
-            }
-        };
-        const onMuted = (publication: any, participant: any) =>
-            postDiag('lk_TrackMuted', { pub: describePub(publication), participant: participant?.identity, isLocal: !!participant?.isLocal });
-        const onUnmuted = (publication: any, participant: any) =>
-            postDiag('lk_TrackUnmuted', { pub: describePub(publication), participant: participant?.identity, isLocal: !!participant?.isLocal });
-        const onAudioPlayback = (playing: boolean) => postDiag('lk_AudioPlaybackStatusChanged', { playing });
-        const onDevicesChanged = (devices?: any) => {
-            void postDiag('lk_MediaDevicesChanged', devices);
-        };
-        const onConnQual = (participant: any, quality: any) => {
-            if (participant?.isLocal) postDiag('lk_ConnectionQualityChanged_local', { quality });
-        };
-
-        room.on(RoomEvent.LocalTrackPublished, onLocalPub);
-        room.on(RoomEvent.LocalTrackUnpublished, onLocalUnpub);
-        room.on(RoomEvent.TrackSubscribed, onTrackSub);
-        room.on(RoomEvent.TrackUnsubscribed, onTrackUnsub);
-        room.on(RoomEvent.TrackMuted, onMuted);
-        room.on(RoomEvent.TrackUnmuted, onUnmuted);
-        room.on(RoomEvent.AudioPlaybackStatusChanged, onAudioPlayback);
-        room.on(RoomEvent.MediaDevicesChanged, onDevicesChanged);
-        room.on(RoomEvent.ConnectionQualityChanged, onConnQual);
-
-        return () => {
-            document.removeEventListener('visibilitychange', onVis);
-            navigator.mediaDevices?.removeEventListener?.('devicechange', onDeviceChange);
-            room.off(RoomEvent.LocalTrackPublished, onLocalPub);
-            room.off(RoomEvent.LocalTrackUnpublished, onLocalUnpub);
-            room.off(RoomEvent.TrackSubscribed, onTrackSub);
-            room.off(RoomEvent.TrackUnsubscribed, onTrackUnsub);
-            room.off(RoomEvent.TrackMuted, onMuted);
-            room.off(RoomEvent.TrackUnmuted, onUnmuted);
-            room.off(RoomEvent.AudioPlaybackStatusChanged, onAudioPlayback);
-            room.off(RoomEvent.MediaDevicesChanged, onDevicesChanged);
+            room.off(RoomEvent.MediaDevicesChanged, onDevicesChanged as unknown as (...args: any[]) => void);
             room.off(RoomEvent.ConnectionQualityChanged, onConnQual);
             if (statsTimerRef.current) {
                 clearInterval(statsTimerRef.current);
@@ -641,23 +524,47 @@ const RoomContent: React.FC<{
                     </Box>
                 )}
 
+                {/* ---------- Button to open workspace (always visible when workspace is closed) */}
+                {!workspaceOpen && isTutor && (
+                    <Tooltip title="Open materials">
+                        <IconButton
+                            onClick={openWorkspace}
+                            sx={{
+                                position: 'absolute',
+                                top: 64,
+                                left: 8,
+                                right: 'auto',
+                                zIndex: 1000,
+                                bgcolor: 'primary.main',
+                                color: 'white',
+                                '&:hover': { bgcolor: 'primary.dark' },
+                            }}
+                            aria-label="Open workspace"
+                        >
+                            <LibraryBooksIcon />
+                        </IconButton>
+                    </Tooltip>
+                )}
+
                 {isTutor && (
-                  <Box
-                    sx={{
-                      position: 'absolute',
-                      top: 56,
-                      left: 8,
-                      zIndex: 1000,
-                      backgroundColor: 'rgba(255, 255, 255, 0.8)',
-                      borderRadius: 1,
-                      px: 1,
-                      py: 0.5,
-                    }}
-                  >
-                    <Button variant="contained" size="small" onClick={requestStudentUnmute}>
-                      Ask to unmute
-                    </Button>
-                  </Box>
+                    <Tooltip title="Ask student to unmute">
+                        <IconButton
+                            onClick={requestStudentUnmute}
+                            sx={{
+                                position: 'absolute',
+                                top: 126,
+                                left: 8,
+                                right: 'auto',
+                                zIndex: 1000,
+                                bgcolor: 'primary.main',
+                                color: 'white',
+                                '&:hover': { bgcolor: 'primary.dark' },
+                            }}
+                            aria-label="Open workspace"
+                        >
+                            <MicIcon />
+                        </IconButton>
+                    </Tooltip>
                 )}
 
                 {/* ---------- Left pane: VideoConference ----------------------- */}
