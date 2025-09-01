@@ -14,11 +14,24 @@ interface GrammarSyncPacket {
   contentId: string;
   blockId: string;
   materialId: string;
-  action: 'open' | 'update' | 'close' | 'reveal' | 'reset' | 'start';
+  action: 'open' | 'update' | 'close' | 'reveal' | 'reset' | 'start' | 'score';
   itemId?: string;
   gapIndex?: number;
   value?: string;
   timerSec?: number;
+  // When action === 'score', include minimal scoring details
+  score?: {
+    materialId: string;
+    totalItems: number;
+    correctItems: number;
+    totalGaps: number;
+    correctGaps: number;
+    details: Array<{
+      grammarItemId: string;
+      gapResults: Array<{ index: number; student: string; correct: string; isCorrect: boolean }>
+      itemCorrect: boolean;
+    }>;
+  };
 }
 
 export function useSyncedGrammarBlock({ room, isTutor, contentId, blockId, materialId }: UseSyncedGrammarBlockArgs) {
@@ -74,6 +87,13 @@ export function useSyncedGrammarBlock({ room, isTutor, contentId, blockId, mater
     publish({ type: 'GRAMMAR_SYNC', contentId, blockId, materialId, action: 'update', itemId, gapIndex, value });
   }, [publish, contentId, blockId, materialId, room]);
 
+  const emitScore = useCallback((score: GrammarSyncPacket['score']) => {
+    if (!score) return;
+    if (suppressLocal.current) { suppressLocal.current = false; return; }
+    if (!isRoomReady()) return;
+    publish({ type: 'GRAMMAR_SYNC', contentId, blockId, materialId, action: 'score', score });
+  }, [publish, contentId, blockId, materialId, room]);
+
   useEffect(() => {
     if (!room) return;
     const handler = (data: Uint8Array) => {
@@ -107,6 +127,12 @@ export function useSyncedGrammarBlock({ room, isTutor, contentId, blockId, mater
               detail: { contentId, blockId, materialId, itemId: pkt.itemId, gapIndex: pkt.gapIndex, value: pkt.value }
             }));
             break;
+          case 'score':
+            // Mirror score result so both sides can show red/green after Check
+            window.dispatchEvent(new CustomEvent('GRAMMAR_BLOCK_SCORE', {
+              detail: { contentId, blockId, materialId, score: pkt.score }
+            }));
+            break;
           case 'close':
             suppressLocal.current = true;
             setIsActive(false);
@@ -119,5 +145,5 @@ export function useSyncedGrammarBlock({ room, isTutor, contentId, blockId, mater
     return () => { room.off('dataReceived', handler); };
   }, [room, contentId, blockId, materialId]);
 
-  return { start, reveal, reset, isActive, isRevealed, emitAttempt } as const;
+  return { start, reveal, reset, isActive, isRevealed, emitAttempt, emitScore } as const;
 }
