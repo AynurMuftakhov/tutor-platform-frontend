@@ -23,6 +23,7 @@
     "@tiptap/react": "^2.26.1",
     "@tiptap/starter-kit": "^2.26.1",
     "@types/react-helmet": "^6.1.11",
+    "agora-classroom-sdk": "^2.9.40",
     "axios": "^1.7.9",
     "dayjs": "^1.11.13",
     "framer-motion": "^12.9.2",

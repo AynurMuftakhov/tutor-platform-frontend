@@ -14,6 +14,7 @@ import DictionaryPage from "./pages/DictionaryPage";
 import StudentVocabularyPage from "./pages/StudentVocabularyPage";
 import StudentPage from "./pages/StudentPage";
 import VideoCallPage from "./pages/VideoCallPage";
+import VideoClassPage from "./pages/VideoClassPage";
 import LandingPage from "./pages/landing/LandingPage";
 import LearningMaterialsPage from "./pages/LearningMaterialsPage";
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -148,6 +149,18 @@ const App: React.FC = () => {
                                 <PrivateRoute>
                                     <AppWrapper>
                                         <VideoCallPage />
+                                    </AppWrapper>
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/video-class"
+                            element={
+                                <PrivateRoute>
+                                    <AppWrapper>
+                                        <React.Suspense fallback={<div>Loading classroom…</div>}>
+                                            <VideoClassPage />
+                                        </React.Suspense>
                                     </AppWrapper>
                                 </PrivateRoute>
                             }

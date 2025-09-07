@@ -3,6 +3,7 @@ import {Student} from "../pages/MyStudentsPage";
 import { NotificationMessage} from "../context/NotificationsSocketContext";
 import { ApiError } from '../context/ApiErrorContext';
 import {GenerateExerciseRequest, GenerateExerciseResponse} from "../types";
+import type {JoinRequest, JoinResponse} from "../types/video";
 
 const api = axios.create({
     baseURL: import.meta.env.VITE_API_URL,
@@ -216,6 +217,15 @@ export const resetPasswordEmail = async (email: string) => {
 export const fetchLiveKitToken = async (identity: string, roomName: string, username: string) => {
     const response = await api.get(`video-service/api/video/token?identity=${identity}&roomName=${roomName}&username=${username}`);
     return response.data;
+}
+
+export async function joinLesson(userId: string, req: JoinRequest): Promise<JoinResponse> {
+    // Backend expects userId along with lessonId and role
+    const res = await api.post(`video-service/api/video/join?userId=${userId}`, {
+        lessonId: req.lessonId,
+        role: req.role,
+    });
+    return res.data;
 }
 
 export const getLessonTasks = async (lessonId: string) => {

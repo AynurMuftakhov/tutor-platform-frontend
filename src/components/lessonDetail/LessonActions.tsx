@@ -43,13 +43,13 @@ const LessonActions: React.FC<Props> = ({ currentStatus, onChangeStatus, current
     // Generate direct video call link
     const generateDirectLink = () => {
         const baseUrl = window.location.origin;
-        return `${baseUrl}/video-call?identity=${studentId}&roomName=lesson-${lessonId}`;
+        return `${baseUrl}/video-class?identity=${studentId}&roomName=lesson-${lessonId}`;
     };
 
     // Start video call
     const startVideoCall = () => {
         // Navigate to video call page with lesson ID as room name
-        navigate('/video-call', {
+        navigate('/video-class', {
             state: {
                 identity: user?.id,
                 roomName: `lesson-${lessonId}`,
