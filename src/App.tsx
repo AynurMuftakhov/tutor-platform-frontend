@@ -20,6 +20,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ApiErrorProvider } from './context/ApiErrorContext';
 import Login from "./pages/Login";
 import OnboardingLinkPage from './pages/OnboardingLinkPage';
+import { RtcProvider } from './context/RtcContext';
 
 const App: React.FC = () => {
     const { isLoading } = useAuth();
@@ -33,6 +34,7 @@ const App: React.FC = () => {
     return (
         <QueryClientProvider client={queryClient}>
             <ApiErrorProvider>
+                <RtcProvider>
                 <Router>
                     <Routes>
                         {/* Public routes */}
@@ -164,6 +166,7 @@ const App: React.FC = () => {
                         />
                     </Routes>
                 </Router>
+                </RtcProvider>
             </ApiErrorProvider>
         </QueryClientProvider>
     );

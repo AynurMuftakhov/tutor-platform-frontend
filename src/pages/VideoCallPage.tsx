@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
     Box,
@@ -27,6 +27,9 @@ import useMediaQuery from '@mui/material/useMediaQuery';
 
 import '../styles/livekit-custom.css';
 import { MicPermissionGate } from "../components/MicPermissionGate";
+import { useRtc } from '../context/RtcContext';
+import RtcHost from '../components/rtc/RtcHost';
+import RtcErrorBanner from '../components/rtc/RtcErrorBanner';
 
 interface VideoCallPageProps {
     identity?: string;
@@ -62,14 +65,25 @@ const VideoCallPage: React.FC<VideoCallPageProps> = (props) => {
     /* ------------------------------------------------------------------ */
     /* 1. Fetch LiveKit token                                             */
     /* ------------------------------------------------------------------ */
+    const { providerReady, provider, failureMessage, canFallbackToLiveKit, refreshJoin, forceFallbackToLiveKit, effectiveProvider } = useRtc();
+    const currentProvider = (effectiveProvider ?? provider);
+
     useEffect(() => {
+        // Wait until the RTC provider is known before deciding what to do
+        if (!providerReady) return;
+
+        // If Daily is the active provider, do not fetch a LiveKit token
+        if (currentProvider === 'daily') {
+            setIsLoading(false);
+            return;
+        }
+
         (async () => {
             if (!identity || !roomName) {
                 setError('Identity and room name are required');
                 setIsLoading(false);
                 return;
             }
-
             try {
                 const { token } = await fetchLiveKitToken(identity, roomName, user?.name || '');
                 setLiveKitToken(token);
@@ -80,12 +94,33 @@ const VideoCallPage: React.FC<VideoCallPageProps> = (props) => {
                 setIsLoading(false);
             }
         })();
-    }, [identity, roomName, user?.name]);
+    }, [providerReady, currentProvider, identity, roomName, user?.name]);
+
+
+    // Define leave handler and RTC hooks BEFORE any early returns to preserve Hooks order
+    const handleLeave = () => navigate(previousPath);
+
+    // Bootstrap RTC join once auth user and roomName are available
+    useEffect(() => {
+        if (!user?.id || !roomName) return;
+        if (joinStartedRef.current) return;
+        joinStartedRef.current = true;
+
+        const mappedRole =
+            user?.role === 'tutor' ? 'teacher'
+                : user?.role === 'student' ? 'student'
+                    : undefined;
+
+        // Pass explicit hint so context doesn't depend solely on the URL query
+        void refreshJoin({ roomName, lessonId, role: mappedRole });
+    }, [user?.id, user?.role, roomName, lessonId, refreshJoin]);
+
+    const joinStartedRef = useRef(false);
 
     /* ------------------------------------------------------------------ */
     /* 2. Loading / error UI                                              */
     /* ------------------------------------------------------------------ */
-    if (isLoading) {
+    if (currentProvider !== 'daily' && isLoading) {
         return (
             <Centered>
                 <CircularProgress size={60} thickness={4} />
@@ -96,7 +131,7 @@ const VideoCallPage: React.FC<VideoCallPageProps> = (props) => {
         );
     }
 
-    if (error || !liveKitToken) {
+    if (currentProvider !== 'daily' && (error || !liveKitToken)) {
         return (
             <Centered>
                 <Typography variant="h5" color="error" gutterBottom>
@@ -112,11 +147,26 @@ const VideoCallPage: React.FC<VideoCallPageProps> = (props) => {
     /* ------------------------------------------------------------------ */
     /* 3. Normal render                                                   */
     /* ------------------------------------------------------------------ */
-    const handleLeave = () => navigate(previousPath);
+
+    if (currentProvider === 'daily' && providerReady) {
+        return (
+            <Box sx={{ width: '100%', height: '100vh', overflow: 'hidden', position: 'relative' }}>
+                {!!failureMessage && (
+                    <RtcErrorBanner
+                        message={failureMessage}
+                        canFallback={canFallbackToLiveKit}
+                        onRetry={() => refreshJoin()}
+                        onFallback={() => forceFallbackToLiveKit()}
+                    />
+                )}
+                <RtcHost onLeft={handleLeave} />
+            </Box>
+        );
+    }
 
     return (
         <LiveKitRoom
-            token={liveKitToken}
+            token={liveKitToken ?? undefined}
             serverUrl={SERVER_URL}
             connect
             data-lk-theme="speakshire"
