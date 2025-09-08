@@ -30,10 +30,10 @@ import useMediaQuery from '@mui/material/useMediaQuery';
 
 import '../styles/livekit-custom.css';
 import { MicPermissionGate } from "../components/MicPermissionGate";
-import LibraryBooksIcon from "@mui/icons-material/LibraryBooks";
 import { useRtc } from '../context/RtcContext';
 import RtcHost from '../components/rtc/RtcHost';
 import RtcErrorBanner from '../components/rtc/RtcErrorBanner';
+import LibraryBooksIcon from "@mui/icons-material/LibraryBooks";
 
 interface VideoCallPageProps {
     identity?: string;
