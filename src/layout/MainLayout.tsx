@@ -22,6 +22,7 @@ import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
 import CheckIcon from "@mui/icons-material/Check";
 import SchoolIcon from "@mui/icons-material/School";
 import BookIcon from "@mui/icons-material/Book";
+import GridViewIcon from "@mui/icons-material/GridView";
 import { motion } from "framer-motion";
 import useMediaQuery from '@mui/material/useMediaQuery';
 
@@ -314,6 +315,56 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                                 }}
                             />
                             {location.pathname === '/learning-materials' && (
+                                <Box
+                                    component={motion.div}
+                                    layoutId="activeIndicator"
+                                    sx={{
+                                        width: 4,
+                                        height: 20,
+                                        bgcolor: 'primary.main',
+                                        borderRadius: 1,
+                                        ml: 1
+                                    }}
+                                />
+                            )}
+                        </ListItemButton>
+                    </ListItem>
+                    <ListItem disablePadding sx={{ mb: 0.5 }}>
+                        <ListItemButton
+                            component={motion.div}
+                            whileHover={{ x: 5 }}
+                            onClick={() => {
+                                navigate('/lesson-contents');
+                                setMobileOpen(false);
+                            }}
+                            selected={location.pathname.startsWith('/lesson-contents')}
+                            sx={{
+                                borderRadius: 2,
+                                px: 2,
+                                py: 1.5,
+                                "&.Mui-selected": {
+                                    backgroundColor: alpha(theme.palette.primary.main, 0.08),
+                                    "& .MuiListItemIcon-root": {
+                                        color: 'primary.main',
+                                    },
+                                    "& .MuiListItemText-primary": {
+                                        color: 'primary.main',
+                                        fontWeight: 600
+                                    }
+                                }
+                            }}
+                        >
+                            <ListItemIcon sx={{ minWidth: 36, color: location.pathname.startsWith('/lesson-contents') ? 'primary.main' : 'text.secondary' }}>
+                                <GridViewIcon />
+                            </ListItemIcon>
+                            <ListItemText
+                                primary="Lesson Contents"
+                                primaryTypographyProps={{
+                                    fontWeight: location.pathname.startsWith('/lesson-contents') ? 600 : 500,
+                                    fontSize: '0.95rem'
+                                }}
+                            />
+                            {location.pathname.startsWith('/lesson-contents') && (
                                 <Box
                                     component={motion.div}
                                     layoutId="activeIndicator"
@@ -771,6 +822,9 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                         background: `linear-gradient(180deg, ${alpha(theme.palette.background.default, 0.8)} 0%, ${alpha(theme.palette.background.default, 1)} 100%)`,
                         position: 'relative',
                         width: isVideoCallPage ? '100%' : 'auto',
+                        overflowY: 'auto',
+                        overflowX: 'hidden',
+                        overscrollBehaviorY: 'contain',
                         '&::before': {
                             content: '""',
                             position: 'absolute',
@@ -855,8 +909,8 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                             position: 'relative',
                             zIndex: 1,
                             flexGrow: 1,
-                            overflowX: 'hidden',
-                            overflowY: 'hidden',
+                            minHeight: 0,
+                            overflow: 'visible',
                         }}
                     >
                         {children}
