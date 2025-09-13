@@ -66,6 +66,22 @@ const VideoCallPage: React.FC<VideoCallPageProps> = (props) => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
+    // Daily provider copy-link button state and helpers
+    const [copiedDaily, setCopiedDaily] = useState(false);
+
+    const generateDirectLinkDaily = () => {
+        const baseUrl = window.location.origin;
+        const rn = roomName ?? '';
+        const sid = studentId ?? '';
+        return `${baseUrl}/video-call?identity=${sid}&roomName=${rn}`;
+    };
+
+    const handleCopyLinkDaily = () => {
+        navigator.clipboard.writeText(generateDirectLinkDaily());
+        setCopiedDaily(true);
+        setTimeout(() => setCopiedDaily(false), 3000);
+    };
+
     /* ------------------------------------------------------------------ */
     /* 1. Fetch LiveKit token                                             */
     /* ------------------------------------------------------------------ */
@@ -162,6 +178,38 @@ const VideoCallPage: React.FC<VideoCallPageProps> = (props) => {
                         onRetry={() => refreshJoin()}
                         onFallback={() => forceFallbackToLiveKit()}
                     />
+                )}
+                {user?.role === 'tutor' && (
+                    <Box
+                        sx={{
+                            position: 'absolute',
+                            top: 48,
+                            right: 'auto',
+                            left: 8,
+                            zIndex: 1000,
+                            backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                            borderRadius: '50%',
+                            padding: '4px',
+                        }}
+                    >
+                        {!copiedDaily ? (
+                            <Tooltip title="Copy direct link to this video call">
+                                <IconButton
+                                    onClick={handleCopyLinkDaily}
+                                    color="primary"
+                                    size="small"
+                                >
+                                    <ContentCopyIcon fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                        ) : (
+                            <Tooltip title="Copied!">
+                                <IconButton color="success" size="small">
+                                    <DoneIcon fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                        )}
+                    </Box>
                 )}
                 <RtcHost onLeft={handleLeave} />
             </Box>
