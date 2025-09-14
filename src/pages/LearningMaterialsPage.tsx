@@ -301,7 +301,7 @@ const LearningMaterialsPage: React.FC = () => {
   }
 
   return (
-    <Box sx={{ display: 'flex', height: 'calc(100vh - 64px)' }}>
+    <Box sx={{ display: 'flex', height: 'calc(100vh - 64px)' ,   bgcolor: '#fafbfd',}}>
       <FolderSidebar
           tree={folderTree}
           selectedId={selectedFolderId}

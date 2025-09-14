@@ -24,6 +24,11 @@ import { RtcProvider } from './context/RtcContext';
 import LessonContentsLibraryPage from './pages/lessonContents/LessonContentsLibraryPage';
 import LessonContentEditorPage from './pages/lessonContents/LessonContentEditorPage';
 import LessonContentViewPage from './pages/lessonContents/LessonContentViewPage';
+import StudentHomeworkPage from './pages/homework/StudentHomeworkPage';
+import StudentAssignmentDetailPage from './pages/homework/StudentAssignmentDetailPage';
+import TeacherHomeworkPage from './pages/homework/TeacherHomeworkPage';
+import TeacherHomeworkNewPage from './pages/homework/TeacherHomeworkNewPage';
+import RoleGuard from './components/RoleGuard';
 
 const App: React.FC = () => {
     const { isLoading } = useAuth();
@@ -194,6 +199,54 @@ const App: React.FC = () => {
                                 <PrivateRoute>
                                     <AppWrapper>
                                         <LessonContentViewPage />
+                                    </AppWrapper>
+                                </PrivateRoute>
+                            }
+                        />
+
+                        {/* Homework routes */}
+                        <Route
+                            path="/homework"
+                            element={
+                                <PrivateRoute>
+                                    <AppWrapper>
+                                        <RoleGuard allow="STUDENT">
+                                            <StudentHomeworkPage />
+                                        </RoleGuard>
+                                    </AppWrapper>
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/homework/:assignmentId"
+                            element={
+                                <PrivateRoute>
+                                    <AppWrapper>
+                                        <StudentAssignmentDetailPage />
+                                    </AppWrapper>
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/t/homework"
+                            element={
+                                <PrivateRoute>
+                                    <AppWrapper>
+                                        <RoleGuard allow="TEACHER">
+                                            <TeacherHomeworkPage />
+                                        </RoleGuard>
+                                    </AppWrapper>
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/t/homework/new"
+                            element={
+                                <PrivateRoute>
+                                    <AppWrapper>
+                                        <RoleGuard allow="TEACHER">
+                                            <TeacherHomeworkNewPage />
+                                        </RoleGuard>
                                     </AppWrapper>
                                 </PrivateRoute>
                             }

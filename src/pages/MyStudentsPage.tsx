@@ -409,7 +409,9 @@ const MyStudentsPage: React.FC = () => {
     ];
 
     return (
-        <Box>
+        <Box  sx={{
+            bgcolor: '#fafbfd',
+        }}>
             <Box sx={{ p: 2 }}>
                 {/* Title & Add Button */}
                 <Box

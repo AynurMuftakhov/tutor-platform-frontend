@@ -38,8 +38,82 @@ import { TextField, InputAdornment } from "@mui/material";
 import { Lesson } from "../types/Lesson";
 import NextLessonCard from "../components/dashboard/NextLessonCard";
 import AssignModal from "../components/vocabulary/AssignModal";
+import { useStudentAssignments } from "../hooks/useHomeworks";
+import type { AssignmentDto } from "../types/homework";
+import { Link as RouterLink } from 'react-router-dom';
 
-// Reuse Student type shape from MyStudentsPage where possible
+const AssignmentCardSmall: React.FC<{ a: AssignmentDto }> = ({ a }) => {
+  const total = a.tasks.length;
+  const done = a.tasks.filter(t => t.status === 'COMPLETED').length;
+  const pct = total ? Math.round((done / total) * 100) : 0;
+  const due = a.dueAt ? new Date(a.dueAt) : null;
+  return (
+    <Paper
+      variant="outlined"
+      sx={{ p:2, height: '100%', cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' } }}
+      role="button"
+      tabIndex={0}
+      onClick={() => { window.location.href = `/homework/${a.id}`; }}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); window.location.href = `/homework/${a.id}`; } }}
+    >
+      <Box display="flex" alignItems="center" justifyContent="space-between" gap={2}>
+        <Box sx={{ minWidth:0 }}>
+          <Typography variant="subtitle1" noWrap>{a.title}</Typography>
+          {a.instructions && (
+            <Typography variant="body2" color="text.secondary" noWrap>{a.instructions}</Typography>
+          )}
+          {due && <Typography variant="caption" color="text.secondary">Due: {due.toLocaleDateString()}</Typography>}
+        </Box>
+        <Box textAlign="center">
+          <Typography variant="caption">{done}/{total}</Typography>
+          <Box sx={{ mt:0.5 }}>
+            <Chip size="small" label={`${pct}%`} />
+          </Box>
+        </Box>
+      </Box>
+    </Paper>
+  );
+};
+
+const StudentHomeworkTab: React.FC<{ studentId: string; isTeacher: boolean }> = ({ studentId, isTeacher }) => {
+  const { data, isLoading, isError } = useStudentAssignments(studentId, undefined);
+  if (isLoading) return <Typography>Loading...</Typography>;
+  if (isError) return <Typography color="error">Failed to load homework.</Typography>;
+  const list = data?.content || [];
+  const header = (
+    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, gap: 1, flexWrap: 'wrap' }}>
+      <Typography variant="body2" color="text.secondary">Homework assigned to this student.</Typography>
+      {isTeacher && (
+        <Button component={RouterLink} to={`/t/homework/new?studentId=${studentId}`} variant="contained" size="small">Assign new homework</Button>
+      )}
+    </Box>
+  );
+
+  if (list.length === 0) {
+    return (
+      <>
+        {header}
+        <Box textAlign="center" py={4}>
+          <Typography variant="subtitle1">No homework yet</Typography>
+          <Typography variant="body2" color="text.secondary">Use the button above to assign a new homework.</Typography>
+        </Box>
+      </>
+    );
+  }
+  return (
+    <>
+      {header}
+      <Grid container spacing={2}>
+        {list.map(a => (
+          <Grid size={{xs: 12, md:6}} key={a.id}>
+            <AssignmentCardSmall a={a} />
+          </Grid>
+        ))}
+      </Grid>
+    </>
+  );
+};
+
 export interface StudentProfile {
   id: string;
   name: string;
@@ -314,7 +388,7 @@ const StudentPage: React.FC = () => {
 
         {activeTab === 1 && (
           <SectionCard title="Assigned homework">
-            <Typography variant="body2" color="text.secondary">Homework assignments will be listed here.</Typography>
+            <StudentHomeworkTab studentId={student.id} isTeacher={isTeacher} />
           </SectionCard>
         )}
 
