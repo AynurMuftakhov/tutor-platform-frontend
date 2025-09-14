@@ -173,7 +173,7 @@ const TeacherHomeworkPage: React.FC = () => {
             <Tooltip title="Refresh">
                 <IconButton onClick={onRefresh} aria-label="Refresh"><RefreshIcon /></IconButton>
             </Tooltip>
-          <Button component={RouterLink} to="/t/homework/new" variant="contained">New Assignment</Button>
+          <Button component={RouterLink} to="/t/homework/new" variant="contained">Add Homework</Button>
         </Stack>
       </Stack>
 
