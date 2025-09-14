@@ -58,7 +58,6 @@ const StudentHomeworkPage: React.FC = () => {
   const role = (user?.role || '').toLowerCase();
   const isTeacher = role === 'tutor' || role === 'teacher';
   const { data, isLoading, isError } =  useStudentAssignments(!isTeacher ? (user?.id || '') : '', undefined);
-  const theme = useTheme();
 
   if (isTeacher) {
     return (
@@ -75,11 +74,17 @@ const StudentHomeworkPage: React.FC = () => {
   return (
       <Box
           sx={{
-              bgcolor: '#fafbfd'
+              p: { xs: 1, sm: 1 },
+              bgcolor: '#fafbfd',
+              height: '100dvh',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              position: 'relative'
           }}
       >
     <Container sx={{ py: 4 }}>
-      <Typography variant="h4" sx={{ mb: 2 }}>Hi {user?.name?.split(' ')[0] || 'there'}, here is your homework</Typography>
+      <Typography variant="h4" sx={{ mb: 2, fontWeight: 600, color: '#2573ff' }}>Here is your homework</Typography>
       <Grid container spacing={2}>
         {data && data.content.length > 0 ? (
           data.content.map((a: AssignmentDto) => (

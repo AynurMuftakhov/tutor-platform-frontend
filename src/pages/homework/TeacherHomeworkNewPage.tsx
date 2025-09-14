@@ -88,12 +88,17 @@ const TeacherHomeworkNewPage: React.FC = () => {
   return (
       <Box
           sx={{
+              p: { xs: 1, sm: 1 },
               bgcolor: '#fafbfd',
-              height: '100%',
+              height: '100dvh',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              position: 'relative'
           }}
       >
-    <Container sx={{ py: 4, bgcolor: 'background.paper'}}>
-      <Typography variant="h5" sx={{ mb: 2 }}>New Homework</Typography>
+    <Container sx={{ py: 4 }}>
+      <Typography variant="h4" sx={{ mb: 2, fontWeight: 600, color: '#2573ff' }}>New Homework</Typography>
       <Grid container spacing={2}>
         <Grid size={{xs:12, md: 6}}>
           <Stack spacing={2}>

@@ -53,11 +53,16 @@ const StudentAssignmentDetailPage: React.FC = () => {
   return (
       <Box
           sx={{
-              bgcolor: '#fafbfd'
+              p: { xs: 1, sm: 1 },
+              bgcolor: '#fafbfd',
+              height: '100dvh',
+              display: 'flex',
+              flexDirection: 'column',
+              position: 'relative'
           }}
       >
     <Container sx={{ py: 4 }}>
-      <Typography variant="h5" sx={{ mb: 1 }}>{assignment.title}</Typography>
+      <Typography variant="h4" sx={{ mb: 1, fontWeight: 600, color: '#2573ff' }}>{assignment.title}</Typography>
       {assignment.instructions && <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>{assignment.instructions}</Typography>}
       <Divider sx={{ mb: 2 }} />
 

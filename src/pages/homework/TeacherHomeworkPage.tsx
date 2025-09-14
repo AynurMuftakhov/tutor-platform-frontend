@@ -130,7 +130,7 @@ const TeacherHomeworkPage: React.FC = () => {
       >
      <Container sx={{ py: 4 }}>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }} justifyContent="space-between" sx={{ mb: 2 }}>
-        <Typography variant="h5">Students Homework</Typography>
+        <Typography variant="h4" sx={{ fontWeight: 600, color: '#2573ff' }}>Students Homework</Typography>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
           <Autocomplete
             size="small"
