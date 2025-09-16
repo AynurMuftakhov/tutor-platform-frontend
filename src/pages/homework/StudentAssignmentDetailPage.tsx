@@ -1,7 +1,7 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { Box, Button, Card, CardContent, Chip, Container, Divider, Grid, Stack, Typography } from '@mui/material';
-import { useStudentAssignments, useTeacherAssignments } from '../../hooks/useHomeworks';
+import { useStudentAssignments, useTeacherAssignments, useStartTask, useCompleteTask } from '../../hooks/useHomeworks';
 import { AssignmentDto, TaskDto } from '../../types/homework';
 import { useAuth } from '../../context/AuthContext';
 import HomeworkTaskFrame from '../../components/homework/HomeworkTaskFrame';
@@ -46,6 +46,37 @@ const StudentAssignmentDetailPage: React.FC = () => {
     if (target) setTaskId(target.id);
   };
 
+  // Lifecycle integrations
+  const startTask = useStartTask(!isTeacher ? (user?.id || '') : '');
+  const completeTask = useCompleteTask(!isTeacher ? (user?.id || '') : '');
+  const startedOnceRef = useRef(false);
+
+  useEffect(() => {
+    if (isTeacher) return;
+    if (!assignment || startedOnceRef.current) return;
+    const sorted = [...assignment.tasks].sort((a,b)=>a.ordinal-b.ordinal);
+    const firstIncomplete = sorted.find(t => t.status !== 'COMPLETED');
+    if (firstIncomplete && firstIncomplete.status === 'NOT_STARTED') {
+      startTask.mutate(firstIncomplete.id);
+      startedOnceRef.current = true;
+    }
+  }, [assignment, isTeacher, startTask]);
+
+  const allDone = useMemo(() => assignment ? assignment.tasks.every(t => t.status === 'COMPLETED') : false, [assignment]);
+  const [completing, setCompleting] = React.useState(false);
+
+  const onMarkAssignmentComplete = async () => {
+    if (isTeacher || !assignment) return;
+    const incompletes = assignment.tasks.filter(t => t.status !== 'COMPLETED');
+    if (incompletes.length === 0) return;
+    try {
+      setCompleting(true);
+      await Promise.all(incompletes.map(t => completeTask.mutateAsync({ taskId: t.id, payload: {} })));
+    } finally {
+      setCompleting(false);
+    }
+  };
+
   if (isLoading) return <Container sx={{ py: 4 }}><Typography>Loading...</Typography></Container>;
   if (isError) return <Container sx={{ py: 4 }}><Typography color="error">Failed to load.</Typography></Container>;
   if (!assignment || !currentTask) return <Container sx={{ py: 4 }}><Typography>No assignment found.</Typography></Container>;
@@ -86,8 +117,15 @@ const StudentAssignmentDetailPage: React.FC = () => {
         </Grid>
         <Grid size={{ xs: 12, md:8, lg:9 }} >
           <HomeworkTaskFrame assignment={assignment as AssignmentDto} task={currentTask as TaskDto} readOnly={isTeacher} />
-          <Box mt={2} display="flex" justifyContent="flex-end">
-            <Button variant="contained" onClick={goNext}>Continue</Button>
+          <Box mt={2} display="flex" justifyContent="space-between">
+            {!isTeacher && (
+              <Button variant="outlined" color="success" onClick={onMarkAssignmentComplete} disabled={allDone || completing}>
+                {allDone ? 'Completed' : completing ? 'Completing…' : 'Mark homework as done'}
+              </Button>
+            )}
+            {assignment.tasks.length > 1 && (
+              <Button variant="contained" onClick={goNext}>Continue</Button>
+            )}
           </Box>
         </Grid>
       </Grid>

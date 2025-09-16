@@ -1,11 +1,15 @@
-import React, { useEffect, useMemo, useRef } from 'react';
-import { Box, Button, Card, CardContent, CircularProgress, Stack, Typography } from '@mui/material';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Box, Button, Card, CardContent, CircularProgress, Stack, Typography, LinearProgress, Chip } from '@mui/material';
 import type { AssignmentDto, TaskDto } from '../../types/homework';
 import useHomeworkTaskLifecycle from '../../hooks/useHomeworkTaskLifecycle';
 import { useQuery } from '@tanstack/react-query';
 import { getLessonContent } from '../../services/api';
 import StudentRenderer from '../../features/lessonContent/student/StudentRenderer';
 import GrammarPlayer from '../grammar/GrammarPlayer';
+import QuizMode from '../vocabulary/QuizMode';
+import { vocabApi } from '../../services/vocabulary.api';
+import { useAuth } from '../../context/AuthContext';
+import VocabularyList from '../vocabulary/VocabularyList';
 
 interface Props {
   assignment: AssignmentDto;
@@ -16,7 +20,7 @@ interface Props {
 const clamp = (n: number, min = 0, max = 100) => Math.max(min, Math.min(max, n));
 
 const HomeworkTaskFrame: React.FC<Props> = ({ assignment, task, readOnly }) => {
-  const { markStarted, reportProgress, markCompleted } = useHomeworkTaskLifecycle(task.id);
+  const { markStarted, reportProgress, markCompleted } = useHomeworkTaskLifecycle(task.id, { minIntervalMs: 400 });
 
   // VIDEO handling: either materialId via StudentRenderer video block not directly accessible here.
   // For simplicity, support EXTERNAL_URL video via HTML5/ReactPlayer-like basic <video>.
@@ -150,7 +154,208 @@ const HomeworkTaskFrame: React.FC<Props> = ({ assignment, task, readOnly }) => {
     );
   }
 
-  // VOCAB or others - basic placeholder
+  // VOCAB LIST task
+  if (task.type === 'VOCAB' && task.sourceKind === 'VOCAB_LIST') {
+    const { studentId } = assignment;
+    const content = (task.contentRef as any) || {};
+    const wordIds: string[] = Array.isArray(content.wordIds) ? content.wordIds.slice(0, 100) : [];
+    const settings = content.settings || {};
+    const masteryStreak: number = Number.isFinite(settings.masteryStreak) ? settings.masteryStreak : 2;
+    const masteryPct: number = Number.isFinite(settings.masteryPct) ? settings.masteryPct : 100;
+    const shuffle: boolean = settings.shuffle !== false;
+    const timeLimitMin: number | undefined = Number.isFinite(settings.timeLimitMin) ? settings.timeLimitMin : undefined;
+
+    const [quizOpen, setQuizOpen] = useState(false);
+    const [quizQuestionWords, setQuizQuestionWords] = useState<any[] | null>(null);
+    const [streaks, setStreaks] = useState<Record<string, number>>(() => {
+      try {
+        const raw = localStorage.getItem(`vocabTaskStreaks:${task.id}`);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === 'object') return parsed as Record<string, number>;
+        }
+      } catch {}
+      return {};
+    });
+    const [masteredSet, setMasteredSet] = useState<Set<string>>(() => {
+      const key = `vocabTaskProgress:${task.id}`;
+      try {
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          const saved = JSON.parse(raw);
+          if (Array.isArray(saved.masteredWordIds)) return new Set<string>(saved.masteredWordIds);
+        }
+      } catch (e) {
+        // ignore JSON parse errors for local progress
+      }
+      return new Set<string>();
+    });
+
+    // load words
+    const { data: allWords } = useQuery({
+      queryKey: ['vocabulary', 'words'],
+      queryFn: () => vocabApi.listWords(),
+      staleTime: 60_000,
+    });
+
+    // pre-mastered from global assignments
+    const { data: assignments } = useQuery({
+      queryKey: ['vocabulary', 'assignments', studentId],
+      queryFn: () => vocabApi.listAssignments(studentId),
+      enabled: !!studentId,
+      staleTime: 60_000,
+    });
+
+    const words = useMemo(() => {
+      const list = (allWords || []).filter((w: any) => wordIds.includes(w.id));
+      // Handle removed words by ignoring missing IDs
+      const order = new Map(wordIds.map((id, idx) => [id, idx] as const));
+      return list.sort((a: any, b: any) => (order.get(a.id)! - order.get(b.id)!));
+    }, [allWords, wordIds]);
+
+    const preMastered = useMemo(() => {
+      const set = new Set<string>();
+      if (!assignments) return set;
+      assignments.forEach((a: any) => {
+        if (a.status === 'LEARNED' || a.status === 'COMPLETED') set.add(a.vocabularyWordId);
+      });
+      return set;
+    }, [assignments]);
+
+    // merge pre-mastered at mount once
+    const mergedMastered = useMemo(() => {
+      const cur = new Set(masteredSet);
+      preMastered.forEach(id => { if (wordIds.includes(id)) cur.add(id); });
+      return cur;
+    }, [masteredSet, preMastered, wordIds]);
+
+    const total = wordIds.length;
+    const masteredCount = mergedMastered.size;
+    const computedPct = total > 0 ? Math.round((masteredCount / total) * 100) : 0;
+    const progressPct = computedPct;
+
+    // persist local progress
+    useEffect(() => {
+      const key = `vocabTaskProgress:${task.id}`;
+      try {
+        localStorage.setItem(key, JSON.stringify({ masteredWordIds: Array.from(mergedMastered) }));
+      } catch (e) {
+        // ignore storage quota or access errors
+      }
+    }, [mergedMastered, task.id]);
+
+    useEffect(() => {
+      try {
+        localStorage.setItem(`vocabTaskStreaks:${task.id}`, JSON.stringify(streaks));
+      } catch {}
+    }, [streaks, task.id]);
+
+    // answer handler
+    const handleAnswer = (wordId: string, correct: boolean) => {
+      if (readOnly) return;
+      // start on first interaction
+      markStarted();
+      setStreaks(prev => {
+        const cur = { ...prev };
+        const next = correct ? (cur[wordId] || 0) + 1 : 0;
+        cur[wordId] = next;
+        // mastery check
+        if (next >= masteryStreak) {
+          setMasteredSet(set => new Set(set).add(wordId));
+        }
+        return cur;
+      });
+      const stats = {
+        total,
+        attemptedCount: 1, // incremental; backend may additively handle or ignore
+        correctCount: correct ? 1 : 0,
+        masteredCount: masteredCount + (correct && !mergedMastered.has(wordId) && (streaks[wordId] || 0) + 1 >= masteryStreak ? 1 : 0),
+      };
+      reportProgress({
+        progressPct: Math.round(((masteredCount + (correct && (streaks[wordId] || 0) + 1 >= masteryStreak && !mergedMastered.has(wordId) ? 1 : 0)) / total) * 100),
+        stats,
+        masteredWordIds: Array.from(new Set(mergedMastered).add(((streaks[wordId] || 0) + 1 >= masteryStreak && correct) ? wordId : '__noop__')).filter(id => id !== '__noop__'),
+        lastEvent: { wordId, correct },
+        meta: { lastProgressAt: new Date().toISOString() }
+      });
+    };
+
+    useEffect(() => {
+      if (total > 0 && (masteredCount >= total || progressPct >= masteryPct)) {
+        // complete
+        markCompleted({
+          progressPct,
+          stats: { total, attemptedCount: 0, correctCount: 0, masteredCount },
+          masteredWordIds: Array.from(mergedMastered),
+          meta: { lastProgressAt: new Date().toISOString() }
+        });
+      }
+    }, [masteredCount, total, progressPct, masteryPct, mergedMastered, markCompleted]);
+
+    const unmasteredWords = useMemo(() => words.filter((w: any) => !mergedMastered.has(w.id)), [words, mergedMastered]);
+
+    return (
+      <Card variant="outlined" elevation={0} sx={{ p: 2, borderRadius: 2, borderColor: 'divider' }}>
+        <CardContent>
+          <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>Learn the words</Typography>
+          </Stack>
+          {/* Inline word list for the task */}
+          <Box sx={{ mt: 1 }}>
+            <VocabularyList
+              data={words}
+              readOnly
+              learnedWords={mergedMastered}
+            />
+              <Chip sx={{ mt:2 }} size="small" color={masteredCount === total ? 'success' : 'warning'} label={`${masteredCount}/${total} mastered`} />
+              <LinearProgress variant="determinate" value={progressPct} sx={{ height: 8, borderRadius: 4, mb: 2, mt:2 }} />
+          </Box>
+            {!readOnly && (<Stack direction="row" spacing={1} sx={{ mb: 2 }} >
+                <Button variant="contained" onClick={() => {
+                  if (readOnly) return;
+                  markStarted();
+                  const expanded: any[] = [];
+                  unmasteredWords.forEach((w: any) => {
+                    const have = streaks[w.id] || 0;
+                    const needed = Math.max(1, masteryStreak - have);
+                    for (let i = 0; i < needed; i++) expanded.push(w);
+                  });
+                  if (shuffle) {
+                    for (let i = expanded.length - 1; i > 0; i--) {
+                      const j = Math.floor(Math.random() * (i + 1));
+                      [expanded[i], expanded[j]] = [expanded[j], expanded[i]];
+                    }
+                  }
+                  setQuizQuestionWords(expanded);
+                  setQuizOpen(true);
+                }} disabled={total === 0 || !!readOnly}>
+                    {masteredCount === 0 ? 'Start' : (masteredCount < total ? 'Resume' : 'Review')}
+                </Button>
+            </Stack>)}
+          <QuizMode
+            open={quizOpen}
+            onClose={() => { setQuizOpen(false); setQuizQuestionWords(null); }}
+            words={words}
+            questionWords={quizQuestionWords || unmasteredWords}
+            onAnswer={handleAnswer}
+            onComplete={() => {
+              // Close to reveal success if completed
+              setQuizOpen(false);
+              setQuizQuestionWords(null);
+            }}
+          />
+          {total === 0 && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>No words selected for this task.</Typography>
+          )}
+          {preMastered.size > 0 && (
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>Some words are already mastered globally.</Typography>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Default fallback
   return (
     <Card variant="outlined">
       <CardContent>

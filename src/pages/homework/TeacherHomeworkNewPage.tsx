@@ -1,11 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Button, Container, Grid, MenuItem, Stack, TextField, Typography, Autocomplete, CircularProgress } from '@mui/material';
+import { Box, Button, Container, Grid, MenuItem, Stack, TextField, Typography, Autocomplete, CircularProgress, Chip, Dialog, DialogTitle, DialogContent, DialogActions, FormControlLabel, Checkbox } from '@mui/material';
 import { CreateAssignmentDto, HomeworkTaskType, SourceKind } from '../../types/homework';
 import { useAuth } from '../../context/AuthContext';
 import { useCreateAssignment } from '../../hooks/useHomeworks';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toOffsetDateTime } from '../../utils/datetime';
 import { fetchStudents, fetchUserById } from '../../services/api';
+import { useQuery } from '@tanstack/react-query';
+import { vocabApi } from '../../services/vocabulary.api';
+import VocabularyList from '../../components/vocabulary/VocabularyList';
+import type { VocabularyWord } from '../../types';
 
 const TeacherHomeworkNewPage: React.FC = () => {
   const { user } = useAuth();
@@ -27,6 +31,37 @@ const TeacherHomeworkNewPage: React.FC = () => {
   const [taskType, setTaskType] = useState<HomeworkTaskType>('VIDEO');
   const [sourceKind, setSourceKind] = useState<SourceKind>('EXTERNAL_URL');
   const [sourceUrl, setSourceUrl] = useState('');
+
+  // VOCAB_LIST selection & settings
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [selectedWordIds, setSelectedWordIds] = useState<string[]>([]);
+  const [wordSearch, setWordSearch] = useState('');
+  const [masteryStreak, setMasteryStreak] = useState<number>(2);
+  const [shuffle, setShuffle] = useState<boolean>(true);
+  const [timeLimitMin, setTimeLimitMin] = useState<string>('');
+
+  const isVocabList = taskType === 'VOCAB' && sourceKind === 'VOCAB_LIST';
+
+  // Load vocabulary words
+  const { data: allWords = [] } = useQuery<VocabularyWord[]>({
+    queryKey: ['vocabulary', 'words'],
+    queryFn: () => vocabApi.listWords(),
+    staleTime: 60_000,
+  });
+
+  const filteredWords = React.useMemo(() => {
+    const q = wordSearch.trim().toLowerCase();
+    if (!q) return allWords;
+    return allWords.filter(w =>
+      w.text.toLowerCase().includes(q) ||
+      (w.translation || '').toLowerCase().includes(q)
+    );
+  }, [allWords, wordSearch]);
+
+  const selectedWordChips = React.useMemo(() => {
+    const map = new Map(allWords.map(w => [w.id, w] as const));
+    return selectedWordIds.map(id => map.get(id)).filter(Boolean) as VocabularyWord[];
+  }, [allWords, selectedWordIds]);
 
   // fetch student options debounced by query
   useEffect(() => {
@@ -61,24 +96,40 @@ const TeacherHomeworkNewPage: React.FC = () => {
 
   const onSubmit = async () => {
     if (!user?.id || !studentId) return;
+
+    const tasks: CreateAssignmentDto['tasks'] = [];
+    if (isVocabList) {
+      const settings: any = { masteryStreak, shuffle };
+      const tl = parseInt(timeLimitMin, 10);
+      if (!isNaN(tl)) settings.timeLimitMin = tl;
+      tasks.push({
+        title: taskTitle,
+        type: 'VOCAB',
+        sourceKind: 'VOCAB_LIST',
+        instructions: undefined,
+        contentRef: { wordIds: selectedWordIds, settings },
+        vocabWordIds: selectedWordIds,
+      });
+    } else {
+      tasks.push({
+        title: taskTitle,
+        type: taskType,
+        sourceKind,
+        instructions: undefined,
+        contentRef: sourceKind === 'EXTERNAL_URL' ? { url: sourceUrl } : {},
+      });
+    }
+
     const payload: CreateAssignmentDto = {
       studentId,
       title,
       instructions: instructions || undefined,
       dueAt: toOffsetDateTime(dueAt) || undefined,
-      tasks: [
-        {
-          title: taskTitle,
-          type: taskType,
-          sourceKind,
-          instructions: undefined,
-          contentRef: sourceKind === 'EXTERNAL_URL' ? { url: sourceUrl } : {},
-        },
-      ],
+      tasks,
     };
 
     try {
-      const res = await create.mutateAsync(payload);
+      await create.mutateAsync(payload);
       navigate('/t/homework');
     } catch (e) {
       // handled globally
@@ -98,7 +149,7 @@ const TeacherHomeworkNewPage: React.FC = () => {
           }}
       >
     <Container sx={{ py: 4 }}>
-      <Typography variant="h4" sx={{ mb: 2, fontWeight: 600, color: '#2573ff' }}>New Homework</Typography>
+      <Typography variant="h4" sx={{ mb: 2, fontWeight: 600, color: '#2573ff' }}>Add Homework</Typography>
       <Grid container spacing={2}>
         <Grid size={{xs:12, md: 6}}>
           <Stack spacing={2}>
@@ -146,13 +197,63 @@ const TeacherHomeworkNewPage: React.FC = () => {
             {sourceKind === 'EXTERNAL_URL' && (
               <TextField label="Source URL" value={sourceUrl} onChange={e => setSourceUrl(e.target.value)} fullWidth />
             )}
+            {isVocabList && (
+              <Stack spacing={1} sx={{ mt: 1 }}>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Button variant="outlined" onClick={() => setPickerOpen(true)}>Select words</Button>
+                  <Chip size="small" color={selectedWordIds.length >= 5 ? 'success' : 'warning'} label={`${selectedWordIds.length} selected`} />
+                  <Typography variant="caption" color="text.secondary">Choose 5–100 words</Typography>
+                </Stack>
+                {selectedWordChips.length > 0 && (
+                  <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+                    {selectedWordChips.slice(0,5).map(w => (
+                      <Chip key={w.id} size="small" label={w.text} />
+                    ))}
+                    {selectedWordChips.length > 5 && (
+                      <Chip size="small" label={`+${selectedWordChips.length - 5} more`} />
+                    )}
+                  </Stack>
+                )}
+                {(selectedWordIds.length < 5 || selectedWordIds.length > 100) && (
+                  <Typography variant="caption" color="error">Please select between 5 and 100 words.</Typography>
+                )}
+                <TextField type="number" label="Mastery streak" value={masteryStreak}
+                           onChange={e => setMasteryStreak(Math.max(1, Math.min(10, Number(e.target.value) || 0)))}
+                           InputLabelProps={{ shrink: true }} inputProps={{ min: 1, max: 10 }} />
+                <FormControlLabel control={<Checkbox checked={shuffle} onChange={(e)=> setShuffle(e.target.checked)} />} label="Shuffle words" />
+                <TextField type="number" label="Time limit (minutes)" value={timeLimitMin}
+                           onChange={e => setTimeLimitMin(e.target.value)} InputLabelProps={{ shrink: true }}
+                           helperText="Optional: leave empty for no timer" />
+              </Stack>
+            )}
           </Stack>
         </Grid>
       </Grid>
 
       <Box mt={3}>
-        <Button variant="contained" onClick={onSubmit} disabled={create.isPending || !studentId}>Create</Button>
+        <Button variant="contained" onClick={onSubmit} disabled={create.isPending || !studentId || (isVocabList && (selectedWordIds.length < 5 || selectedWordIds.length > 100))}>Create</Button>
       </Box>
+
+      <Dialog open={pickerOpen} onClose={() => setPickerOpen(false)} fullWidth maxWidth="md">
+        <DialogTitle>Select vocabulary words</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField label="Search" value={wordSearch} onChange={e => setWordSearch(e.target.value)} fullWidth />
+            <VocabularyList
+              data={filteredWords}
+              selectionMode
+              selectedWords={selectedWordIds}
+              onToggleSelection={(id: string) => {
+                setSelectedWordIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+              }}
+              readOnly={false}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPickerOpen(false)}>Done</Button>
+        </DialogActions>
+      </Dialog>
     </Container></Box>
   );
 };

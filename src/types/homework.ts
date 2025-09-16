@@ -42,12 +42,27 @@ export interface CreateAssignmentDto {
       contentRef: Record<string, unknown>;
       ordinal?: number;
       meta?: Record<string, unknown>;
+      // Backend supports direct vocab IDs on task creation
+      vocabWordIds?: string[];
     }
   >;
 }
 
 export interface UpdateProgressPayload {
-  progressPct?: number;
+  // overall progress percentage 0..100
+  progressPct: number;
+  // optional richer stats for tasks like VOCAB
+  stats?: {
+    total: number;
+    attemptedCount: number;
+    correctCount: number;
+    masteredCount: number;
+  };
+  // for vocab: current mastered set to support resume
+  masteredWordIds?: string[];
+  // telemetry hint for last action
+  lastEvent?: { wordId: string; correct: boolean };
+  // additional info
   meta?: Record<string, unknown>;
 }
 

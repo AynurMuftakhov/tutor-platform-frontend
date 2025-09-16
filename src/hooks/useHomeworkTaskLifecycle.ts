@@ -5,7 +5,7 @@ import type { UpdateProgressPayload } from '../types/homework';
 
 const milestones = new Set([10, 30, 60, 90]);
 
-export function useHomeworkTaskLifecycle(taskId: string) {
+export function useHomeworkTaskLifecycle(taskId: string, opts?: { minIntervalMs?: number; milestonePercents?: number[] }) {
   const { user } = useAuth();
   const studentId = user?.id || '';
 
@@ -17,6 +17,10 @@ export function useHomeworkTaskLifecycle(taskId: string) {
   const completedRef = useRef<boolean>(false);
   const lastSentPctRef = useRef<number>(0);
   const lastSentAtRef = useRef<number>(0);
+
+  const minIntervalMs = opts?.minIntervalMs ?? 2000;
+  const percents = opts?.milestonePercents ?? [10, 30, 60, 90];
+  const milestoneSet = useRef(new Set(percents));
 
   const markStarted = useCallback(() => {
     if (!taskId || !studentId) return;
@@ -32,16 +36,17 @@ export function useHomeworkTaskLifecycle(taskId: string) {
     const pct = Math.max(0, Math.min(100, Math.round(payload.progressPct ?? 0)));
     const now = Date.now();
 
-    const timeOk = now - lastSentAtRef.current >= 2000;
-    const milestoneOk = milestones.has(pct) && lastSentPctRef.current !== pct;
+    const timeOk = now - lastSentAtRef.current >= minIntervalMs;
+    const milestoneOk = milestoneSet.current.has(pct) && lastSentPctRef.current !== pct;
 
     if (!timeOk && !milestoneOk) return;
 
     lastSentAtRef.current = now;
     lastSentPctRef.current = pct;
 
-    progress.mutate({ taskId, payload: { progressPct: pct, meta: payload.meta } });
-  }, [progress, taskId, studentId]);
+    // forward full payload; ensure normalized pct
+    progress.mutate({ taskId, payload: { ...payload, progressPct: pct } });
+  }, [progress, taskId, studentId, minIntervalMs]);
 
   const markCompleted = useCallback((payload?: UpdateProgressPayload) => {
     if (!taskId || !studentId) return;

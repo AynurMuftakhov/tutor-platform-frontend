@@ -40,7 +40,11 @@ export const useUpdateTaskProgress = (studentId: string) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ taskId, payload }: { taskId: string; payload: UpdateProgressPayload }) => updateTaskProgress(taskId, studentId, payload),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['homeworks'] }),
+    // Do NOT invalidate on each progress tick to avoid disruptive rerenders of homework page during quiz.
+    // The UI maintains local progress; we will rely on completion/start invalidations for list refresh.
+    onSuccess: () => {
+      // no-op; optionally could update cache minimally here
+    },
   });
 };
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     Box,
     Typography,
@@ -30,6 +30,11 @@ interface QuizModeProps {
     open: boolean;
     onClose: () => void;
     words: VocabularyWord[];
+    // Optional: limit which words are asked as questions; full words pool remains for answer options
+    questionWords?: VocabularyWord[];
+    // Optional callbacks for integration (e.g., homework progress)
+    onAnswer?: (wordId: string, correct: boolean) => void;
+    onComplete?: () => void;
 }
 
 type QuizType = 'translation' | 'definition' | 'listening';
@@ -40,7 +45,7 @@ type QuizQuestion = {
     type: QuizType;
 };
 
-const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words }) => {
+const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords, onAnswer, onComplete }) => {
     const theme = useTheme();
     const [quizType, setQuizType] = useState<QuizType>('translation');
     const [questions, setQuestions] = useState<QuizQuestion[]>([]);
@@ -51,40 +56,91 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words }) => {
     const [quizComplete, setQuizComplete] = useState(false);
     const [loading, setLoading] = useState(false);
 
-    // Generate quiz questions when quiz type changes or when words change
-    useEffect(() => {
-        if (words.length < 4) return; // Need at least 4 words for options
-        
-        setLoading(true);
-        
-        // Reset quiz state
-        setCurrentQuestionIndex(0);
-        setSelectedAnswer(null);
-        setIsAnswered(false);
-        setScore(0);
-        setQuizComplete(false);
-        
-        // Generate new questions
-        const newQuestions = generateQuestions(words, quizType);
-        setQuestions(newQuestions);
-        
-        setLoading(false);
-    }, [quizType, words]);
+    // Lock the question pool per dialog open to avoid resets on parent re-renders
+    const sessionWordsRef = useRef<VocabularyWord[]>([]);
+    const initializedRef = useRef(false);
 
-    const generateQuestions = (wordList: VocabularyWord[], type: QuizType): QuizQuestion[] => {
+    // Auto-advance timer for correct answers
+    const autoNextTimerRef = useRef<number | null>(null);
+    const clearAutoTimer = () => {
+      if (autoNextTimerRef.current !== null) {
+        clearTimeout(autoNextTimerRef.current);
+        autoNextTimerRef.current = null;
+      }
+    };
+
+    // Clear auto-advance timer on unmount
+    useEffect(() => {
+      return () => {
+        clearAutoTimer();
+      };
+    }, []);
+
+    // Initialize once per dialog open
+    useEffect(() => {
+      if (!open) {
+        initializedRef.current = false; // allow re-init on the next open
+        clearAutoTimer();
+        return;
+      }
+      if (initializedRef.current) return;
+
+      if (words.length < 4) return; // handled by "not enough words" UI path
+      const qWords = (questionWords && questionWords.length > 0) ? questionWords : words;
+      if (qWords.length === 0) return;
+
+      setLoading(true);
+
+      // Reset quiz state for a fresh session
+      setCurrentQuestionIndex(0);
+      setSelectedAnswer(null);
+      setIsAnswered(false);
+      setScore(0);
+      setQuizComplete(false);
+
+      // Lock the base pool for this session
+      sessionWordsRef.current = qWords.slice();
+
+      // Build questions once for this open
+      const newQuestions = generateQuestions(sessionWordsRef.current, words, quizType);
+      setQuestions(newQuestions);
+
+      setLoading(false);
+      initializedRef.current = true;
+    }, [open]);
+
+    // If user switches quiz type, rebuild from the locked pool (no parent-driven resets)
+    useEffect(() => {
+      if (!initializedRef.current) return;
+      clearAutoTimer();
+
+      setCurrentQuestionIndex(0);
+      setSelectedAnswer(null);
+      setIsAnswered(false);
+      setScore(0);
+      setQuizComplete(false);
+
+      const base = sessionWordsRef.current.length
+        ? sessionWordsRef.current
+        : ((questionWords && questionWords.length > 0) ? questionWords : words);
+
+      setQuestions(generateQuestions(base, words, quizType));
+    }, [quizType]);
+
+    const generateQuestions = (wordList: VocabularyWord[], poolForOptions: VocabularyWord[], type: QuizType): QuizQuestion[] => {
         // Shuffle words and take up to 10
         const shuffledWords = [...wordList].sort(() => Math.random() - 0.5).slice(0, 10);
-        
+
         return shuffledWords.map(word => {
             // Get 3 random incorrect options
-            const incorrectOptions = wordList
+            const incorrectOptions = poolForOptions
                 .filter(w => w.id !== word.id)
                 .sort(() => Math.random() - 0.5)
                 .slice(0, 3);
-            
+
             let correctAnswer = '';
             let options: string[] = [];
-            
+
             switch (type) {
                 case 'translation':
                     correctAnswer = word.translation;
@@ -108,10 +164,10 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words }) => {
                     ];
                     break;
             }
-            
+
             // Shuffle options
             options = options.sort(() => Math.random() - 0.5);
-            
+
             return {
                 word,
                 options,
@@ -122,41 +178,71 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words }) => {
     };
 
     const handleAnswerSelect = (answer: string) => {
-        setSelectedAnswer(answer);
+      setSelectedAnswer(answer);
+
+      const currentQuestion = questions[currentQuestionIndex];
+      if (!currentQuestion) return;
+
+      const correct = answer === currentQuestion.correctAnswer;
+
+      // Lock selection and evaluate immediately
+      setIsAnswered(true);
+
+      if (correct) {
+        setScore(prev => prev + 1);
+        if (onAnswer) onAnswer(currentQuestion.word.id, true);
+
+        // Auto-advance after 3 seconds
+        clearAutoTimer();
+        autoNextTimerRef.current = window.setTimeout(() => {
+          setCurrentQuestionIndex(prevIdx => {
+            const isLast = prevIdx >= questions.length - 1;
+            if (isLast) {
+              setQuizComplete(true);
+              if (onComplete) onComplete();
+              return prevIdx;
+            }
+            return prevIdx + 1;
+          });
+          setSelectedAnswer(null);
+          setIsAnswered(false);
+        }, 1000);
+      } else {
+        // Incorrect – no auto-advance; wait for user to click "Next"
+        if (onAnswer) onAnswer(currentQuestion.word.id, false);
+        clearAutoTimer();
+      }
     };
 
-    const handleCheckAnswer = () => {
-        if (!selectedAnswer) return;
-        
-        setIsAnswered(true);
-        
-        const currentQuestion = questions[currentQuestionIndex];
-        if (selectedAnswer === currentQuestion.correctAnswer) {
-            setScore(prev => prev + 1);
-        }
-    };
+    // (handleCheckAnswer deleted)
 
     const handleNextQuestion = () => {
-        if (currentQuestionIndex < questions.length - 1) {
-            setCurrentQuestionIndex(prev => prev + 1);
-            setSelectedAnswer(null);
-            setIsAnswered(false);
-        } else {
-            setQuizComplete(true);
+      clearAutoTimer();
+      if (currentQuestionIndex < questions.length - 1) {
+        setCurrentQuestionIndex(prev => prev + 1);
+        setSelectedAnswer(null);
+        setIsAnswered(false);
+      } else {
+        setQuizComplete(true);
+        if (onComplete) {
+          onComplete();
         }
+      }
     };
 
     const handleRestartQuiz = () => {
-        // Generate new questions with the same type
-        const newQuestions = generateQuestions(words, quizType);
-        setQuestions(newQuestions);
-        
-        // Reset quiz state
-        setCurrentQuestionIndex(0);
-        setSelectedAnswer(null);
-        setIsAnswered(false);
-        setScore(0);
-        setQuizComplete(false);
+      const base = sessionWordsRef.current.length
+        ? sessionWordsRef.current
+        : ((questionWords && questionWords.length > 0) ? questionWords : words);
+      const newQuestions = generateQuestions(base, words, quizType);
+      setQuestions(newQuestions);
+
+      // Reset quiz state
+      setCurrentQuestionIndex(0);
+      setSelectedAnswer(null);
+      setIsAnswered(false);
+      setScore(0);
+      setQuizComplete(false);
     };
 
     const handlePlayAudio = () => {
@@ -169,11 +255,12 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words }) => {
     // If we don't have enough words
     if (words.length < 4) {
         return (
-            <Dialog 
-                open={open} 
+            <Dialog
+                open={open}
                 onClose={onClose}
                 fullWidth
                 maxWidth="sm"
+                keepMounted
             >
                 <DialogTitle>
                     Quiz Mode
@@ -203,11 +290,12 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words }) => {
     }
 
     return (
-        <Dialog 
-            open={open} 
+        <Dialog
+            open={open}
             onClose={onClose}
             fullWidth
             maxWidth="sm"
+            keepMounted
         >
             <DialogTitle>
                 Quiz Mode
@@ -219,16 +307,16 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words }) => {
                     <CloseIcon />
                 </IconButton>
             </DialogTitle>
-            
+
             <DialogContent>
                 {!quizComplete ? (
                     <Box>
                         {/* Quiz Type Selection */}
                         <Box sx={{ mb: 3, display: 'flex', justifyContent: 'center', gap: 1, flexWrap: 'wrap' }}>
-                            <Button 
+                            <Button
                                 variant={quizType === 'translation' ? 'contained' : 'outlined'}
                                 onClick={() => setQuizType('translation')}
-                                sx={{ 
+                                sx={{
                                     borderRadius: 2,
                                     bgcolor: quizType === 'translation' ? '#2573ff' : 'transparent',
                                     '&:hover': {
@@ -238,10 +326,10 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words }) => {
                             >
                                 Translation
                             </Button>
-                            <Button 
+                            <Button
                                 variant={quizType === 'definition' ? 'contained' : 'outlined'}
                                 onClick={() => setQuizType('definition')}
-                                sx={{ 
+                                sx={{
                                     borderRadius: 2,
                                     bgcolor: quizType === 'definition' ? '#2573ff' : 'transparent',
                                     '&:hover': {
@@ -251,10 +339,10 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words }) => {
                             >
                                 Definition
                             </Button>
-                            <Button 
+                            <Button
                                 variant={quizType === 'listening' ? 'contained' : 'outlined'}
                                 onClick={() => setQuizType('listening')}
-                                sx={{ 
+                                sx={{
                                     borderRadius: 2,
                                     bgcolor: quizType === 'listening' ? '#2573ff' : 'transparent',
                                     '&:hover': {
@@ -266,7 +354,7 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words }) => {
                                 Listening
                             </Button>
                         </Box>
-                        
+
                         {/* Progress */}
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                             <Typography variant="body2" color="text.secondary">
@@ -276,7 +364,7 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words }) => {
                                 Score: {score}
                             </Typography>
                         </Box>
-                        
+
                         {loading ? (
                             <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
                                 <CircularProgress />
@@ -291,10 +379,10 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words }) => {
                                         exit={{ opacity: 0, x: -50 }}
                                         transition={{ duration: 0.3 }}
                                     >
-                                        <Card 
-                                            elevation={0} 
-                                            sx={{ 
-                                                mb: 3, 
+                                        <Card
+                                            elevation={0}
+                                            sx={{
+                                                mb: 3,
                                                 borderRadius: 2,
                                                 bgcolor: '#fafbfd',
                                                 border: '1px solid rgba(0,0,0,0.08)'
@@ -304,9 +392,9 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words }) => {
                                                 <Box sx={{ mb: 2 }}>
                                                     {quizType === 'listening' ? (
                                                         <Box sx={{ textAlign: 'center', py: 2 }}>
-                                                            <IconButton 
+                                                            <IconButton
                                                                 onClick={handlePlayAudio}
-                                                                sx={{ 
+                                                                sx={{
                                                                     bgcolor: 'rgba(37, 115, 255, 0.1)',
                                                                     color: '#2573ff',
                                                                     p: 2,
@@ -326,27 +414,27 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words }) => {
                                                             <Typography variant="h6" gutterBottom sx={{ color: '#2573ff', fontWeight: 600 }}>
                                                                 {questions[currentQuestionIndex].word.text}
                                                             </Typography>
-                                                            
+
                                                             {questions[currentQuestionIndex].word.partOfSpeech && (
-                                                                <Chip 
-                                                                    label={questions[currentQuestionIndex].word.partOfSpeech} 
-                                                                    size="small" 
-                                                                    sx={{ 
+                                                                <Chip
+                                                                    label={questions[currentQuestionIndex].word.partOfSpeech}
+                                                                    size="small"
+                                                                    sx={{
                                                                         textTransform: 'capitalize',
                                                                         bgcolor: 'rgba(37, 115, 255, 0.1)',
                                                                         color: '#2573ff',
                                                                         mb: 1
-                                                                    }} 
+                                                                    }}
                                                                 />
                                                             )}
-                                                            
+
                                                             <Typography variant="body2" color="text.secondary" gutterBottom>
                                                                 {quizType === 'translation' ? 'Choose the correct translation:' : 'Choose the correct definition:'}
                                                             </Typography>
                                                         </>
                                                     )}
                                                 </Box>
-                                                
+
                                                 <FormControl component="fieldset" sx={{ width: '100%' }}>
                                                     <RadioGroup value={selectedAnswer || ''} onChange={(e) => handleAnswerSelect(e.target.value)}>
                                                         {questions[currentQuestionIndex].options.map((option, index) => (
@@ -360,18 +448,18 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words }) => {
                                                                     mb: 1,
                                                                     p: 1,
                                                                     borderRadius: 1,
-                                                                    bgcolor: isAnswered 
-                                                                        ? option === questions[currentQuestionIndex].correctAnswer 
+                                                                    bgcolor: isAnswered
+                                                                        ? option === questions[currentQuestionIndex].correctAnswer
                                                                             ? 'rgba(0, 215, 194, 0.1)'
-                                                                            : selectedAnswer === option 
+                                                                            : selectedAnswer === option
                                                                                 ? 'rgba(255, 72, 66, 0.1)'
                                                                                 : 'transparent'
                                                                         : 'transparent',
                                                                     '&:hover': {
-                                                                        bgcolor: isAnswered 
-                                                                            ? option === questions[currentQuestionIndex].correctAnswer 
+                                                                        bgcolor: isAnswered
+                                                                            ? option === questions[currentQuestionIndex].correctAnswer
                                                                                 ? 'rgba(0, 215, 194, 0.1)'
-                                                                                : selectedAnswer === option 
+                                                                                : selectedAnswer === option
                                                                                     ? 'rgba(255, 72, 66, 0.1)'
                                                                                     : 'rgba(0,0,0,0.04)'
                                                                             : 'rgba(0,0,0,0.04)'
@@ -383,7 +471,7 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words }) => {
                                                 </FormControl>
                                             </CardContent>
                                         </Card>
-                                        
+
                                         {isAnswered && (
                                             <Box sx={{ mb: 3, p: 2, borderRadius: 2, bgcolor: selectedAnswer === questions[currentQuestionIndex].correctAnswer ? 'rgba(0, 215, 194, 0.1)' : 'rgba(255, 72, 66, 0.1)' }}>
                                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
@@ -403,7 +491,7 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words }) => {
                                                         </>
                                                     )}
                                                 </Box>
-                                                
+
                                                 {selectedAnswer !== questions[currentQuestionIndex].correctAnswer && (
                                                     <Typography variant="body2">
                                                         The correct answer is: <strong>{questions[currentQuestionIndex].correctAnswer}</strong>
@@ -424,85 +512,66 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words }) => {
                             transition={{ duration: 0.5 }}
                         >
                             <EmojiEventsIcon sx={{ fontSize: 60, color: score > questions.length / 2 ? '#FFD700' : 'rgba(0,0,0,0.2)', mb: 2 }} />
-                            
+
                             <Typography variant="h5" gutterBottom>
                                 Quiz Complete!
                             </Typography>
-                            
+
                             <Typography variant="h6" gutterBottom sx={{ color: score > questions.length / 2 ? '#00d7c2' : theme.palette.text.secondary }}>
                                 Your score: {score} / {questions.length}
                             </Typography>
-                            
+
                             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                                {score === questions.length 
-                                    ? 'Perfect! You got all answers correct.' 
-                                    : score > questions.length / 2 
-                                        ? 'Good job! Keep practicing to improve your vocabulary.' 
+                                {score === questions.length
+                                    ? 'Perfect! You got all answers correct.'
+                                    : score > questions.length / 2
+                                        ? 'Good job! Keep practicing to improve your vocabulary.'
                                         : 'Keep practicing to improve your vocabulary skills.'}
                             </Typography>
                         </motion.div>
                     </Box>
                 )}
             </DialogContent>
-            
+
             <DialogActions sx={{ px: 3, pb: 3 }}>
-                {!quizComplete ? (
-                    <>
-                        <Button onClick={onClose} color="inherit">
-                            Exit Quiz
-                        </Button>
-                        
-                        {isAnswered ? (
-                            <Button 
-                                onClick={handleNextQuestion}
-                                variant="contained"
-                                sx={{ 
-                                    borderRadius: 2,
-                                    bgcolor: '#2573ff',
-                                    '&:hover': {
-                                        bgcolor: '#1a5cd1'
-                                    }
-                                }}
-                            >
-                                {currentQuestionIndex < questions.length - 1 ? 'Next Question' : 'See Results'}
-                            </Button>
-                        ) : (
-                            <Button 
-                                onClick={handleCheckAnswer}
-                                variant="contained"
-                                disabled={!selectedAnswer}
-                                sx={{ 
-                                    borderRadius: 2,
-                                    bgcolor: '#2573ff',
-                                    '&:hover': {
-                                        bgcolor: '#1a5cd1'
-                                    }
-                                }}
-                            >
-                                Check Answer
-                            </Button>
-                        )}
-                    </>
-                ) : (
-                    <>
-                        <Button onClick={onClose} color="inherit">
-                            Close
-                        </Button>
-                        <Button 
-                            onClick={handleRestartQuiz}
-                            variant="contained"
-                            sx={{ 
-                                borderRadius: 2,
-                                bgcolor: '#2573ff',
-                                '&:hover': {
-                                    bgcolor: '#1a5cd1'
-                                }
-                            }}
-                        >
-                            Try Again
-                        </Button>
-                    </>
-                )}
+              {!quizComplete ? (
+                <>
+                  <Button onClick={onClose} color="inherit">
+                    Exit Quiz
+                  </Button>
+
+                  {isAnswered && selectedAnswer !== questions[currentQuestionIndex]?.correctAnswer && (
+                    <Button
+                      onClick={handleNextQuestion}
+                      variant="contained"
+                      sx={{
+                        borderRadius: 2,
+                        bgcolor: '#2573ff',
+                        '&:hover': { bgcolor: '#1a5cd1' }
+                      }}
+                    >
+                      {currentQuestionIndex < questions.length - 1 ? 'Next Question' : 'See Results'}
+                    </Button>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Button onClick={onClose} color="inherit">
+                    Close
+                  </Button>
+                  <Button
+                    onClick={handleRestartQuiz}
+                    variant="contained"
+                    sx={{
+                      borderRadius: 2,
+                      bgcolor: '#2573ff',
+                      '&:hover': { bgcolor: '#1a5cd1' }
+                    }}
+                  >
+                    Try Again
+                  </Button>
+                </>
+              )}
             </DialogActions>
         </Dialog>
     );
