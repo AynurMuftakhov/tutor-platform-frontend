@@ -23,7 +23,7 @@
     // Module system to use in transpiled output
     "module": "ESNext",
     // How modules are resolved (Node is typical for React)
-    "moduleResolution": "Node",
+    "moduleResolution": "Bundler",
 
     // Allow importing JSON files
     "resolveJsonModule": true,

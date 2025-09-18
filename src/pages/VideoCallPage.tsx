@@ -211,7 +211,7 @@ const VideoCallPage: React.FC<VideoCallPageProps> = (props) => {
                         )}
                     </Box>
                 )}
-                <RtcHost onLeft={handleLeave} />
+                <RtcHost onLeft={handleLeave} lessonId={lessonId} />
             </Box>
         );
     }
