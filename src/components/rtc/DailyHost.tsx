@@ -1,16 +1,18 @@
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import DailyIframe, { type DailyCall } from '@daily-co/daily-js';
 import { useRtc } from '../../context/RtcContext';
+import { DailyCallContext } from '../../context/DailyCallContext';
 
 type Props = {
   url: string;
   token?: string;
   onLeft?: () => void | Promise<void>;
+  children?: React.ReactNode;
 };
 
 let __DAILY_HOST_SEQ = 0;
 
-export default function DailyHost({ url, token, onLeft }: Props) {
+export default function DailyHost({ url, token, onLeft, children }: Props) {
   // Stable container ref for Prebuilt
   const parentElRef = useRef<HTMLElement | null>(null);
 
@@ -31,6 +33,8 @@ export default function DailyHost({ url, token, onLeft }: Props) {
 
   const { setFailure } = useRtc();
 
+  const [callFrame, setCallFrame] = useState<DailyCall | null>(null);
+
   // Keep latest callbacks in refs (no effect churn)
   const onLeftRef = useRef<Props['onLeft']>(onLeft);
   useEffect(() => { onLeftRef.current = onLeft; }, [onLeft]);
@@ -49,6 +53,7 @@ export default function DailyHost({ url, token, onLeft }: Props) {
 
     const cf = DailyIframe.createFrame(el, prebuiltOptions);
     callFrameRef.current = cf;
+    setCallFrame(cf);
     log('callFrame created');
 
     const onError = (e: any) => {
@@ -70,6 +75,7 @@ export default function DailyHost({ url, token, onLeft }: Props) {
       try { cf.destroy(); } catch {}
       callFrameRef.current = null;
       joinedForUrlRef.current = undefined;
+      setCallFrame(null);
       log('callFrame early-destroy (container lost)');
     };
   }, [prebuiltOptions]);
@@ -105,10 +111,29 @@ export default function DailyHost({ url, token, onLeft }: Props) {
       }
       callFrameRef.current = null;
       joinedForUrlRef.current = undefined;
+      setCallFrame(null);
     };
   }, []);
 
   return (
-    <div ref={setParentEl} style={{ width: '100%', height: '100%' }} />
+    <DailyCallContext.Provider value={callFrame}>
+      <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+        <div ref={setParentEl} style={{ position: 'absolute', inset: 0 }} />
+        {children ? (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              pointerEvents: 'none',
+              zIndex: 5,
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            <div style={{ flex: 1, pointerEvents: 'auto', position: 'relative' }}>{children}</div>
+          </div>
+        ) : null}
+      </div>
+    </DailyCallContext.Provider>
   );
 }
