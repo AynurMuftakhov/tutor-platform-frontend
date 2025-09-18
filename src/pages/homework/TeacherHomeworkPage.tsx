@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { Avatar, Box, Button, Chip, Container, Grid, IconButton, MenuItem, Select, Stack, TextField, Tooltip, Typography, Autocomplete, CircularProgress, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions } from '@mui/material';
+import { Avatar, Box, Button, Chip, Container, Grid, IconButton, MenuItem, Select, Stack, TextField, Tooltip, Typography, Autocomplete, CircularProgress, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Snackbar } from '@mui/material';
+import HomeworkComposerDrawer from '../../components/homework/HomeworkComposerDrawer';
 import { useTeacherAssignments, useDeleteAssignment } from '../../hooks/useHomeworks';
-import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { fetchStudents, fetchUserById } from '../../services/api';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
@@ -22,6 +23,12 @@ const TeacherHomeworkPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(statusParam);
 
   const { data, isLoading, isError, refetch } = useTeacherAssignments(user?.id || '', studentId || undefined, undefined);
+
+  // composer + snackbar state
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMsg, setSnackbarMsg] = useState('');
+  const [lastCreated, setLastCreated] = useState<AssignmentDto | null>(null);
 
   // manual refresh handler
   const onRefresh = () => refetch();
@@ -174,7 +181,7 @@ const TeacherHomeworkPage: React.FC = () => {
             <Tooltip title="Refresh">
                 <IconButton onClick={onRefresh} aria-label="Refresh"><RefreshIcon /></IconButton>
             </Tooltip>
-          <Button component={RouterLink} to="/t/homework/new" variant="contained">Add Homework</Button>
+          <Button variant="contained" onClick={() => setComposerOpen(true)}>Add Homework</Button>
         </Stack>
       </Stack>
 
@@ -262,6 +269,35 @@ const TeacherHomeworkPage: React.FC = () => {
           <Button onClick={confirmDelete} color="error" disabled={del.isPending}>{del.isPending ? 'Deleting…' : 'Delete'}</Button>
         </DialogActions>
       </Dialog>
+
+      <HomeworkComposerDrawer
+        open={composerOpen}
+        onClose={() => setComposerOpen(false)}
+        prefillStudentId={studentFilter || undefined}
+        onSuccess={(assignment, studentLabel) => {
+          setLastCreated(assignment);
+          setSnackbarMsg(`Homework assigned to ${studentLabel}`);
+          setComposerOpen(false);
+          setSnackbarOpen(true);
+        }}
+        onCreateAndOpen={(assignment) => {
+          setComposerOpen(false);
+          navigate(`/homework/${assignment.id}`);
+        }}
+      />
+
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={6000}
+        onClose={() => setSnackbarOpen(false)}
+        message={snackbarMsg}
+        action={
+          <Stack direction="row" spacing={1}>
+            <Button size="small" onClick={() => { if (lastCreated) navigate(`/homework/${lastCreated.id}`); setSnackbarOpen(false); }}>Open</Button>
+            <Button size="small" onClick={() => { setSnackbarOpen(false); setComposerOpen(true); }}>Assign another</Button>
+          </Stack>
+        }
+      />
     </Container>
   </Box>
   );

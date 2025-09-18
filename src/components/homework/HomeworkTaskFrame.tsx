@@ -54,7 +54,7 @@ const HomeworkTaskFrame: React.FC<Props> = ({ assignment, task, readOnly }) => {
     const pct = res && res.totalGaps ? Math.round((100 * res.correctGaps) / res.totalGaps) : 0;
     reportProgress({ progressPct: pct, meta: { score: res.correctGaps, maxScore: res.totalGaps } });
     if (res.totalGaps > 0 && res.correctGaps === res.totalGaps) {
-      markCompleted({ meta: { score: res.correctGaps, maxScore: res.totalGaps } });
+      markCompleted({ progressPct: pct, meta: { score: res.correctGaps, maxScore: res.totalGaps } });
     }
   };
 
@@ -80,7 +80,10 @@ const HomeworkTaskFrame: React.FC<Props> = ({ assignment, task, readOnly }) => {
                   const pct = v.duration ? Math.round((v.currentTime / v.duration) * 100) : 0;
                   if (!readOnly) reportProgress({ progressPct: pct, meta: { playedSec: Math.floor(v.currentTime), durationSec: Math.floor(v.duration || 0) } });
                   if (pct >= 90 && !readOnly) {
-                    markCompleted({ meta: { playedSec: Math.floor(v.currentTime), durationSec: Math.floor(v.duration || 0) } });
+                    markCompleted({
+                      progressPct: Math.min(100, pct),
+                      meta: { playedSec: Math.floor(v.currentTime), durationSec: Math.floor(v.duration || 0) }
+                    });
                   }
                 }}
               />
@@ -163,7 +166,6 @@ const HomeworkTaskFrame: React.FC<Props> = ({ assignment, task, readOnly }) => {
     const masteryStreak: number = Number.isFinite(settings.masteryStreak) ? settings.masteryStreak : 2;
     const masteryPct: number = Number.isFinite(settings.masteryPct) ? settings.masteryPct : 100;
     const shuffle: boolean = settings.shuffle !== false;
-    const timeLimitMin: number | undefined = Number.isFinite(settings.timeLimitMin) ? settings.timeLimitMin : undefined;
 
     const [quizOpen, setQuizOpen] = useState(false);
     const [quizQuestionWords, setQuizQuestionWords] = useState<any[] | null>(null);
@@ -174,7 +176,9 @@ const HomeworkTaskFrame: React.FC<Props> = ({ assignment, task, readOnly }) => {
           const parsed = JSON.parse(raw);
           if (parsed && typeof parsed === 'object') return parsed as Record<string, number>;
         }
-      } catch {}
+      } catch {
+          // ignore storage quota or access errors
+      }
       return {};
     });
     const [masteredSet, setMasteredSet] = useState<Set<string>>(() => {
@@ -247,7 +251,9 @@ const HomeworkTaskFrame: React.FC<Props> = ({ assignment, task, readOnly }) => {
     useEffect(() => {
       try {
         localStorage.setItem(`vocabTaskStreaks:${task.id}`, JSON.stringify(streaks));
-      } catch {}
+      } catch {
+          // ignore storage quota or access errors
+      }
     }, [streaks, task.id]);
 
     // answer handler

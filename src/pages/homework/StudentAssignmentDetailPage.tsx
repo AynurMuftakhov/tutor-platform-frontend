@@ -71,7 +71,7 @@ const StudentAssignmentDetailPage: React.FC = () => {
     if (incompletes.length === 0) return;
     try {
       setCompleting(true);
-      await Promise.all(incompletes.map(t => completeTask.mutateAsync({ taskId: t.id, payload: {} })));
+      await Promise.all(incompletes.map(t => completeTask.mutateAsync({ taskId: t.id })));
     } finally {
       setCompleting(false);
     }
