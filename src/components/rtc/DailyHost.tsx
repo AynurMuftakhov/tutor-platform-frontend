@@ -130,7 +130,7 @@ export default function DailyHost({ url, token, onLeft, children }: Props) {
               flexDirection: 'column',
             }}
           >
-            <div style={{ flex: 1, pointerEvents: 'auto', position: 'relative' }}>{children}</div>
+            <div style={{ flex: 1, pointerEvents: 'none', position: 'relative' }}>{children}</div>
           </div>
         ) : null}
       </div>
