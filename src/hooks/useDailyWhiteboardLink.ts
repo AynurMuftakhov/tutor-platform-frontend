@@ -107,6 +107,7 @@ export const useDailyWhiteboardLink = ({ callFrame, role, lessonId, isOpen }: Op
 
   const latestUrlRef = useRef<string | null>(stored?.url ?? null);
   const isHost = role === 'tutor' || role === 'teacher';
+  const rebroadcastOnJoinedRef = useRef<boolean>(false);
 
   const persist = useCallback(
     (value: StoredWhiteboard | null) => {
@@ -129,6 +130,7 @@ export const useDailyWhiteboardLink = ({ callFrame, role, lessonId, isOpen }: Op
       if (!callFrame) return;
       const ts = timestamp ?? Date.now();
       try {
+        console.debug('[WB]', { action: 'broadcast', to: target, isHost, lessonId, ts, hasUrl: !!value });
         callFrame.sendAppMessage(
           { type: 'WB_LINK', url: value, lessonId, ts, createdBy: role ?? undefined },
           target,
@@ -138,7 +140,7 @@ export const useDailyWhiteboardLink = ({ callFrame, role, lessonId, isOpen }: Op
         setError('Could not broadcast the whiteboard link. Try again.');
       }
     },
-    [callFrame, lessonId, role],
+    [callFrame, lessonId, role, isHost],
   );
 
   const applyUrl = useCallback(
@@ -172,13 +174,15 @@ export const useDailyWhiteboardLink = ({ callFrame, role, lessonId, isOpen }: Op
     if (!callFrame) return;
     setWaitingForLink(true);
     try {
-      callFrame.sendAppMessage({ type: 'WB_REQUEST_LINK', lessonId, ts: Date.now(), requester: role ?? undefined }, '*');
+      const ts = Date.now();
+      console.debug('[WB]', { action: 'request-link', isHost, lessonId, ts });
+      callFrame.sendAppMessage({ type: 'WB_REQUEST_LINK', lessonId, ts, requester: role ?? undefined }, '*');
     } catch (err) {
       console.warn('Failed to request whiteboard link', err);
       setError('Could not reach the host for a whiteboard link.');
       setWaitingForLink(false);
     }
-  }, [callFrame, lessonId, role]);
+  }, [callFrame, lessonId, role, isHost]);
 
   const resyncBoard = useCallback(() => {
     if (latestUrlRef.current) {
@@ -210,29 +214,61 @@ export const useDailyWhiteboardLink = ({ callFrame, role, lessonId, isOpen }: Op
       setRemoteParticipantCount(computeRemoteCount(callFrame));
     };
 
-    callFrame.on('participant-joined', updateParticipants);
+    const onParticipantJoined = (ev: any) => {
+      updateParticipants();
+      if (!isHost) return;
+      const toId = ev?.participant?.session_id;
+      if (latestUrlRef.current && toId) {
+        console.debug('[WB]', { action: 'targeted-send-on-join', to: toId, isHost, lessonId, hasUrl: !!latestUrlRef.current });
+        broadcastUrl(latestUrlRef.current, toId);
+      } else {
+        console.debug('[WB]', { action: 'participant-joined-no-url', isHost, lessonId, to: toId });
+      }
+    };
+
+    callFrame.on('participant-joined', onParticipantJoined);
     callFrame.on('participant-left', updateParticipants);
     callFrame.on('participant-updated', updateParticipants);
 
     return () => {
-      callFrame.off('participant-joined', updateParticipants);
+      callFrame.off('participant-joined', onParticipantJoined);
       callFrame.off('participant-left', updateParticipants);
       callFrame.off('participant-updated', updateParticipants);
     };
-  }, [callFrame]);
+  }, [callFrame, isHost, lessonId, broadcastUrl]);
+
+  useEffect(() => {
+    if (!callFrame) return;
+    const onJoinedMeeting = () => {
+      console.debug('[WB]', { action: 'joined-meeting', isHost, lessonId, isOpen, hasUrl: !!latestUrlRef.current, alreadyRebroadcasted: rebroadcastOnJoinedRef.current });
+      if (isHost && isOpen && latestUrlRef.current && !rebroadcastOnJoinedRef.current) {
+        rebroadcastOnJoinedRef.current = true;
+        broadcastUrl(latestUrlRef.current);
+      }
+    };
+    callFrame.on('joined-meeting', onJoinedMeeting);
+    return () => {
+      callFrame.off('joined-meeting', onJoinedMeeting);
+    };
+  }, [callFrame, isHost, isOpen, lessonId, broadcastUrl]);
 
   useEffect(() => {
     if (!callFrame) return;
     const handler = (event: DailyEventObjectAppMessage<WhiteboardMessage>) => {
       const payload = event.data;
       if (!payload || typeof payload !== 'object') return;
-      if (payload.lessonId && lessonId && payload.lessonId !== lessonId) return;
+      if (lessonId && payload.lessonId !== lessonId) {
+        console.debug('[WB]', { action: 'app-message-ignore-lesson', isHost, lessonId, from: event.fromId, payloadLessonId: (payload as any).lessonId });
+        return;
+      }
+      console.debug('[WB]', { action: 'app-message', isHost, lessonId, from: event.fromId, type: (payload as any).type });
 
       if (payload.type === 'WB_LINK') {
         if (typeof payload.url === 'string' && payload.url.trim()) {
           applyUrl(payload.url, 'remote', payload.ts);
         }
       } else if (payload.type === 'WB_REQUEST_LINK') {
+        console.debug('[WB]', { action: 'request-received', isHost, lessonId, hasUrl: !!latestUrlRef.current, from: event.fromId });
         if (latestUrlRef.current) {
           broadcastUrl(latestUrlRef.current, event.fromId ?? '*');
         } else if (isHost) {
@@ -250,6 +286,7 @@ export const useDailyWhiteboardLink = ({ callFrame, role, lessonId, isOpen }: Op
   useEffect(() => {
     if (!isOpen) return;
     if (latestUrlRef.current) {
+      console.debug('[WB]', { action: 'drawer-open-has-url', isHost, lessonId });
       if (isHost) {
         broadcastUrl(latestUrlRef.current);
       } else {
@@ -258,11 +295,13 @@ export const useDailyWhiteboardLink = ({ callFrame, role, lessonId, isOpen }: Op
       return;
     }
     if (isHost) {
+      console.debug('[WB]', { action: 'drawer-open-create', isHost, lessonId });
       applyUrl(createBoardUrl(), 'local');
     } else {
+      console.debug('[WB]', { action: 'drawer-open-request', isHost, lessonId });
       requestLink();
     }
-  }, [applyUrl, broadcastUrl, isHost, isOpen, requestLink]);
+  }, [applyUrl, broadcastUrl, isHost, isOpen, requestLink, lessonId]);
 
   useEffect(() => {
     if (!storageKey || typeof window === 'undefined') return;
@@ -276,8 +315,10 @@ export const useDailyWhiteboardLink = ({ callFrame, role, lessonId, isOpen }: Op
         setLastUpdatedAt(parsed.ts ?? Date.now());
         setWaitingForLink(false);
       }
-    } catch {}
-  }, [storageKey]);
+    } catch (e) {
+      console.debug('[WB]', { action: 'storage-parse-error', lessonId, error: (e as any)?.message });
+    }
+  }, [storageKey, lessonId]);
 
   const embedUrl = useMemo(() => toEmbedUrl(url), [url]);
 
