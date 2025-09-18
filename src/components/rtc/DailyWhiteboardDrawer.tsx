@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Box,
@@ -14,11 +14,12 @@ import {
 } from '@mui/material';
 import type { TransitionProps } from '@mui/material/transitions';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
-import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
-import RestartAltRoundedIcon from '@mui/icons-material/RestartAltRounded';
-import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
 import SpaceDashboardRoundedIcon from '@mui/icons-material/SpaceDashboardRounded';
 import GroupsRoundedIcon from '@mui/icons-material/GroupsRounded';
+import RestartAltRoundedIcon from '@mui/icons-material/RestartAltRounded';
+import SyncRoundedIcon from '@mui/icons-material/SyncRounded';
+import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
+import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
 import { useTheme } from '@mui/material/styles';
 import { useDailyCall } from '../../context/DailyCallContext';
 import { useDailyWhiteboardLink } from '../../hooks/useDailyWhiteboardLink';
@@ -42,6 +43,7 @@ const DailyWhiteboardDrawer: React.FC<Props> = ({ open, onClose, lessonId, role 
   const callFrame = useDailyCall();
   const theme = useTheme();
   const [copied, setCopied] = useState(false);
+  const [iframeRefresh, setIframeRefresh] = useState(0);
 
   const {
     url,
@@ -50,6 +52,7 @@ const DailyWhiteboardDrawer: React.FC<Props> = ({ open, onClose, lessonId, role 
     error,
     lastUpdatedAt,
     remoteParticipantCount,
+    resyncBoard,
     resetBoard,
     openInNewTab,
   } = useDailyWhiteboardLink({ callFrame, role, lessonId, isOpen: open });
@@ -74,7 +77,11 @@ const DailyWhiteboardDrawer: React.FC<Props> = ({ open, onClose, lessonId, role 
     [theme.palette.primary.dark, theme.palette.primary.main, theme.palette.secondary?.main],
   );
 
-  const handleCopyLink = async () => {
+  const handleClose = useCallback(() => {
+    onClose();
+  }, [onClose]);
+
+  const handleCopyLink = useCallback(async () => {
     if (!url || typeof navigator === 'undefined' || !navigator.clipboard) return;
     try {
       await navigator.clipboard.writeText(url);
@@ -83,13 +90,21 @@ const DailyWhiteboardDrawer: React.FC<Props> = ({ open, onClose, lessonId, role 
     } catch (err) {
       console.warn('Failed to copy whiteboard link', err);
     }
-  };
+  }, [url]);
+
+  const handleResync = useCallback(() => {
+    resyncBoard();
+    setIframeRefresh((key) => key + 1);
+  }, [resyncBoard]);
+
+  const iframeKey = useMemo(() => `${embedUrl ?? 'blank'}:${iframeRefresh}`, [embedUrl, iframeRefresh]);
+  const isTutor = role === 'tutor' || role === 'teacher';
 
   return (
     <Dialog
       fullScreen
       open={open}
-      onClose={onClose}
+      onClose={handleClose}
       TransitionComponent={Transition}
       keepMounted
       PaperProps={{
@@ -165,36 +180,7 @@ const DailyWhiteboardDrawer: React.FC<Props> = ({ open, onClose, lessonId, role 
                 sx={{ borderColor: 'rgba(255,255,255,0.45)', color: '#fff' }}
               />
             )}
-            <Tooltip title="Open in a separate tab">
-              <span>
-                <Button
-                  variant="outlined"
-                  color="inherit"
-                  onClick={openInNewTab}
-                  startIcon={<OpenInNewRoundedIcon />}
-                  sx={{ borderColor: 'rgba(255,255,255,0.4)', color: '#fff' }}
-                  disabled={!url}
-                >
-                  Open in new tab
-                </Button>
-              </span>
-            </Tooltip>
-            {(role === 'tutor' || role === 'teacher') && (
-              <Tooltip title="Start a fresh whiteboard">
-                <span>
-                  <Button
-                    variant="contained"
-                    color="secondary"
-                    startIcon={<RestartAltRoundedIcon />}
-                    onClick={resetBoard}
-                    sx={{ color: theme.palette.getContrastText(theme.palette.secondary.main) }}
-                  >
-                    New blank board
-                  </Button>
-                </span>
-              </Tooltip>
-            )}
-            <IconButton onClick={onClose} sx={{ color: '#fff', border: '1px solid rgba(255,255,255,0.4)', ml: { xs: 0, md: 1 } }}>
+            <IconButton onClick={handleClose} sx={{ color: '#fff', border: '1px solid rgba(255,255,255,0.4)', ml: { xs: 0, md: 1 } }}>
               <CloseRoundedIcon />
             </IconButton>
           </Stack>
@@ -214,7 +200,7 @@ const DailyWhiteboardDrawer: React.FC<Props> = ({ open, onClose, lessonId, role 
             </Alert>
           )}
 
-          {!embedUrl && waitingForLink && (
+          {waitingForLink && (
             <Box
               sx={{
                 position: 'absolute',
@@ -237,7 +223,52 @@ const DailyWhiteboardDrawer: React.FC<Props> = ({ open, onClose, lessonId, role 
 
           {embedUrl && (
             <Stack spacing={2} sx={{ height: '100%' }}>
-              <Stack direction="row" spacing={1} alignItems="center" justifyContent="flex-end">
+              <Stack direction="row" spacing={1.5} alignItems="center" justifyContent="flex-end" flexWrap="wrap" useFlexGap>
+                <Tooltip title="Request the latest whiteboard link from the host">
+                  <span>
+                    <Button
+                      variant="outlined"
+                      color="primary"
+                      startIcon={<SyncRoundedIcon />}
+                      onClick={handleResync}
+                      disabled={waitingForLink}
+                    >
+                      Resync board
+                    </Button>
+                  </span>
+                </Tooltip>
+                <Tooltip title="Open the whiteboard in a separate tab">
+                  <span>
+                    <Button
+                      variant="outlined"
+                      color="inherit"
+                      onClick={openInNewTab}
+                      startIcon={<OpenInNewRoundedIcon />}
+                      disabled={!url}
+                      sx={{ borderColor: 'divider' }}
+                    >
+                      Open in new tab
+                    </Button>
+                  </span>
+                </Tooltip>
+                {isTutor && (
+                  <Tooltip title="Start a blank Excalidraw room for everyone">
+                    <span>
+                      <Button
+                        variant="contained"
+                        color="secondary"
+                        startIcon={<RestartAltRoundedIcon />}
+                        onClick={resetBoard}
+                        sx={{ color: theme.palette.getContrastText(theme.palette.secondary.main) }}
+                      >
+                        New blank board
+                      </Button>
+                    </span>
+                  </Tooltip>
+                )}
+              </Stack>
+
+              <Stack direction="row" spacing={1.5} justifyContent="flex-end">
                 <Tooltip title={copied ? 'Copied!' : 'Copy shareable link'}>
                   <span>
                     <Button
@@ -252,8 +283,10 @@ const DailyWhiteboardDrawer: React.FC<Props> = ({ open, onClose, lessonId, role 
                   </span>
                 </Tooltip>
               </Stack>
+
               <Box
                 component="iframe"
+                key={iframeKey}
                 src={embedUrl}
                 title="Collaborative whiteboard"
                 sx={{
@@ -264,6 +297,7 @@ const DailyWhiteboardDrawer: React.FC<Props> = ({ open, onClose, lessonId, role 
                   borderColor: 'divider',
                   boxShadow: '0 24px 60px rgba(15, 23, 42, 0.22)',
                   overflow: 'hidden',
+                  minHeight: 0,
                 }}
                 allow="clipboard-read; clipboard-write; fullscreen"
               />
