@@ -1,5 +1,8 @@
 import React from 'react';
-import { Box, Button, Card, CardActions, CardContent, Chip, CircularProgress, Container, Grid, Typography, useTheme } from '@mui/material';
+import {
+    Box, Button, Card,
+    CardActionArea, CardContent, Chip, CircularProgress, Container, Grid, Typography,
+} from '@mui/material';
 import { useStudentAssignments } from '../../hooks/useHomeworks';
 import { AssignmentDto } from '../../types/homework';
 import { Link as RouterLink } from 'react-router-dom';
@@ -12,44 +15,43 @@ const AssignmentCard: React.FC<{ a: AssignmentDto }> = ({ a }) => {
   const due = a.dueAt ? new Date(a.dueAt) : null;
 
   return (
-    <Card
-      variant="outlined"
-      sx={{ height: '100%', display: 'flex', flexDirection: 'column', cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' } }}
-      role="button"
-      tabIndex={0}
-      onClick={() => { window.location.href = `/homework/${a.id}`; }}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); window.location.href = `/homework/${a.id}`; } }}
-    >
-      <CardContent sx={{ flexGrow: 1 }}>
-        <Typography variant="h6" gutterBottom>{a.title}</Typography>
-        {a.instructions && (
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>{a.instructions}</Typography>
-        )}
-        <Box display="flex" alignItems="center" gap={2}>
-          <Box position="relative" display="inline-flex">
-            <CircularProgress variant="determinate" value={pct} />
-            <Box
-              top={0}
-              left={0}
-              bottom={0}
-              right={0}
-              position="absolute"
-              display="flex"
-              alignItems="center"
-              justifyContent="center"
-            >
-              <Typography variant="caption" component="div" color="text.secondary">
-                {`${pct}%`}
-              </Typography>
-            </Box>
-          </Box>
-          <Typography variant="body2">{done}/{total} tasks</Typography>
-        </Box>
-        {due && (
-          <Chip size="small" label={`Due: ${due.toLocaleDateString()}`} sx={{ mt: 1 }} />
-        )}
-      </CardContent>
-    </Card>
+      <Card variant="outlined" sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+          <CardActionArea
+              component={RouterLink}
+              to={`/homework/${a.id}`}
+              sx={{ flexGrow: 1, display: 'flex', alignItems: 'stretch' }}
+          >
+              <CardContent sx={{ flexGrow: 1 }}>
+                  <Typography variant="h6" gutterBottom>{a.title}</Typography>
+                  {a.instructions && (
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>{a.instructions}</Typography>
+                  )}
+                  <Box display="flex" alignItems="center" gap={2}>
+                      <Box position="relative" display="inline-flex">
+                          <CircularProgress variant="determinate" value={pct} />
+                          <Box
+                              top={0}
+                              left={0}
+                              bottom={0}
+                              right={0}
+                              position="absolute"
+                              display="flex"
+                              alignItems="center"
+                              justifyContent="center"
+                          >
+                              <Typography variant="caption" component="div" color="text.secondary">
+                                  {`${pct}%`}
+                              </Typography>
+                          </Box>
+                      </Box>
+                      <Typography variant="body2">{done}/{total} tasks</Typography>
+                  </Box>
+                  {due && (
+                      <Chip size="small" label={`Due: ${due.toLocaleDateString()}`} sx={{ mt: 1 }} />
+                  )}
+              </CardContent>
+          </CardActionArea>
+      </Card>
   );
 };
 
