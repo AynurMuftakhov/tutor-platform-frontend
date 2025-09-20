@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useMemo, useState } from 'react';
+import type { DailyCall } from '@daily-co/daily-js';
 import { useAuth } from './AuthContext';
 import { fetchRtcJoin } from '../services/rtc/join';
 import { RtcJoinResponse, RtcProviderId } from '../types/rtc/adapter';
@@ -23,16 +24,20 @@ interface RtcState {
 }
 
 interface RtcContextValue extends RtcState {
+  dailyCall: DailyCall | null;
   refreshJoin: (hint?: JoinHint) => Promise<void>;
   setFailure: (message: string) => void;
   forceFallbackToLiveKit: () => void;
+  registerDailyCall: (call: DailyCall | null) => void;
 }
 
 const RtcContext = createContext<RtcContextValue>({
   providerReady: false,
+  dailyCall: null,
   refreshJoin: async () => undefined,
   setFailure: () => undefined,
   forceFallbackToLiveKit: () => undefined,
+  registerDailyCall: () => undefined,
 });
 
 export const useRtc = () => useContext(RtcContext);
@@ -40,6 +45,7 @@ export const useRtc = () => useContext(RtcContext);
 export const RtcProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
   const [state, setState] = useState<RtcState>({ providerReady: false, canFallbackToLiveKit: false });
+  const [dailyCall, setDailyCall] = useState<DailyCall | null>(null);
 
   const deriveLessonAndRole = (hint?: JoinHint): { lessonId?: string; role?: string } => {
     // Role mapping: app roles → API roles
@@ -92,6 +98,16 @@ export const RtcProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setState((s) => ({ ...s, effectiveProvider: 'livekit', failureMessage: undefined }));
   };
 
-  const value = useMemo(() => ({ ...state, refreshJoin, setFailure, forceFallbackToLiveKit }), [state]);
+  const value = useMemo(
+    () => ({
+      ...state,
+      dailyCall,
+      refreshJoin,
+      setFailure,
+      forceFallbackToLiveKit,
+      registerDailyCall: setDailyCall,
+    }),
+    [state, dailyCall, refreshJoin, setFailure, forceFallbackToLiveKit],
+  );
   return <RtcContext.Provider value={value}>{children}</RtcContext.Provider>;
 };
