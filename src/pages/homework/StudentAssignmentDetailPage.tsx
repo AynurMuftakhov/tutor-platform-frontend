@@ -100,7 +100,7 @@ const StudentAssignmentDetailPage: React.FC = () => {
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md:4, lg:3 }}>
           <Stack spacing={1}>
-            {assignment.tasks.sort((a,b)=>a.ordinal-b.ordinal).map(t => (
+            {[...assignment.tasks].sort((a,b)=>a.ordinal-b.ordinal).map(t => (
               <Card key={t.id} variant={t.id===currentTaskId? 'elevation':'outlined'} sx={{ cursor:'pointer' }} onClick={()=>setTaskId(t.id)}>
                 <CardContent>
                   <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">

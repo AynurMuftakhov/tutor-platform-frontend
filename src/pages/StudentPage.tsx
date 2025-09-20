@@ -39,10 +39,10 @@ import { Lesson } from "../types/Lesson";
 import NextLessonCard from "../components/dashboard/NextLessonCard";
 import AssignModal from "../components/vocabulary/AssignModal";
 import { useStudentAssignments } from "../hooks/useHomeworks";
-import type { AssignmentDto } from "../types/homework";
+import type { AssignmentDto, TaskDto } from "../types/homework";
+import HomeworkTaskFrame from "../components/homework/HomeworkTaskFrame";
 import { Link as RouterLink } from 'react-router-dom';
 import { useTheme } from "@mui/material/styles";
-import useMediaQuery from "@mui/material/useMediaQuery";
 
 const AssignmentCardSmall: React.FC<{ a: AssignmentDto; onOpen: (assignment: AssignmentDto) => void }> = ({ a, onOpen }) => {
   const total = a.tasks.length;
@@ -162,8 +162,6 @@ const StudentPage: React.FC<StudentPageProps> = ({
   const { studentId: routeStudentId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const theme = useTheme();
-  const fullScreenPreview = useMediaQuery(theme.breakpoints.down('sm'));
 
   const resolvedStudentId = studentIdOverride ?? routeStudentId;
 
@@ -171,7 +169,9 @@ const StudentPage: React.FC<StudentPageProps> = ({
   const [loading, setLoading] = useState(true);
   const [activeTabState, setActiveTabState] = useState(initialTab);
   const activeTab = activeTabOverride ?? activeTabState;
-  const [previewAssignment, setPreviewAssignment] = useState<AssignmentDto | null>(null);
+  const [openedAssignment, setOpenedAssignment] = useState<AssignmentDto | null>(null);
+  const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
+  const currentTask = useMemo(() => (openedAssignment?.tasks.find(t => t.id === currentTaskId) || null) as TaskDto | null, [openedAssignment, currentTaskId]);
 
   // Next lesson state
   const [upcoming, setUpcoming] = useState<Lesson[] | null>(null);
@@ -206,15 +206,15 @@ const StudentPage: React.FC<StudentPageProps> = ({
   const handleAssignmentOpen = useCallback(
     (assignment: AssignmentDto) => {
       if (embedded) {
-        setPreviewAssignment(assignment);
+        setOpenedAssignment(assignment);
+        const first = [...assignment.tasks].sort((a,b)=>a.ordinal-b.ordinal)[0]?.id || assignment.tasks[0]?.id || null;
+        setCurrentTaskId(first);
       } else {
         navigate(`/homework/${assignment.id}`);
       }
     },
     [embedded, navigate],
   );
-
-  const handlePreviewClose = () => setPreviewAssignment(null);
 
   useEffect(() => {
     const load = async () => {
@@ -368,8 +368,35 @@ const StudentPage: React.FC<StudentPageProps> = ({
         label: "Homework",
         hidden: false,
         content: (
-          <SectionCard title="Assigned homework">
-            <StudentHomeworkTab studentId={student.id} isTeacher={isTeacher} onAssignmentOpen={handleAssignmentOpen} />
+          <SectionCard title={embedded && openedAssignment ? "Homework" : "Assigned homework"}>
+            {embedded && openedAssignment ? (
+              <>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                  <Button size="small" startIcon={<ArrowBackIcon />} onClick={() => { setOpenedAssignment(null); setCurrentTaskId(null); }}>
+                    Back to list
+                  </Button>
+                  <Typography variant="subtitle1" fontWeight={700}>{openedAssignment.title}</Typography>
+                </Box>
+                <Grid container spacing={2}>
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      {[...openedAssignment.tasks].sort((a,b)=>a.ordinal-b.ordinal).map(t => (
+                        <Button key={t.id} variant={t.id===currentTaskId? 'contained':'outlined'} size="small" sx={{ justifyContent: 'flex-start' }} onClick={() => setCurrentTaskId(t.id)}>
+                          {t.ordinal}. {t.title}
+                        </Button>
+                      ))}
+                    </Box>
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 8 }}>
+                    {currentTask && (
+                      <HomeworkTaskFrame assignment={openedAssignment as AssignmentDto} task={currentTask as TaskDto} readOnly={isTeacher} />
+                    )}
+                  </Grid>
+                </Grid>
+              </>
+            ) : (
+              <StudentHomeworkTab studentId={student.id} isTeacher={isTeacher} onAssignmentOpen={handleAssignmentOpen} />
+            )}
           </SectionCard>
         ),
       },
@@ -430,7 +457,7 @@ const StudentPage: React.FC<StudentPageProps> = ({
         ),
       },
     ];
-  }, [student, hideOverviewTab, upcoming, upcomingError, isTeacher, handleAssignmentOpen, dictSearch, filteredAssigned, assignOpen]);
+  }, [student, hideOverviewTab, upcoming, upcomingError, isTeacher, handleAssignmentOpen, dictSearch, filteredAssigned, assignOpen, openedAssignment, currentTaskId]);
 
   const visibleTabs = tabDefinitions.filter((tab) => !tab.hidden);
   const effectiveActiveTab = Math.min(activeTab, Math.max(visibleTabs.length - 1, 0));
@@ -518,7 +545,7 @@ const StudentPage: React.FC<StudentPageProps> = ({
             </Box>
           </Box>
         </Box>
-        {isTeacher && (
+        {isTeacher && !embedded && (
           <Box display="flex" gap={1}>
             <Tooltip title="Edit">
               <IconButton color="primary" onClick={() => setEditDialogOpen(true)}>
@@ -559,79 +586,6 @@ const StudentPage: React.FC<StudentPageProps> = ({
       <Box sx={contentSx}>
         {visibleTabs[effectiveActiveTab]?.content}
       </Box>
-
-      <Dialog
-        open={Boolean(previewAssignment)}
-        onClose={handlePreviewClose}
-        fullWidth
-        maxWidth="md"
-        fullScreen={fullScreenPreview}
-      >
-        {previewAssignment && (
-          <>
-            <DialogTitle>{previewAssignment.title}</DialogTitle>
-            <DialogContent dividers>
-              {previewAssignment.instructions && (
-                <Typography variant="body1" sx={{ mb: 2 }}>
-                  {previewAssignment.instructions}
-                </Typography>
-              )}
-              <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', mb: 3 }}>
-                <Chip label={`Tasks: ${previewAssignment.tasks.length}`} size="small" color="primary" />
-                {previewAssignment.dueAt && (
-                  <Chip
-                    label={`Due ${new Date(previewAssignment.dueAt).toLocaleString()}`}
-                    size="small"
-                    color="info"
-                    variant="outlined"
-                  />
-                )}
-              </Box>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {previewAssignment.tasks.length === 0 ? (
-                  <Typography variant="body2" color="text.secondary">
-                    This homework does not contain any tasks yet.
-                  </Typography>
-                ) : (
-                  previewAssignment.tasks.map((task) => (
-                    <Paper key={task.id} variant="outlined" sx={{ p: 2, borderRadius: 1.5 }}>
-                      <Box display="flex" justifyContent="space-between" alignItems="flex-start" gap={2}>
-                        <Box sx={{ flex: 1 }}>
-                          <Typography variant="subtitle1" fontWeight={600}>{task.title}</Typography>
-                          {task.instructions && (
-                            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                              {task.instructions}
-                            </Typography>
-                          )}
-                        </Box>
-                        <Chip
-                          label={task.type.toLowerCase()}
-                          size="small"
-                          sx={{ textTransform: 'capitalize', fontWeight: 600 }}
-                          color="secondary"
-                          variant="outlined"
-                        />
-                      </Box>
-                    </Paper>
-                  ))
-                )}
-              </Box>
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={handlePreviewClose}>Close</Button>
-              <Button
-                component="a"
-                href={`/homework/${previewAssignment.id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                variant="contained"
-              >
-                Open full homework
-              </Button>
-            </DialogActions>
-          </>
-        )}
-      </Dialog>
 
       {/* Edit Dialog */}
       <Dialog

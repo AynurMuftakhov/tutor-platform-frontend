@@ -41,7 +41,7 @@ const StudentProfileDrawer: React.FC<StudentProfileDrawerProps> = ({
   sharedBy,
   allowClose = true,
   resizable = true,
-  initialWidth = 480,
+  initialWidth = 840,
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
@@ -118,7 +118,6 @@ const StudentProfileDrawer: React.FC<StudentProfileDrawerProps> = ({
       ModalProps={{ keepMounted: true }}
       PaperProps={{
         sx: (theme) => ({
-          position: "relative",
           width: { xs: "100%", sm: width },
           minWidth: { xs: "100%", sm: minWidth },
           maxWidth: { xs: "100%", sm: maxWidth },

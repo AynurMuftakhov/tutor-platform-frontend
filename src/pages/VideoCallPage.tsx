@@ -343,7 +343,7 @@ const DailyCallLayout: React.FC<{
                         onClick={() => setStudentProfileOpen(true)}
                         sx={{
                             position: 'absolute',
-                            top: 188,
+                            top: 100,
                             left: 8,
                             right: 'auto',
                             zIndex: 1000,
@@ -381,7 +381,6 @@ const DailyCallLayout: React.FC<{
                     studentId={resolvedStudentId}
                     activeTab={sharedProfileTab}
                     sharedBy={sharedProfileBy}
-                    resizable={false}
                 />
             )}
         </Box>
