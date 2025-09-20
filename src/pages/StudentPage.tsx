@@ -25,6 +25,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import CloseIcon from "@mui/icons-material/Close";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import { ENGLISH_LEVELS, EnglishLevel } from "../types/ENGLISH_LEVELS";
 import { deleteUser, fetchUserById, resetPasswordEmail, updateCurrentUser, getUpcomingLessons } from "../services/api";
@@ -130,14 +131,33 @@ const SectionCard: React.FC<{ title: string; children?: React.ReactNode }> = ({ 
   </Paper>
 );
 
-const StudentPage: React.FC = () => {
-  const { studentId } = useParams();
+export interface StudentPageProps {
+  studentIdOverride?: string;
+  embedded?: boolean;
+  onClose?: () => void;
+  activeTabOverride?: number;
+  onTabChange?: (tab: number) => void;
+  initialTab?: number;
+}
+
+const StudentPage: React.FC<StudentPageProps> = ({
+  studentIdOverride,
+  embedded = false,
+  onClose,
+  activeTabOverride,
+  onTabChange,
+  initialTab = 0,
+}) => {
+  const { studentId: routeStudentId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
 
+  const resolvedStudentId = studentIdOverride ?? routeStudentId;
+
   const [student, setStudent] = useState<StudentProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState(0);
+  const [activeTabState, setActiveTabState] = useState(initialTab);
+  const activeTab = activeTabOverride ?? activeTabState;
 
   // Next lesson state
   const [upcoming, setUpcoming] = useState<Lesson[] | null>(null);
@@ -171,10 +191,10 @@ const StudentPage: React.FC = () => {
 
   useEffect(() => {
     const load = async () => {
-      if (!studentId) return;
+      if (!resolvedStudentId) return;
       try {
         setLoading(true);
-        const data = await fetchUserById(studentId);
+        const data = await fetchUserById(resolvedStudentId);
         // Map to StudentProfile; level may come as string
         const mapped: StudentProfile = {
           id: data.id,
@@ -192,18 +212,18 @@ const StudentPage: React.FC = () => {
       }
     };
     load();
-  }, [studentId]);
+  }, [resolvedStudentId]);
 
   // Load upcoming lessons for this student
   useEffect(() => {
     const fetchUpcoming = async () => {
-      if (!user || !studentId) return;
+      if (!user || !resolvedStudentId) return;
       try {
         setUpcomingError(null);
         setUpcoming(null);
         const tutorId = user.id; // assume tutorId is always the same
         const now = new Date().toISOString();
-        const res = await getUpcomingLessons(tutorId, studentId, now);
+        const res = await getUpcomingLessons(tutorId, resolvedStudentId, now);
         setUpcoming(Array.isArray(res) ? res : []);
       } catch (err) {
         console.error("Failed to fetch upcoming lessons", err);
@@ -212,7 +232,7 @@ const StudentPage: React.FC = () => {
       }
     };
     fetchUpcoming();
-  }, [user, studentId]);
+  }, [user, resolvedStudentId]);
 
   const levelInfo = useMemo(() => (student?.level ? ENGLISH_LEVELS[student.level] : undefined), [student?.level]);
 
@@ -279,6 +299,21 @@ const StudentPage: React.FC = () => {
     }
   };
 
+  const handleTabChange = (_event: React.SyntheticEvent, value: number) => {
+    onTabChange?.(value);
+    if (activeTabOverride === undefined) {
+      setActiveTabState(value);
+    }
+  };
+
+  if (!resolvedStudentId) {
+    return (
+      <Container maxWidth="lg" sx={{ mt: 4, mb: 6 }}>
+        <Typography color="error">No student selected</Typography>
+      </Container>
+    );
+  }
+
   if (loading) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 6 }}>
@@ -295,12 +330,37 @@ const StudentPage: React.FC = () => {
     );
   }
 
+  const containerSx = embedded
+    ? {
+        mt: 0,
+        mb: 0,
+        py: 2,
+        px: { xs: 0, sm: 1.5 },
+        height: "100%",
+        display: "flex",
+        flexDirection: "column" as const,
+      }
+    : { mt: 4, mb: 6 };
+
+  const contentSx = embedded
+    ? { mt: 2, flex: 1, overflowY: "auto", pr: { xs: 0, sm: 1 } }
+    : { mt: 2 };
+
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 6 }}>
+    <Container maxWidth={embedded ? false : "lg"} sx={containerSx}>
       {/* Header bar */}
       <Box display="flex" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
         <Box display="flex" alignItems="center" gap={2}>
-          <IconButton onClick={() => navigate(-1)}><ArrowBackIcon /></IconButton>
+          {!embedded && (
+            <IconButton onClick={() => navigate(-1)}>
+              <ArrowBackIcon />
+            </IconButton>
+          )}
+          {embedded && onClose && (
+            <IconButton onClick={onClose}>
+              <CloseIcon />
+            </IconButton>
+          )}
           <Avatar
             src={student.avatar}
             alt={student.name}
@@ -349,7 +409,7 @@ const StudentPage: React.FC = () => {
       <Paper elevation={0} sx={{ borderRadius: 1, bgcolor: (t) => t.palette.background.paper }}>
         <Tabs
           value={activeTab}
-          onChange={(_, v) => setActiveTab(v)}
+          onChange={handleTabChange}
           variant="scrollable"
           scrollButtons="auto"
           sx={{ px: 1 }}
@@ -361,7 +421,7 @@ const StudentPage: React.FC = () => {
         </Tabs>
       </Paper>
 
-      <Box sx={{ mt: 2 }}>
+      <Box sx={contentSx}>
         {activeTab === 0 && (
           <Grid container spacing={2}>
             <Grid size={{ xs: 12, md: 8 }}>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
     Box,
@@ -34,6 +34,8 @@ import { useRtc } from '../context/RtcContext';
 import RtcHost from '../components/rtc/RtcHost';
 import RtcErrorBanner from '../components/rtc/RtcErrorBanner';
 import LibraryBooksIcon from "@mui/icons-material/LibraryBooks";
+import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
+import StudentProfileDrawer from "../components/videoCall/StudentProfileDrawer";
 
 interface VideoCallPageProps {
     identity?: string;
@@ -241,6 +243,7 @@ const RoomContent: React.FC<{
     const statsTimerRef = useRef<number | null>(null);
 
     const [showUnmutePrompt, setShowUnmutePrompt] = useState(false);
+    const resolvedStudentId = studentId ?? (user?.role === 'student' ? user.id : undefined);
 
     // ---------- Lightweight diagnostics logger ----------
     const postDiag = async (event: string, details?: any) => {
@@ -434,6 +437,68 @@ const RoomContent: React.FC<{
     };
 
     const [copied, setIsCopied] = useState(false);
+    const [studentProfileOpen, setStudentProfileOpen] = useState(false);
+    const [shareStudentProfile, setShareStudentProfile] = useState(false);
+    const [studentProfileTab, setStudentProfileTab] = useState(0);
+    const [sharedProfileOpen, setSharedProfileOpen] = useState(false);
+    const [sharedProfileTab, setSharedProfileTab] = useState(0);
+    const [sharedProfileBy, setSharedProfileBy] = useState<string | undefined>();
+    const isTutor = user?.role === 'tutor';
+
+    const sendStudentPanelState = useCallback(
+        async (open: boolean, tabOverride?: number) => {
+            if (!room || !isTutor) return;
+            try {
+                const payload = new TextEncoder().encode(
+                    JSON.stringify({
+                        t: 'STUDENT_PANEL',
+                        open,
+                        tab: tabOverride ?? studentProfileTab,
+                        from: user?.name || 'Teacher',
+                    }),
+                );
+                const target = getStudentRemote();
+                if (target) {
+                    await room.localParticipant.publishData(payload, {
+                        reliable: true,
+                        destinationIdentities: [target.identity],
+                    });
+                } else {
+                    await room.localParticipant.publishData(payload, { reliable: true });
+                }
+            } catch (err) {
+                console.warn('Failed to share student profile', err);
+            }
+        },
+        [room, isTutor, studentProfileTab, user?.name, getStudentRemote],
+    );
+
+    const handleStudentShareToggle = (value: boolean) => {
+        setShareStudentProfile(value);
+        if (value) {
+            if (!studentProfileOpen) {
+                setStudentProfileOpen(true);
+            }
+            void sendStudentPanelState(true);
+        } else {
+            void sendStudentPanelState(false);
+        }
+    };
+
+    const handleStudentDrawerClose = () => {
+        setStudentProfileOpen(false);
+        if (shareStudentProfile) {
+            setShareStudentProfile(false);
+            void sendStudentPanelState(false);
+        }
+    };
+
+    const handleStudentProfileTabChange = (tab: number) => {
+        setStudentProfileTab(tab);
+        if (shareStudentProfile) {
+            void sendStudentPanelState(true, tab);
+        }
+    };
 
     // Hook to manage workspace toggle and split ratio
     const [workspaceOpen, openWorkspace, closeWorkspace, splitRatio, setSplitRatio] = useWorkspaceToggle();
@@ -443,7 +508,6 @@ const RoomContent: React.FC<{
     const syncedGrammar = useSyncedGrammar(room, user?.role === 'tutor', workspaceOpen, openWorkspace);
     const syncedContent = useSyncedContent(room, user?.role === 'tutor');
 
-    const isTutor = user?.role === 'tutor';
     const theme = useTheme();
     const isSmallScreen = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -476,6 +540,17 @@ const RoomContent: React.FC<{
           if (msg?.t === 'REQUEST_UNMUTE' && !isTutor) {
             postDiag('request_unmute_received', msg);
             setShowUnmutePrompt(true);
+          } else if (msg?.t === 'STUDENT_PANEL' && !isTutor) {
+            const shouldOpen = Boolean(msg?.open);
+            setSharedProfileOpen(shouldOpen);
+            if (typeof msg?.tab === 'number') {
+              setSharedProfileTab(msg.tab);
+            }
+            if (shouldOpen) {
+              setSharedProfileBy(msg?.from || 'Teacher');
+            } else {
+              setSharedProfileBy(undefined);
+            }
           }
         } catch {
           /* ignore non-JSON data packets */
@@ -665,6 +740,29 @@ const RoomContent: React.FC<{
                     </Tooltip>
                 )}
 
+                {isTutor && studentId && (
+                    <Tooltip title={shareStudentProfile ? 'Sharing student profile' : 'Open student profile'}>
+                        <IconButton
+                            onClick={() => setStudentProfileOpen(true)}
+                            sx={{
+                                position: 'absolute',
+                                top: 188,
+                                left: 8,
+                                right: 'auto',
+                                zIndex: 1000,
+                                bgcolor: shareStudentProfile ? 'success.main' : 'primary.main',
+                                color: 'white',
+                                '&:hover': { bgcolor: shareStudentProfile ? 'success.dark' : 'primary.dark' },
+                                boxShadow: (theme) => theme.shadows[6],
+                            }}
+                            aria-label="Open student profile"
+                            aria-pressed={studentProfileOpen}
+                        >
+                            <PersonRoundedIcon />
+                        </IconButton>
+                    </Tooltip>
+                )}
+
                 {/* ---------- Left pane: VideoConference ----------------------- */}
                 <Box
                     sx={{
@@ -727,6 +825,27 @@ const RoomContent: React.FC<{
                             room={room}
                         />
                     </Box>
+                )}
+                {isTutor && studentId && (
+                    <StudentProfileDrawer
+                        open={studentProfileOpen}
+                        onClose={handleStudentDrawerClose}
+                        studentId={studentId}
+                        showShareToggle
+                        shareEnabled={shareStudentProfile}
+                        onShareChange={handleStudentShareToggle}
+                        activeTab={studentProfileTab}
+                        onTabChange={handleStudentProfileTabChange}
+                    />
+                )}
+                {!isTutor && resolvedStudentId && (
+                    <StudentProfileDrawer
+                        open={sharedProfileOpen}
+                        onClose={() => setSharedProfileOpen(false)}
+                        studentId={resolvedStudentId}
+                        activeTab={sharedProfileTab}
+                        sharedBy={sharedProfileBy}
+                    />
                 )}
             </Box>
         </WorkspaceProvider>
