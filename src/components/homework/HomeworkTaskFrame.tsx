@@ -232,6 +232,14 @@ const HomeworkTaskFrame: React.FC<Props> = ({ assignment, task, readOnly }) => {
       };
     }, [task.meta]);
 
+    const [attemptedCount, setAttemptedCount] = useState<number>(() => serverStats?.attemptedCount ?? 0);
+    const [correctCount, setCorrectCount] = useState<number>(() => serverStats?.correctCount ?? 0);
+
+    useEffect(() => {
+      setAttemptedCount(serverStats?.attemptedCount ?? 0);
+      setCorrectCount(serverStats?.correctCount ?? 0);
+    }, [task.id, serverStats?.attemptedCount, serverStats?.correctCount]);
+
     // load words
     const { data: allWords } = useQuery({
       queryKey: ['vocabulary', 'words'],
@@ -311,10 +319,14 @@ const HomeworkTaskFrame: React.FC<Props> = ({ assignment, task, readOnly }) => {
       });
       const newlyMastered = correct && !mergedMastered.has(wordId) && (streaks[wordId] || 0) + 1 >= masteryStreak;
       const nextMasteredCount = Math.min(total, masteredCount + (newlyMastered ? 1 : 0));
+      const nextAttemptedCount = attemptedCount + 1;
+      const nextCorrectCount = correctCount + (correct ? 1 : 0);
+      setAttemptedCount(nextAttemptedCount);
+      setCorrectCount(nextCorrectCount);
       const stats = {
         total,
-        attemptedCount: 1,
-        correctCount: correct ? 1 : 0,
+        attemptedCount: nextAttemptedCount,
+        correctCount: nextCorrectCount,
         masteredCount: nextMasteredCount,
       };
       const nextProgressPct = total > 0 ? clamp(Math.round((nextMasteredCount / total) * 100)) : 0;
@@ -334,12 +346,12 @@ const HomeworkTaskFrame: React.FC<Props> = ({ assignment, task, readOnly }) => {
       if (total > 0 && (masteredCount >= total || progressPct >= masteryPct)) {
         markCompleted({
           progressPct,
-          stats: { total, attemptedCount: 0, correctCount: 0, masteredCount },
+          stats: { total, attemptedCount, correctCount, masteredCount },
           masteredWordIds: Array.from(mergedMastered),
           meta: { lastProgressAt: new Date().toISOString() }
         });
       }
-    }, [readOnly, total, masteredCount, progressPct, masteryPct, mergedMastered, markCompleted]);
+    }, [readOnly, total, masteredCount, progressPct, masteryPct, mergedMastered, markCompleted, attemptedCount, correctCount]);
 
     const unmasteredWords = useMemo(() => words.filter((w: any) => !mergedMastered.has(w.id)), [words, mergedMastered]);
 
