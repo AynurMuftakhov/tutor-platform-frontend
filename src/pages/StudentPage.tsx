@@ -84,11 +84,23 @@ const AssignmentCardSmall: React.FC<{ a: AssignmentDto; onOpen: (assignment: Ass
   );
 };
 
-const StudentHomeworkTab: React.FC<{ studentId: string; isTeacher: boolean; onAssignmentOpen: (assignment: AssignmentDto) => void }> = ({ studentId, isTeacher, onAssignmentOpen }) => {
+const StudentHomeworkTab: React.FC<{ studentId: string; isTeacher: boolean; onAssignmentOpen: (assignment: AssignmentDto, preselectTaskId?: string | null) => void; autoOpenAssignmentId?: string | null; autoOpenTaskId?: string | null; onConsumedAutoOpen?: () => void; }> = ({ studentId, isTeacher, onAssignmentOpen, autoOpenAssignmentId, autoOpenTaskId, onConsumedAutoOpen }) => {
   const { data, isLoading, isError } = useStudentAssignments(studentId, undefined);
+  const list = data?.content || [];
+
+  // auto open command from parent (student sync)
+  React.useEffect(() => {
+    if (!autoOpenAssignmentId) return;
+    const a = list.find(x => x.id === autoOpenAssignmentId);
+    if (a) {
+      onAssignmentOpen(a, autoOpenTaskId);
+      onConsumedAutoOpen?.();
+    }
+  }, [autoOpenAssignmentId, autoOpenTaskId, list]);
+
   if (isLoading) return <Typography>Loading...</Typography>;
   if (isError) return <Typography color="error">Failed to load homework.</Typography>;
-  const list = data?.content || [];
+
   const header = (
     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, gap: 1, flexWrap: 'wrap' }}>
       <Typography variant="body2" color="text.secondary">Homework assigned to this student.</Typography>
@@ -115,7 +127,7 @@ const StudentHomeworkTab: React.FC<{ studentId: string; isTeacher: boolean; onAs
       <Grid container spacing={2}>
         {list.map(a => (
           <Grid size={{xs: 12, md:6}} key={a.id}>
-            <AssignmentCardSmall a={a} onOpen={onAssignmentOpen} />
+            <AssignmentCardSmall a={a} onOpen={(assn)=>onAssignmentOpen(assn, undefined)} />
           </Grid>
         ))}
       </Grid>
@@ -148,6 +160,14 @@ export interface StudentPageProps {
   onTabChange?: (tab: number) => void;
   initialTab?: number;
   hideOverviewTab?: boolean;
+  // sync hooks: open word and homework via commands
+  openWordId?: string | null;
+  onConsumeOpenWordCommand?: () => void;
+  autoOpenAssignmentId?: string | null;
+  autoOpenTaskId?: string | null;
+  onConsumeOpenAssignmentCommand?: () => void;
+  onEmbeddedAssignmentOpen?: (assignment: AssignmentDto, preselectTaskId?: string | null) => void;
+  onWordOpen?: (wordId: string) => void;
 }
 
 const StudentPage: React.FC<StudentPageProps> = ({
@@ -158,6 +178,13 @@ const StudentPage: React.FC<StudentPageProps> = ({
   onTabChange,
   initialTab = 0,
   hideOverviewTab = false,
+  openWordId,
+  onConsumeOpenWordCommand,
+  autoOpenAssignmentId,
+  autoOpenTaskId,
+  onConsumeOpenAssignmentCommand,
+  onEmbeddedAssignmentOpen,
+  onWordOpen,
 }) => {
   const { studentId: routeStudentId } = useParams();
   const navigate = useNavigate();
@@ -204,16 +231,17 @@ const StudentPage: React.FC<StudentPageProps> = ({
   const [assignOpen, setAssignOpen] = useState(false);
 
   const handleAssignmentOpen = useCallback(
-    (assignment: AssignmentDto) => {
+    (assignment: AssignmentDto, preselectTaskId?: string | null) => {
       if (embedded) {
         setOpenedAssignment(assignment);
-        const first = [...assignment.tasks].sort((a,b)=>a.ordinal-b.ordinal)[0]?.id || assignment.tasks[0]?.id || null;
+        const first = preselectTaskId || ([...assignment.tasks].sort((a,b)=>a.ordinal-b.ordinal)[0]?.id || assignment.tasks[0]?.id || null);
         setCurrentTaskId(first);
+        onEmbeddedAssignmentOpen?.(assignment, first);
       } else {
         navigate(`/homework/${assignment.id}`);
       }
     },
-    [embedded, navigate],
+    [embedded, navigate, onEmbeddedAssignmentOpen],
   );
 
   useEffect(() => {
@@ -395,7 +423,7 @@ const StudentPage: React.FC<StudentPageProps> = ({
                 </Grid>
               </>
             ) : (
-              <StudentHomeworkTab studentId={student.id} isTeacher={isTeacher} onAssignmentOpen={handleAssignmentOpen} />
+              <StudentHomeworkTab studentId={student.id} isTeacher={isTeacher} onAssignmentOpen={handleAssignmentOpen} autoOpenAssignmentId={autoOpenAssignmentId} autoOpenTaskId={autoOpenTaskId} onConsumedAutoOpen={onConsumeOpenAssignmentCommand} />
             )}
           </SectionCard>
         ),
@@ -435,7 +463,7 @@ const StudentPage: React.FC<StudentPageProps> = ({
               />
             </Box>
             <Box sx={{ maxHeight: 480, overflowY: 'auto' }}>
-              <VocabularyList data={filteredAssigned} readOnly />
+              <VocabularyList data={filteredAssigned} readOnly onWordOpen={onWordOpen} openWordId={openWordId} onWordDialogClose={onConsumeOpenWordCommand} />
             </Box>
 
             {/* Assign words modal */}

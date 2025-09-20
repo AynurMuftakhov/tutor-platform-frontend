@@ -27,6 +27,15 @@ interface StudentProfileDrawerProps {
   allowClose?: boolean;
   resizable?: boolean;
   initialWidth?: number;
+  // sync commands for student side
+  openWordIdCommand?: string | null;
+  onConsumeOpenWordCommand?: () => void;
+  openAssignmentIdCommand?: string | null;
+  openTaskIdCommand?: string | null;
+  onConsumeOpenAssignmentCommand?: () => void;
+  // teacher-side event bubbling
+  onEmbeddedAssignmentOpen?: (assignment: any, preselectTaskId?: string | null) => void;
+  onWordOpen?: (wordId: string) => void;
 }
 
 const StudentProfileDrawer: React.FC<StudentProfileDrawerProps> = ({
@@ -42,6 +51,13 @@ const StudentProfileDrawer: React.FC<StudentProfileDrawerProps> = ({
   allowClose = true,
   resizable = true,
   initialWidth = 840,
+  openWordIdCommand,
+  onConsumeOpenWordCommand,
+  openAssignmentIdCommand,
+  openTaskIdCommand,
+  onConsumeOpenAssignmentCommand,
+  onEmbeddedAssignmentOpen,
+  onWordOpen,
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
@@ -227,6 +243,15 @@ const StudentProfileDrawer: React.FC<StudentProfileDrawerProps> = ({
             hideOverviewTab
             activeTabOverride={activeTab}
             onTabChange={onTabChange}
+            // sync commands for student side
+            openWordId={openWordIdCommand}
+            onConsumeOpenWordCommand={onConsumeOpenWordCommand}
+            autoOpenAssignmentId={openAssignmentIdCommand}
+            autoOpenTaskId={openTaskIdCommand}
+            onConsumeOpenAssignmentCommand={onConsumeOpenAssignmentCommand}
+            // teacher-side bubble events
+            onEmbeddedAssignmentOpen={onEmbeddedAssignmentOpen as any}
+            onWordOpen={onWordOpen}
           />
         ) : (
           <Box

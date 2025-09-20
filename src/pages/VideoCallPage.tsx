@@ -202,9 +202,16 @@ const DailyCallLayout: React.FC<{
     const [sharedProfileOpen, setSharedProfileOpen] = useState(false);
     const [sharedProfileTab, setSharedProfileTab] = useState(0);
     const [sharedProfileBy, setSharedProfileBy] = useState<string | undefined>();
+    // Sync commands (student side) for Daily
+    const [openWordIdCmd, setOpenWordIdCmd] = useState<string | null>(null);
+    const [openAssignmentIdCmd, setOpenAssignmentIdCmd] = useState<string | null>(null);
+    const [openTaskIdCmd, setOpenTaskIdCmd] = useState<string | null>(null);
 
     const isTutor = user?.role === 'tutor';
     const resolvedStudentId = studentId ?? (user?.role === 'student' ? user.id : undefined);
+    // Embedded StudentPage tabs when used inside StudentProfileDrawer (Overview hidden):
+    const TAB_HOMEWORK = 0;
+    const TAB_DICTIONARY = 1;
 
     const generateDirectLinkDaily = useCallback(() => {
         const baseUrl = window.location.origin;
@@ -263,6 +270,44 @@ const DailyCallLayout: React.FC<{
         }
     };
 
+    // Teacher → Student sync (Daily only)
+    const sendWordOpenToStudent = React.useCallback(
+        (wordId: string) => {
+            if (!dailyCall || !isTutor) return;
+            // Do not send if sharing is not enabled
+            if (!shareStudentProfile) return;
+            try {
+                // ensure panel opens on Dictionary tab on student first (ordering)
+                sendStudentPanelState(true, TAB_DICTIONARY);
+                dailyCall.sendAppMessage({ t: 'WORD_OPEN', wordId, from: user?.name || 'Teacher' });
+            } catch (err) {
+                console.warn('Failed to send WORD_OPEN via Daily', err);
+            }
+        },
+        [dailyCall, isTutor, user?.name, sendStudentPanelState, shareStudentProfile],
+    );
+
+    const sendAssignmentOpenToStudent = React.useCallback(
+        (assignment: any, preselectTaskId?: string | null) => {
+            if (!dailyCall || !isTutor) return;
+            // Do not send if sharing is not enabled
+            if (!shareStudentProfile) return;
+            try {
+                // ensure Homework tab visible on student first (ordering)
+                sendStudentPanelState(true, TAB_HOMEWORK);
+                dailyCall.sendAppMessage({
+                    t: 'ASSIGNMENT_OPEN',
+                    assignmentId: assignment?.id,
+                    taskId: preselectTaskId ?? null,
+                    from: user?.name || 'Teacher',
+                });
+            } catch (err) {
+                console.warn('Failed to send ASSIGNMENT_OPEN via Daily', err);
+            }
+        },
+        [dailyCall, isTutor, user?.name, sendStudentPanelState, shareStudentProfile],
+    );
+
     useEffect(() => {
         if (!dailyCall) return;
 
@@ -279,6 +324,19 @@ const DailyCallLayout: React.FC<{
                 } else {
                     setSharedProfileBy(undefined);
                 }
+            } else if (msg?.t === 'WORD_OPEN' && !isTutor) {
+                // Open student profile on Dictionary tab and command open word dialog
+                setSharedProfileOpen(true);
+                setSharedProfileTab(TAB_DICTIONARY);
+                setOpenWordIdCmd(msg?.wordId || null);
+                setSharedProfileBy(msg?.from || 'Teacher');
+            } else if (msg?.t === 'ASSIGNMENT_OPEN' && !isTutor) {
+                // Open student profile on Homework tab and command embedded assignment open
+                setSharedProfileOpen(true);
+                setSharedProfileTab(TAB_HOMEWORK);
+                setOpenAssignmentIdCmd(msg?.assignmentId || null);
+                setOpenTaskIdCmd(msg?.taskId ?? null);
+                setSharedProfileBy(msg?.from || 'Teacher');
             }
         };
 
@@ -372,6 +430,8 @@ const DailyCallLayout: React.FC<{
                     onShareChange={handleStudentShareToggle}
                     activeTab={studentProfileTab}
                     onTabChange={handleStudentProfileTabChange}
+                    onWordOpen={sendWordOpenToStudent}
+                    onEmbeddedAssignmentOpen={sendAssignmentOpenToStudent}
                 />
             )}
             {!isTutor && resolvedStudentId && (
@@ -381,6 +441,12 @@ const DailyCallLayout: React.FC<{
                     studentId={resolvedStudentId}
                     activeTab={sharedProfileTab}
                     sharedBy={sharedProfileBy}
+                    // command props from Daily messages
+                    openWordIdCommand={openWordIdCmd}
+                    onConsumeOpenWordCommand={() => setOpenWordIdCmd(null)}
+                    openAssignmentIdCommand={openAssignmentIdCmd}
+                    openTaskIdCommand={openTaskIdCmd}
+                    onConsumeOpenAssignmentCommand={() => { setOpenAssignmentIdCmd(null); setOpenTaskIdCmd(null); }}
                 />
             )}
         </Box>
