@@ -13,6 +13,7 @@ import {LiveKitRoom, VideoConference, useRoomContext} from '@livekit/components-
 import MicIcon from '@mui/icons-material/Mic';
 import '@livekit/components-styles';
 import { RoomEvent, RemoteParticipant, createLocalAudioTrack } from 'livekit-client';
+import type { DailyEventObjectAppMessage } from '@daily-co/daily-js';
 import { useAuth } from '../context/AuthContext';
 import {fetchLiveKitToken, MicDiagPayload, postMicDiag} from '../services/api';
 import WorkZone from '../components/lessonDetail/WorkZone';
@@ -68,26 +69,10 @@ const VideoCallPage: React.FC<VideoCallPageProps> = (props) => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    // Daily provider copy-link button state and helpers
-    const [copiedDaily, setCopiedDaily] = useState(false);
-
-    const generateDirectLinkDaily = () => {
-        const baseUrl = window.location.origin;
-        const rn = roomName ?? '';
-        const sid = studentId ?? '';
-        return `${baseUrl}/video-call?identity=${sid}&roomName=${rn}`;
-    };
-
-    const handleCopyLinkDaily = () => {
-        navigator.clipboard.writeText(generateDirectLinkDaily());
-        setCopiedDaily(true);
-        setTimeout(() => setCopiedDaily(false), 3000);
-    };
-
     /* ------------------------------------------------------------------ */
     /* 1. Fetch LiveKit token                                             */
     /* ------------------------------------------------------------------ */
-    const { providerReady, provider, failureMessage, canFallbackToLiveKit, refreshJoin, forceFallbackToLiveKit, effectiveProvider } = useRtc();
+    const { providerReady, provider, refreshJoin, effectiveProvider } = useRtc();
     const currentProvider = (effectiveProvider ?? provider);
 
     useEffect(() => {
@@ -172,49 +157,11 @@ const VideoCallPage: React.FC<VideoCallPageProps> = (props) => {
 
     if (currentProvider === 'daily' && providerReady) {
         return (
-            <Box sx={{ width: '100%', height: '100vh', overflow: 'hidden', position: 'relative' }}>
-                {!!failureMessage && (
-                    <RtcErrorBanner
-                        message={failureMessage}
-                        canFallback={canFallbackToLiveKit}
-                        onRetry={() => refreshJoin()}
-                        onFallback={() => forceFallbackToLiveKit()}
-                    />
-                )}
-                {user?.role === 'tutor' && (
-                    <Box
-                        sx={{
-                            position: 'absolute',
-                            top: 48,
-                            right: 'auto',
-                            left: 8,
-                            zIndex: 1000,
-                            backgroundColor: 'rgba(255, 255, 255, 0.8)',
-                            borderRadius: '50%',
-                            padding: '4px',
-                        }}
-                    >
-                        {!copiedDaily ? (
-                            <Tooltip title="Copy direct link to this video call">
-                                <IconButton
-                                    onClick={handleCopyLinkDaily}
-                                    color="primary"
-                                    size="small"
-                                >
-                                    <ContentCopyIcon fontSize="small" />
-                                </IconButton>
-                            </Tooltip>
-                        ) : (
-                            <Tooltip title="Copied!">
-                                <IconButton color="success" size="small">
-                                    <DoneIcon fontSize="small" />
-                                </IconButton>
-                            </Tooltip>
-                        )}
-                    </Box>
-                )}
-                <RtcHost onLeft={handleLeave} />
-            </Box>
+            <DailyCallLayout
+                roomName={roomName ?? undefined}
+                studentId={studentId ?? undefined}
+                onLeave={handleLeave}
+            />
         );
     }
 
@@ -228,6 +175,215 @@ const VideoCallPage: React.FC<VideoCallPageProps> = (props) => {
         >
             <RoomContent lessonId={lessonId} studentId={studentId} />
         </LiveKitRoom>
+    );
+};
+
+/* -------------------------------------------------------------------- */
+/* DailyCallLayout – overlay UI for Daily provider                      */
+/* -------------------------------------------------------------------- */
+const DailyCallLayout: React.FC<{
+    roomName?: string;
+    studentId?: string;
+    onLeave: () => void;
+}> = ({ roomName, studentId, onLeave }) => {
+    const { user } = useAuth();
+    const {
+        failureMessage,
+        canFallbackToLiveKit,
+        refreshJoin,
+        forceFallbackToLiveKit,
+        dailyCall,
+    } = useRtc();
+
+    const [copiedDaily, setCopiedDaily] = useState(false);
+    const [studentProfileOpen, setStudentProfileOpen] = useState(false);
+    const [shareStudentProfile, setShareStudentProfile] = useState(false);
+    const [studentProfileTab, setStudentProfileTab] = useState(0);
+    const [sharedProfileOpen, setSharedProfileOpen] = useState(false);
+    const [sharedProfileTab, setSharedProfileTab] = useState(0);
+    const [sharedProfileBy, setSharedProfileBy] = useState<string | undefined>();
+
+    const isTutor = user?.role === 'tutor';
+    const resolvedStudentId = studentId ?? (user?.role === 'student' ? user.id : undefined);
+
+    const generateDirectLinkDaily = useCallback(() => {
+        const baseUrl = window.location.origin;
+        const rn = roomName ?? '';
+        const sid = studentId ?? '';
+        return `${baseUrl}/video-call?identity=${sid}&roomName=${rn}`;
+    }, [roomName, studentId]);
+
+    const handleCopyLinkDaily = useCallback(() => {
+        navigator.clipboard.writeText(generateDirectLinkDaily());
+        setCopiedDaily(true);
+        setTimeout(() => setCopiedDaily(false), 3000);
+    }, [generateDirectLinkDaily]);
+
+    const sendStudentPanelState = useCallback(
+        (open: boolean, tabOverride?: number) => {
+            if (!dailyCall || !isTutor) return;
+            try {
+                dailyCall.sendAppMessage({
+                    t: 'STUDENT_PANEL',
+                    open,
+                    tab: tabOverride ?? studentProfileTab,
+                    from: user?.name || 'Teacher',
+                });
+            } catch (err) {
+                console.warn('Failed to share student profile via Daily', err);
+            }
+        },
+        [dailyCall, isTutor, studentProfileTab, user?.name],
+    );
+
+    const handleStudentShareToggle = (value: boolean) => {
+        setShareStudentProfile(value);
+        if (value) {
+            if (!studentProfileOpen) {
+                setStudentProfileOpen(true);
+            }
+            sendStudentPanelState(true);
+        } else {
+            sendStudentPanelState(false);
+        }
+    };
+
+    const handleStudentDrawerClose = () => {
+        setStudentProfileOpen(false);
+        if (shareStudentProfile) {
+            setShareStudentProfile(false);
+            sendStudentPanelState(false);
+        }
+    };
+
+    const handleStudentProfileTabChange = (tab: number) => {
+        setStudentProfileTab(tab);
+        if (shareStudentProfile) {
+            sendStudentPanelState(true, tab);
+        }
+    };
+
+    useEffect(() => {
+        if (!dailyCall) return;
+
+        const onAppMessage = (event: DailyEventObjectAppMessage) => {
+            const msg = event?.data as any;
+            if (msg?.t === 'STUDENT_PANEL' && !isTutor) {
+                const shouldOpen = Boolean(msg?.open);
+                setSharedProfileOpen(shouldOpen);
+                if (typeof msg?.tab === 'number') {
+                    setSharedProfileTab(msg.tab);
+                }
+                if (shouldOpen) {
+                    setSharedProfileBy(msg?.from || 'Teacher');
+                } else {
+                    setSharedProfileBy(undefined);
+                }
+            }
+        };
+
+        dailyCall.on('app-message', onAppMessage);
+        return () => {
+            dailyCall.off('app-message', onAppMessage);
+        };
+    }, [dailyCall, isTutor]);
+
+    useEffect(() => {
+        if (!isTutor) return;
+        if (shareStudentProfile && dailyCall) {
+            sendStudentPanelState(true);
+        }
+    }, [shareStudentProfile, dailyCall, sendStudentPanelState, isTutor]);
+
+    return (
+        <Box sx={{ width: '100%', height: '100vh', overflow: 'hidden', position: 'relative' }}>
+            {!!failureMessage && (
+                <RtcErrorBanner
+                    message={failureMessage}
+                    canFallback={canFallbackToLiveKit}
+                    onRetry={() => refreshJoin()}
+                    onFallback={() => forceFallbackToLiveKit()}
+                />
+            )}
+            {isTutor && (
+                <Box
+                    sx={{
+                        position: 'absolute',
+                        top: 48,
+                        right: 'auto',
+                        left: 8,
+                        zIndex: 1000,
+                        backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                        borderRadius: '50%',
+                        padding: '4px',
+                    }}
+                >
+                    {!copiedDaily ? (
+                        <Tooltip title="Copy direct link to this video call">
+                            <IconButton
+                                onClick={handleCopyLinkDaily}
+                                color="primary"
+                                size="small"
+                            >
+                                <ContentCopyIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                    ) : (
+                        <Tooltip title="Copied!">
+                            <IconButton color="success" size="small">
+                                <DoneIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                    )}
+                </Box>
+            )}
+            {isTutor && studentId && (
+                <Tooltip title={shareStudentProfile ? 'Sharing student profile' : 'Open student profile'}>
+                    <IconButton
+                        onClick={() => setStudentProfileOpen(true)}
+                        sx={{
+                            position: 'absolute',
+                            top: 188,
+                            left: 8,
+                            right: 'auto',
+                            zIndex: 1000,
+                            bgcolor: shareStudentProfile ? 'success.main' : 'primary.main',
+                            color: 'white',
+                            '&:hover': { bgcolor: shareStudentProfile ? 'success.dark' : 'primary.dark' },
+                            boxShadow: (theme) => theme.shadows[6],
+                        }}
+                        aria-label="Open student profile"
+                        aria-pressed={studentProfileOpen}
+                    >
+                        <PersonRoundedIcon />
+                    </IconButton>
+                </Tooltip>
+            )}
+
+            <RtcHost onLeft={onLeave} />
+
+            {isTutor && studentId && (
+                <StudentProfileDrawer
+                    open={studentProfileOpen}
+                    onClose={handleStudentDrawerClose}
+                    studentId={studentId}
+                    showShareToggle
+                    shareEnabled={shareStudentProfile}
+                    onShareChange={handleStudentShareToggle}
+                    activeTab={studentProfileTab}
+                    onTabChange={handleStudentProfileTabChange}
+                />
+            )}
+            {!isTutor && resolvedStudentId && (
+                <StudentProfileDrawer
+                    open={sharedProfileOpen}
+                    onClose={() => setSharedProfileOpen(false)}
+                    studentId={resolvedStudentId}
+                    activeTab={sharedProfileTab}
+                    sharedBy={sharedProfileBy}
+                />
+            )}
+        </Box>
     );
 };
 

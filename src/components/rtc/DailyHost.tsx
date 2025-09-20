@@ -29,7 +29,7 @@ export default function DailyHost({ url, token, onLeft }: Props) {
   // Prebuilt options are constant
   const prebuiltOptions = useMemo(() => ({ showLeaveButton: true }), []);
 
-  const { setFailure } = useRtc();
+  const { setFailure, registerDailyCall } = useRtc();
 
   // Keep latest callbacks in refs (no effect churn)
   const onLeftRef = useRef<Props['onLeft']>(onLeft);
@@ -49,6 +49,7 @@ export default function DailyHost({ url, token, onLeft }: Props) {
 
     const cf = DailyIframe.createFrame(el, prebuiltOptions);
     callFrameRef.current = cf;
+    registerDailyCall(cf);
     log('callFrame created');
 
     const onError = (e: any) => {
@@ -70,9 +71,10 @@ export default function DailyHost({ url, token, onLeft }: Props) {
       try { cf.destroy(); } catch {}
       callFrameRef.current = null;
       joinedForUrlRef.current = undefined;
+      registerDailyCall(null);
       log('callFrame early-destroy (container lost)');
     };
-  }, [prebuiltOptions]);
+  }, [prebuiltOptions, registerDailyCall]);
 
   // Join once per URL when we have a frame and a container
   useEffect(() => {
@@ -105,8 +107,9 @@ export default function DailyHost({ url, token, onLeft }: Props) {
       }
       callFrameRef.current = null;
       joinedForUrlRef.current = undefined;
+      registerDailyCall(null);
     };
-  }, []);
+  }, [registerDailyCall]);
 
   return (
     <div ref={setParentEl} style={{ width: '100%', height: '100%' }} />
