@@ -3,6 +3,7 @@ import { Box, Button, Container, Grid, MenuItem, Stack, TextField, Typography, A
 import { CreateAssignmentDto, HomeworkTaskType, SourceKind } from '../../types/homework';
 import { useAuth } from '../../context/AuthContext';
 import { useCreateAssignment } from '../../hooks/useHomeworks';
+import { useAssignWords } from '../../hooks/useAssignments';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toOffsetDateTime } from '../../utils/datetime';
 import { fetchStudents, fetchUserById } from '../../services/api';
@@ -16,6 +17,7 @@ const TeacherHomeworkNewPage: React.FC = () => {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const create = useCreateAssignment(user?.id || '');
+  const assignWords = useAssignWords();
 
   const [studentId, setStudentId] = useState(params.get('studentId') || '');
   const [studentOptions, setStudentOptions] = useState<{ id: string; name: string; email?: string; avatar?: string }[]>([]);
@@ -130,6 +132,17 @@ const TeacherHomeworkNewPage: React.FC = () => {
 
     try {
       await create.mutateAsync(payload);
+      const vocabWordIds = Array.from(new Set(payload.tasks.flatMap(task => task.vocabWordIds ?? [])));
+      if (vocabWordIds.length > 0) {
+        try {
+          await assignWords.mutateAsync({
+            studentId: payload.studentId,
+            vocabularyWordIds: vocabWordIds,
+          });
+        } catch (assignError) {
+          console.error('Failed to assign vocabulary words to student', assignError);
+        }
+      }
       navigate('/t/homework');
     } catch (e) {
       // handled globally

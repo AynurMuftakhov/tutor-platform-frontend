@@ -24,6 +24,7 @@ import ContentPasteIcon from '@mui/icons-material/ContentPaste';
 import {useQuery} from '@tanstack/react-query';
 import {useAuth} from '../../context/AuthContext';
 import {useCreateAssignment} from '../../hooks/useHomeworks';
+import {useAssignWords} from '../../hooks/useAssignments';
 import {CreateAssignmentDto, HomeworkTaskType, SourceKind, AssignmentDto} from '../../types/homework';
 import {toOffsetDateTime} from '../../utils/datetime';
 import {fetchStudents, fetchUserById} from '../../services/api';
@@ -46,6 +47,7 @@ const WIDTH = 640; // within 560–680px
 const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, onClose, prefillStudentId, onSuccess, onCreateAndOpen }) => {
   const { user } = useAuth();
   const create = useCreateAssignment(user?.id || '');
+  const assignWords = useAssignWords();
 
   // Assignment fields
   const [studentId, setStudentId] = React.useState<string>('');
@@ -212,6 +214,17 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
     };
     try {
       const res = await create.mutateAsync(payload);
+      const vocabWordIds = Array.from(new Set(payload.tasks.flatMap(task => task.vocabWordIds ?? [])));
+      if (vocabWordIds.length > 0) {
+        try {
+          await assignWords.mutateAsync({
+            studentId: payload.studentId,
+            vocabularyWordIds: vocabWordIds,
+          });
+        } catch (assignError) {
+          console.error('Failed to assign vocabulary words to student', assignError);
+        }
+      }
       const studentLabel = selectedStudent?.name || studentId;
       onSuccess(res, studentLabel);
       if (openAfterCreate && onCreateAndOpen) onCreateAndOpen(res);
