@@ -29,7 +29,7 @@ export default function DailyHost({ url, token, onLeft }: Props) {
   // Prebuilt options are constant
   const prebuiltOptions = useMemo(() => ({ showLeaveButton: true }), []);
 
-  const { setFailure } = useRtc();
+  const { setFailure, setDailySend, notifyDailyListeners } = useRtc();
 
   // Keep latest callbacks in refs (no effect churn)
   const onLeftRef = useRef<Props['onLeft']>(onLeft);
@@ -57,17 +57,29 @@ export default function DailyHost({ url, token, onLeft }: Props) {
     };
     const onLeftHandler = async () => {
       log('left-meeting event');
-      try { await onLeftRef.current?.(); } catch {}
+      try { await onLeftRef.current?.(); } catch (e) { /* noop */ }
     };
+
+    const onAppMessage = (ev: any) => {
+      try { notifyDailyListeners(ev?.data); } catch (e) { /* noop */ }
+    };
+
+    // expose send to context
+    try {
+      setDailySend((msg: any) => { try { cf.sendAppMessage(msg, '*'); } catch (e) { /* noop */ } });
+    } catch (e) { /* noop */ }
 
     cf.on('error', onError);
     cf.on('left-meeting', onLeftHandler);
+    cf.on('app-message', onAppMessage);
 
     return () => {
       // detach listeners and destroy if the container disappears before unmount
-      try { cf.off('error', onError); } catch {}
-      try { cf.off('left-meeting', onLeftHandler); } catch {}
-      try { cf.destroy(); } catch {}
+      try { cf.off('error', onError); } catch (e) { /* noop */ }
+      try { cf.off('left-meeting', onLeftHandler); } catch (e) { /* noop */ }
+      try { cf.off('app-message', onAppMessage); } catch (e) { /* noop */ }
+      try { setDailySend(undefined); } catch (e) { /* noop */ }
+      try { cf.destroy(); } catch (e) { /* noop */ }
       callFrameRef.current = null;
       joinedForUrlRef.current = undefined;
       log('callFrame early-destroy (container lost)');
@@ -100,8 +112,8 @@ export default function DailyHost({ url, token, onLeft }: Props) {
       if (!cf) return;
       try {
         cf.leave().finally(() => cf.destroy());
-      } catch {
-        try { cf.destroy(); } catch {}
+      } catch (e) {
+        try { cf.destroy(); } catch (e2) { /* noop */ }
       }
       callFrameRef.current = null;
       joinedForUrlRef.current = undefined;

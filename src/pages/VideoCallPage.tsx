@@ -7,7 +7,11 @@ import {
     CircularProgress,
     IconButton,
     Tooltip,
-    Alert
+    Alert,
+    Drawer,
+    Divider,
+    FormControlLabel,
+    Switch
 } from '@mui/material';
 import {LiveKitRoom, VideoConference, useRoomContext} from '@livekit/components-react';
 import MicIcon from '@mui/icons-material/Mic';
@@ -34,6 +38,9 @@ import { useRtc } from '../context/RtcContext';
 import RtcHost from '../components/rtc/RtcHost';
 import RtcErrorBanner from '../components/rtc/RtcErrorBanner';
 import LibraryBooksIcon from "@mui/icons-material/LibraryBooks";
+import PersonIcon from "@mui/icons-material/Person";
+import StudentPage from "./StudentPage";
+import type { AssignmentDto } from "../types/homework";
 
 interface VideoCallPageProps {
     identity?: string;
@@ -58,6 +65,7 @@ const VideoCallPage: React.FC<VideoCallPageProps> = (props) => {
         (location.state?.roomName as string);
     const studentId = searchParams.get('studentId') ||
         (location.state?.studentId as string);
+    const effectiveStudentId: string | undefined = studentId || (user?.role === 'student' ? user?.id : undefined);
 
     const lessonId = roomName?.startsWith('lesson-') ? roomName.slice(7) : roomName;
     const previousPath = location.state?.from || '/dashboard';
@@ -69,11 +77,56 @@ const VideoCallPage: React.FC<VideoCallPageProps> = (props) => {
     // Daily provider copy-link button state and helpers
     const [copiedDaily, setCopiedDaily] = useState(false);
 
+    // Daily: student details panel state and messaging
+    const [studentPanelOpenDaily, setStudentPanelOpenDaily] = useState(false);
+    const [shareStudentPanelDaily, setShareStudentPanelDaily] = useState(false);
+    const [studentPanelMirrorOpenDaily, setStudentPanelMirrorOpenDaily] = useState(false);
+    const [spActiveTabMirrorDaily, setSpActiveTabMirrorDaily] = useState<number | undefined>(undefined);
+    const [spOpenedAssignmentMirrorDaily, setSpOpenedAssignmentMirrorDaily] = useState<AssignmentDto | null>(null);
+    const isTutor = user?.role === 'tutor';
+    const [studentDrawerWidthDaily, setStudentDrawerWidthDaily] = useState<number>(560);
+
+    const startResizeDaily = (e: React.MouseEvent) => {
+        e.preventDefault();
+        const startX = e.clientX;
+        const startWidth = studentDrawerWidthDaily;
+        const onMove = (ev: MouseEvent) => {
+            const delta = startX - ev.clientX; // dragging left increases width
+            let next = startWidth + delta;
+            const min = 360;
+            const max = Math.min(900, window.innerWidth - 200);
+            if (next < min) next = min;
+            if (next > max) next = max;
+            setStudentDrawerWidthDaily(next);
+        };
+        const onUp = () => {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+        };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+    };
+
+    const sendStudentPanelDaily = (open: boolean) => {
+        try { dailySend?.({ t: 'STUDENT_PANEL', open }); } catch (e) { /* noop */ }
+    };
+
+    const sendSpTabDaily = (idx: number) => {
+        try { dailySend?.({ t: 'SP_TAB', idx }); } catch (e) { /* noop */ }
+    };
+    const sendSpAssignDaily = (assignment: AssignmentDto | null) => {
+        try { dailySend?.({ t: 'SP_ASSIGN', assignment }); } catch (e) { /* noop */ }
+    };
+
     const generateDirectLinkDaily = () => {
         const baseUrl = window.location.origin;
         const rn = roomName ?? '';
-        const sid = studentId ?? '';
-        return `${baseUrl}/video-call?identity=${sid}&roomName=${rn}`;
+        const sid = effectiveStudentId ?? '';
+        const url = new URL(`${baseUrl}/video-call`);
+        if (sid) url.searchParams.set('identity', sid);
+        if (rn) url.searchParams.set('roomName', rn);
+        if (sid) url.searchParams.set('studentId', sid);
+        return url.toString();
     };
 
     const handleCopyLinkDaily = () => {
@@ -85,8 +138,32 @@ const VideoCallPage: React.FC<VideoCallPageProps> = (props) => {
     /* ------------------------------------------------------------------ */
     /* 1. Fetch LiveKit token                                             */
     /* ------------------------------------------------------------------ */
-    const { providerReady, provider, failureMessage, canFallbackToLiveKit, refreshJoin, forceFallbackToLiveKit, effectiveProvider } = useRtc();
+    const { providerReady, provider, failureMessage, canFallbackToLiveKit, refreshJoin, forceFallbackToLiveKit, effectiveProvider, addDailyListener, dailySend } = useRtc();
     const currentProvider = (effectiveProvider ?? provider);
+
+    useEffect(() => {
+        if (!providerReady || currentProvider !== 'daily') return;
+        // subscribe to app messages
+        const off = addDailyListener?.((msg: any) => {
+            try {
+                if (!isTutor && msg?.t === 'STUDENT_PANEL') {
+                    setStudentPanelMirrorOpenDaily(!!msg.open);
+                } else if (!isTutor && msg?.t === 'SP_TAB') {
+                    setSpActiveTabMirrorDaily(typeof msg.idx === 'number' ? msg.idx : undefined);
+                } else if (!isTutor && msg?.t === 'SP_ASSIGN') {
+                    setSpOpenedAssignmentMirrorDaily(msg.assignment || null);
+                }
+            } catch (e) { /* noop */ }
+        });
+        return () => { try { off?.(); } catch (e) { /* noop */ } };
+    }, [providerReady, currentProvider, addDailyListener, isTutor]);
+
+    useEffect(() => {
+        if (currentProvider !== 'daily' || !isTutor) return;
+        if (shareStudentPanelDaily) {
+            sendStudentPanelDaily(studentPanelOpenDaily);
+        }
+    }, [currentProvider, isTutor, shareStudentPanelDaily, studentPanelOpenDaily]);
 
     useEffect(() => {
         // Wait until the RTC provider is known before deciding what to do
@@ -211,6 +288,75 @@ const VideoCallPage: React.FC<VideoCallPageProps> = (props) => {
                         )}
                     </Box>
                 )}
+                {user?.role === 'tutor' && (
+                    <Tooltip title="Student details">
+                        <IconButton
+                            onClick={() => setStudentPanelOpenDaily(true)}
+                            sx={{
+                                position: 'absolute',
+                                top: 100,
+                                left: 8,
+                                right: 'auto',
+                                zIndex: 1000,
+                                bgcolor: 'primary.main',
+                                color: 'white',
+                                '&:hover': { bgcolor: 'primary.dark' },
+                            }}
+                            aria-label="Open student details"
+                        >
+                            <PersonIcon />
+                        </IconButton>
+                    </Tooltip>
+                )}
+
+                {/* Tutor Drawer: Student details (Daily) */}
+                <Drawer
+                  anchor="right"
+                  open={isTutor && studentPanelOpenDaily}
+                  onClose={() => {
+                    setStudentPanelOpenDaily(false);
+                    if (shareStudentPanelDaily) sendStudentPanelDaily(false);
+                  }}
+                  PaperProps={{ sx: { width: { xs: '100%', md: studentDrawerWidthDaily } } }}
+                >
+                  <Box sx={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 6, cursor: 'col-resize', zIndex: 2000 }} onMouseDown={startResizeDaily} />
+                  <Box sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Typography variant="h6" fontWeight={800}>Student details</Typography>
+                    <FormControlLabel
+                      control={<Switch checked={shareStudentPanelDaily} onChange={(e) => {
+                        const v = e.target.checked; setShareStudentPanelDaily(v); if (v && studentPanelOpenDaily) sendStudentPanelDaily(true); else sendStudentPanelDaily(false);
+                      }} />}
+                      label="Show to student"
+                    />
+                  </Box>
+                  <Divider />
+                  <Box sx={{ p: 0, height: '100%', overflow: 'auto' }}>
+                    {studentId && (
+                      <StudentPage studentIdProp={studentId} embedded />
+                    )}
+                  </Box>
+                </Drawer>
+
+                {/* Student mirror Drawer (Daily): opens when tutor shares */}
+                {!isTutor && (
+                  <Drawer
+                    anchor="right"
+                    open={studentPanelMirrorOpenDaily}
+                    onClose={() => setStudentPanelMirrorOpenDaily(false)}
+                    PaperProps={{ sx: { width: { xs: '100%', md: 560 } } }}
+                  >
+                    <Box sx={{ p: 2 }}>
+                      <Typography variant="h6" fontWeight={800}>Shared by your teacher</Typography>
+                    </Box>
+                    <Divider />
+                    <Box sx={{ p: 0, height: '100%', overflow: 'auto' }}>
+                      {studentId && (
+                        <StudentPage studentIdProp={studentId} embedded />
+                      )}
+                    </Box>
+                  </Drawer>
+                )}
+
                 <RtcHost onLeft={handleLeave} />
             </Box>
         );
@@ -349,6 +495,21 @@ const RoomContent: React.FC<{
       }
     };
 
+    // Share student details panel state with the student via LiveKit data channel
+    const sendStudentPanel = async (open: boolean) => {
+      try {
+        const payload = new TextEncoder().encode(JSON.stringify({ t: 'STUDENT_PANEL', open }));
+        const target = getStudentRemote();
+        if (target) {
+          await room.localParticipant.publishData(payload, { reliable: true, destinationIdentities: [target.identity] });
+        } else {
+          await room.localParticipant.publishData(payload, { reliable: true });
+        }
+      } catch (e) {
+        console.warn('Failed to send student panel state', e);
+      }
+    };
+
     // Local unmute flow that the student triggers
     const enableMicLocal = async () => {
       postDiag('enableMicLocal_start', {
@@ -435,6 +596,33 @@ const RoomContent: React.FC<{
 
     const [copied, setIsCopied] = useState(false);
 
+    // Student details panel state
+    const [studentPanelOpen, setStudentPanelOpen] = useState(false);
+    const [shareStudentPanel, setShareStudentPanel] = useState(false);
+    const [studentPanelMirrorOpen, setStudentPanelMirrorOpen] = useState(false);
+    const [studentDrawerWidth, setStudentDrawerWidth] = useState<number>(560);
+
+    const startResize = (e: React.MouseEvent) => {
+        e.preventDefault();
+        const startX = e.clientX;
+        const startWidth = studentDrawerWidth;
+        const onMove = (ev: MouseEvent) => {
+            const delta = startX - ev.clientX; // dragging left increases width
+            let next = startWidth + delta;
+            const min = 360;
+            const max = Math.min(900, window.innerWidth - 200);
+            if (next < min) next = min;
+            if (next > max) next = max;
+            setStudentDrawerWidth(next);
+        };
+        const onUp = () => {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+        };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+    };
+
     // Hook to manage workspace toggle and split ratio
     const [workspaceOpen, openWorkspace, closeWorkspace, splitRatio, setSplitRatio] = useWorkspaceToggle();
 
@@ -476,6 +664,8 @@ const RoomContent: React.FC<{
           if (msg?.t === 'REQUEST_UNMUTE' && !isTutor) {
             postDiag('request_unmute_received', msg);
             setShowUnmutePrompt(true);
+          } else if (msg?.t === 'STUDENT_PANEL' && !isTutor) {
+            setStudentPanelMirrorOpen(!!msg.open);
           }
         } catch {
           /* ignore non-JSON data packets */
@@ -487,6 +677,14 @@ const RoomContent: React.FC<{
         room.off(RoomEvent.DataReceived, onData);
       };
     }, [room, isTutor]);
+
+    // When tutor toggles sharing or opens/closes the panel, broadcast state to student
+    useEffect(() => {
+      if (!room || !isTutor) return;
+      if (shareStudentPanel) {
+        void sendStudentPanel(studentPanelOpen);
+      }
+    }, [room, isTutor, shareStudentPanel, studentPanelOpen]);
 
     useEffect(() => {
         if (!room) return;
@@ -658,9 +856,31 @@ const RoomContent: React.FC<{
                                 color: 'white',
                                 '&:hover': { bgcolor: 'primary.dark' },
                             }}
-                            aria-label="Open workspace"
+                            aria-label="Ask to unmute"
                         >
                             <MicIcon />
+                        </IconButton>
+                    </Tooltip>
+                )}
+
+                {/* Tutor-only: open Student details */}
+                {isTutor && (
+                    <Tooltip title="Student details">
+                        <IconButton
+                            onClick={() => setStudentPanelOpen(true)}
+                            sx={{
+                                position: 'absolute',
+                                top: 188,
+                                left: 8,
+                                right: 'auto',
+                                zIndex: 1000,
+                                bgcolor: 'primary.main',
+                                color: 'white',
+                                '&:hover': { bgcolor: 'primary.dark' },
+                            }}
+                            aria-label="Open student details"
+                        >
+                            <PersonIcon />
                         </IconButton>
                     </Tooltip>
                 )}
@@ -727,6 +947,54 @@ const RoomContent: React.FC<{
                             room={room}
                         />
                     </Box>
+                )}
+
+                {/* Tutor Drawer: Student details */}
+                <Drawer
+                  anchor="right"
+                  open={isTutor && studentPanelOpen}
+                  onClose={() => {
+                    setStudentPanelOpen(false);
+                    if (shareStudentPanel) sendStudentPanel(false);
+                  }}
+                  PaperProps={{ sx: { width: { xs: '100%', md: studentDrawerWidth } } }}
+                >
+                  <Box sx={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 6, cursor: 'col-resize', zIndex: 2000 }} onMouseDown={startResize} />
+                  <Box sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Typography variant="h6" fontWeight={800}>Student details</Typography>
+                    <FormControlLabel
+                      control={<Switch checked={shareStudentPanel} onChange={(e) => {
+                        const v = e.target.checked; setShareStudentPanel(v); if (v && studentPanelOpen) sendStudentPanel(true); else sendStudentPanel(false);
+                      }} />}
+                      label="Show to student"
+                    />
+                  </Box>
+                  <Divider />
+                  <Box sx={{ p: 0, height: '100%', overflow: 'auto' }}>
+                    {studentId && (
+                      <StudentPage studentIdProp={studentId} embedded />
+                    )}
+                  </Box>
+                </Drawer>
+
+                {/* Student mirror Drawer: opens when tutor shares */}
+                {!isTutor && (
+                  <Drawer
+                    anchor="right"
+                    open={studentPanelMirrorOpen}
+                    onClose={() => setStudentPanelMirrorOpen(false)}
+                    PaperProps={{ sx: { width: { xs: '100%', md: 560 } } }}
+                  >
+                    <Box sx={{ p: 2 }}>
+                      <Typography variant="h6" fontWeight={800}>Shared by your teacher</Typography>
+                    </Box>
+                    <Divider />
+                    <Box sx={{ p: 0, height: '100%', overflow: 'auto' }}>
+                      {studentId && (
+                        <StudentPage studentIdProp={studentId} embedded />
+                      )}
+                    </Box>
+                  </Drawer>
                 )}
             </Box>
         </WorkspaceProvider>

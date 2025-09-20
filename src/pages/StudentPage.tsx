@@ -38,10 +38,11 @@ import { Lesson } from "../types/Lesson";
 import NextLessonCard from "../components/dashboard/NextLessonCard";
 import AssignModal from "../components/vocabulary/AssignModal";
 import { useStudentAssignments } from "../hooks/useHomeworks";
-import type { AssignmentDto } from "../types/homework";
+import type { AssignmentDto, TaskDto } from "../types/homework";
 import { Link as RouterLink } from 'react-router-dom';
+import HomeworkTaskFrame from "../components/homework/HomeworkTaskFrame";
 
-const AssignmentCardSmall: React.FC<{ a: AssignmentDto }> = ({ a }) => {
+const AssignmentCardSmall: React.FC<{ a: AssignmentDto; onOpen?: (a: AssignmentDto) => void }> = ({ a, onOpen }) => {
   const total = a.tasks.length;
   const done = a.tasks.filter(t => t.status === 'COMPLETED').length;
   const pct = total ? Math.round((done / total) * 100) : 0;
@@ -52,8 +53,8 @@ const AssignmentCardSmall: React.FC<{ a: AssignmentDto }> = ({ a }) => {
       sx={{ p:2, height: '100%', cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' } }}
       role="button"
       tabIndex={0}
-      onClick={() => { window.location.href = `/homework/${a.id}`; }}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); window.location.href = `/homework/${a.id}`; } }}
+      onClick={(e) => { if (onOpen) { e.preventDefault(); onOpen(a); } else { window.location.href = `/homework/${a.id}`; } }}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (onOpen) onOpen(a); else window.location.href = `/homework/${a.id}`; } }}
     >
       <Box display="flex" alignItems="center" justifyContent="space-between" gap={2}>
         <Box sx={{ minWidth:0 }}>
@@ -74,7 +75,7 @@ const AssignmentCardSmall: React.FC<{ a: AssignmentDto }> = ({ a }) => {
   );
 };
 
-const StudentHomeworkTab: React.FC<{ studentId: string; isTeacher: boolean }> = ({ studentId, isTeacher }) => {
+const StudentHomeworkTab: React.FC<{ studentId: string; isTeacher: boolean; onOpenAssignment?: (a: AssignmentDto) => void }> = ({ studentId, isTeacher, onOpenAssignment }) => {
   const { data, isLoading, isError } = useStudentAssignments(studentId, undefined);
   if (isLoading) return <Typography>Loading...</Typography>;
   if (isError) return <Typography color="error">Failed to load homework.</Typography>;
@@ -105,7 +106,7 @@ const StudentHomeworkTab: React.FC<{ studentId: string; isTeacher: boolean }> = 
       <Grid container spacing={2}>
         {list.map(a => (
           <Grid size={{xs: 12, md:6}} key={a.id}>
-            <AssignmentCardSmall a={a} />
+            <AssignmentCardSmall a={a} onOpen={onOpenAssignment} />
           </Grid>
         ))}
       </Grid>
@@ -130,14 +131,44 @@ const SectionCard: React.FC<{ title: string; children?: React.ReactNode }> = ({ 
   </Paper>
 );
 
-const StudentPage: React.FC = () => {
-  const { studentId } = useParams();
+interface StudentPageProps { studentIdProp?: string; embedded?: boolean; activeTabControlled?: number; onActiveTabChange?: (v:number)=>void; openedAssignmentExternal?: AssignmentDto|null; onOpenAssignment?: (a: AssignmentDto|null)=>void }
+const StudentPage: React.FC<StudentPageProps> = ({ studentIdProp, embedded, activeTabControlled, onActiveTabChange, openedAssignmentExternal, onOpenAssignment }) => {
+  const params = useParams();
+  const studentId = (studentIdProp ?? params.studentId) as string | undefined;
   const navigate = useNavigate();
   const { user } = useAuth();
 
   const [student, setStudent] = useState<StudentProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState(0);
+    const [openedAssignment, setOpenedAssignment] = useState<AssignmentDto | null>(null);
+    const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
+    const currentTask = useMemo(() => openedAssignment?.tasks.find(t => t.id === currentTaskId), [openedAssignment, currentTaskId]);
+    const handleOpenAssignment = (a: AssignmentDto) => {
+      setOpenedAssignment(a);
+      const sorted = [...a.tasks].sort((x,y)=>x.ordinal-y.ordinal);
+      const next = sorted.find(t => t.status !== 'COMPLETED') || sorted[0];
+      setCurrentTaskId(next?.id || null);
+      try { (onOpenAssignment as any)?.(a); } catch (e) { /* noop */ }
+    };
+
+    // Controlled tab support
+    useEffect(() => {
+      if (typeof activeTabControlled === 'number' && activeTabControlled !== activeTab) {
+        setActiveTab(activeTabControlled);
+      }
+    }, [activeTabControlled]);
+
+    // External assignment opening
+    useEffect(() => {
+      if (openedAssignmentExternal === undefined) return;
+      setOpenedAssignment(openedAssignmentExternal || null);
+      if (openedAssignmentExternal) {
+        const sorted = [...openedAssignmentExternal.tasks].sort((x,y)=>x.ordinal-y.ordinal);
+        const next = sorted.find(t => t.status !== 'COMPLETED') || sorted[0];
+        setCurrentTaskId(next?.id || null);
+      }
+    }, [openedAssignmentExternal]);
 
   // Next lesson state
   const [upcoming, setUpcoming] = useState<Lesson[] | null>(null);
@@ -295,12 +326,19 @@ const StudentPage: React.FC = () => {
     );
   }
 
+  const overviewIdx = embedded ? -1 : 0;
+  const homeworkIdx = embedded ? 0 : 1;
+  const dictionaryIdx = embedded ? 1 : 2;
+  const activityIdx = embedded ? 2 : 3;
+
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 6 }}>
       {/* Header bar */}
       <Box display="flex" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
         <Box display="flex" alignItems="center" gap={2}>
-          <IconButton onClick={() => navigate(-1)}><ArrowBackIcon /></IconButton>
+          {!embedded && (
+                      <IconButton onClick={() => navigate(-1)}><ArrowBackIcon /></IconButton>
+                    )}
           <Avatar
             src={student.avatar}
             alt={student.name}
@@ -349,12 +387,12 @@ const StudentPage: React.FC = () => {
       <Paper elevation={0} sx={{ borderRadius: 1, bgcolor: (t) => t.palette.background.paper }}>
         <Tabs
           value={activeTab}
-          onChange={(_, v) => setActiveTab(v)}
+          onChange={(_, v) => { setActiveTab(v); try { onActiveTabChange && onActiveTabChange(v); } catch (e) { /* noop */ } }}
           variant="scrollable"
           scrollButtons="auto"
           sx={{ px: 1 }}
         >
-          <Tab label="Overview" />
+          {!embedded && <Tab label="Overview" />}
           <Tab label="Homework" />
           <Tab label="Dictionary" />
           <Tab label="Activity" />
@@ -362,7 +400,7 @@ const StudentPage: React.FC = () => {
       </Paper>
 
       <Box sx={{ mt: 2 }}>
-        {activeTab === 0 && (
+        {activeTab === overviewIdx && !embedded && (
           <Grid container spacing={2}>
             <Grid size={{ xs: 12, md: 8 }}>
               <SectionCard title="Next lesson">
@@ -385,13 +423,38 @@ const StudentPage: React.FC = () => {
           </Grid>
         )}
 
-        {activeTab === 1 && (
-          <SectionCard title="Assigned homework">
-            <StudentHomeworkTab studentId={student.id} isTeacher={isTeacher} />
+        {activeTab === homeworkIdx && (
+          <SectionCard title={embedded && openedAssignment ? "Homework" : "Assigned homework"}>
+            {embedded && openedAssignment ? (
+              <>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                  <Button size="small" startIcon={<ArrowBackIcon />} onClick={() => { setOpenedAssignment(null); try { (onOpenAssignment as any)?.(null); } catch (e) { /* noop */ } }}>Back to list</Button>
+                  <Typography variant="subtitle1" fontWeight={700}>{openedAssignment.title}</Typography>
+                </Box>
+                <Grid container spacing={2}>
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      {openedAssignment.tasks.sort((a,b)=>a.ordinal-b.ordinal).map(t => (
+                        <Button key={t.id} variant={t.id===currentTaskId? 'contained':'outlined'} size="small" sx={{ justifyContent: 'flex-start' }} onClick={() => setCurrentTaskId(t.id)}>
+                          {t.ordinal}. {t.title}
+                        </Button>
+                      ))}
+                    </Box>
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 8 }}>
+                    {currentTask && (
+                      <HomeworkTaskFrame assignment={openedAssignment as AssignmentDto} task={currentTask as TaskDto} readOnly={isTeacher} />
+                    )}
+                  </Grid>
+                </Grid>
+              </>
+            ) : (
+              <StudentHomeworkTab studentId={student.id} isTeacher={isTeacher} onOpenAssignment={embedded ? handleOpenAssignment : undefined} />
+            )}
           </SectionCard>
         )}
 
-        {activeTab === 2 && (
+        {activeTab === dictionaryIdx && (
           <SectionCard title="Dictionary">
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 2, flexWrap: 'wrap' }}>
               <Typography variant="body2" color="text.secondary">Manage student vocabulary.</Typography>
@@ -435,7 +498,7 @@ const StudentPage: React.FC = () => {
           </SectionCard>
         )}
 
-        {activeTab === 3 && (
+        {activeTab === activityIdx && (
           <SectionCard title="Activity">
             <Typography variant="body2" color="text.secondary">Recent activity and notes will be shown here.</Typography>
           </SectionCard>
