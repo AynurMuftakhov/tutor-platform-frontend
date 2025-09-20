@@ -10,7 +10,8 @@ import {
   Typography,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
-import { alpha } from "@mui/material/styles";
+import { alpha, useTheme } from "@mui/material/styles";
+import useMediaQuery from "@mui/material/useMediaQuery";
 import StudentPage from "../../pages/StudentPage";
 
 interface StudentProfileDrawerProps {
@@ -24,6 +25,8 @@ interface StudentProfileDrawerProps {
   onTabChange?: (tab: number) => void;
   sharedBy?: string;
   allowClose?: boolean;
+  resizable?: boolean;
+  initialWidth?: number;
 }
 
 const StudentProfileDrawer: React.FC<StudentProfileDrawerProps> = ({
@@ -37,7 +40,66 @@ const StudentProfileDrawer: React.FC<StudentProfileDrawerProps> = ({
   onTabChange,
   sharedBy,
   allowClose = true,
+  resizable = true,
+  initialWidth = 480,
 }) => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  const minWidth = 360;
+  const maxWidth = 720;
+  const clamp = React.useCallback(
+    (value: number) => Math.min(maxWidth, Math.max(minWidth, value)),
+    [maxWidth, minWidth],
+  );
+  const [width, setWidth] = React.useState(() => clamp(initialWidth));
+  const [isResizing, setIsResizing] = React.useState(false);
+  const startXRef = React.useRef(0);
+  const startWidthRef = React.useRef(width);
+
+  React.useEffect(() => {
+    setWidth(clamp(initialWidth));
+  }, [initialWidth, clamp]);
+
+  React.useEffect(() => {
+    if (!resizable || isMobile || !isResizing) return;
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const delta = startXRef.current - event.clientX;
+      const nextWidth = clamp(startWidthRef.current + delta);
+      setWidth(nextWidth);
+    };
+
+    const stopResizing = () => {
+      setIsResizing(false);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", stopResizing);
+    window.addEventListener("pointercancel", stopResizing);
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", stopResizing);
+      window.removeEventListener("pointercancel", stopResizing);
+    };
+  }, [clamp, resizable, isMobile, isResizing]);
+
+  const handleResizePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!resizable || isMobile) return;
+    event.preventDefault();
+    startXRef.current = event.clientX;
+    startWidthRef.current = width;
+    setIsResizing(true);
+  };
+
+  const handleResizeKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!resizable || isMobile) return;
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    const direction = event.key === "ArrowLeft" ? 32 : -32;
+    setWidth((prev) => clamp(prev + direction));
+  };
+
   const handleShareToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
     onShareChange?.(event.target.checked);
   };
@@ -56,7 +118,11 @@ const StudentProfileDrawer: React.FC<StudentProfileDrawerProps> = ({
       ModalProps={{ keepMounted: true }}
       PaperProps={{
         sx: (theme) => ({
-          width: { xs: "100%", sm: 420, md: 480 },
+          position: "relative",
+          width: { xs: "100%", sm: width },
+          minWidth: { xs: "100%", sm: minWidth },
+          maxWidth: { xs: "100%", sm: maxWidth },
+          transition: isResizing ? "none" : "width 200ms ease",
           borderTopLeftRadius: { xs: 0, sm: 20 },
           borderBottomLeftRadius: { xs: 0, sm: 20 },
           bgcolor:
@@ -68,9 +134,45 @@ const StudentProfileDrawer: React.FC<StudentProfileDrawerProps> = ({
           boxShadow: "0 24px 70px rgba(15, 23, 42, 0.35)",
           display: "flex",
           flexDirection: "column",
+          userSelect: isResizing ? "none" : undefined,
         }),
       }}
     >
+      {!isMobile && resizable && (
+        <Box
+          role="separator"
+          aria-orientation="vertical"
+          tabIndex={0}
+          onPointerDown={handleResizePointerDown}
+          onKeyDown={handleResizeKeyDown}
+          sx={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: 12,
+            cursor: "ew-resize",
+            display: { xs: "none", sm: "block" },
+            zIndex: 2,
+            touchAction: "none",
+            "&::after": {
+              content: '""',
+              position: "absolute",
+              left: "50%",
+              top: "50%",
+              transform: "translate(-50%, -50%)",
+              width: 2,
+              height: "36%",
+              borderRadius: 1,
+              bgcolor: alpha(theme.palette.text.primary, 0.2),
+            },
+            "&:focus-visible": {
+              outline: `2px solid ${theme.palette.primary.main}`,
+              outlineOffset: 2,
+            },
+          }}
+        />
+      )}
       <Box sx={{ px: { xs: 2, sm: 3 }, pt: 2.5, pb: 1.5 }}>
         <Box display="flex" justifyContent="space-between" alignItems="flex-start" gap={2}>
           <Box>
@@ -123,6 +225,7 @@ const StudentProfileDrawer: React.FC<StudentProfileDrawerProps> = ({
           <StudentPage
             studentIdOverride={studentId}
             embedded
+            hideOverviewTab
             activeTabOverride={activeTab}
             onTabChange={onTabChange}
           />

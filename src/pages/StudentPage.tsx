@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   Avatar,
@@ -41,20 +41,29 @@ import AssignModal from "../components/vocabulary/AssignModal";
 import { useStudentAssignments } from "../hooks/useHomeworks";
 import type { AssignmentDto } from "../types/homework";
 import { Link as RouterLink } from 'react-router-dom';
+import { useTheme } from "@mui/material/styles";
+import useMediaQuery from "@mui/material/useMediaQuery";
 
-const AssignmentCardSmall: React.FC<{ a: AssignmentDto }> = ({ a }) => {
+const AssignmentCardSmall: React.FC<{ a: AssignmentDto; onOpen: (assignment: AssignmentDto) => void }> = ({ a, onOpen }) => {
   const total = a.tasks.length;
   const done = a.tasks.filter(t => t.status === 'COMPLETED').length;
   const pct = total ? Math.round((done / total) * 100) : 0;
   const due = a.dueAt ? new Date(a.dueAt) : null;
+  const handleActivate = () => onOpen(a);
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onOpen(a);
+    }
+  };
   return (
     <Paper
       variant="outlined"
       sx={{ p:2, height: '100%', cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' } }}
       role="button"
       tabIndex={0}
-      onClick={() => { window.location.href = `/homework/${a.id}`; }}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); window.location.href = `/homework/${a.id}`; } }}
+      onClick={handleActivate}
+      onKeyDown={handleKeyDown}
     >
       <Box display="flex" alignItems="center" justifyContent="space-between" gap={2}>
         <Box sx={{ minWidth:0 }}>
@@ -75,7 +84,7 @@ const AssignmentCardSmall: React.FC<{ a: AssignmentDto }> = ({ a }) => {
   );
 };
 
-const StudentHomeworkTab: React.FC<{ studentId: string; isTeacher: boolean }> = ({ studentId, isTeacher }) => {
+const StudentHomeworkTab: React.FC<{ studentId: string; isTeacher: boolean; onAssignmentOpen: (assignment: AssignmentDto) => void }> = ({ studentId, isTeacher, onAssignmentOpen }) => {
   const { data, isLoading, isError } = useStudentAssignments(studentId, undefined);
   if (isLoading) return <Typography>Loading...</Typography>;
   if (isError) return <Typography color="error">Failed to load homework.</Typography>;
@@ -106,7 +115,7 @@ const StudentHomeworkTab: React.FC<{ studentId: string; isTeacher: boolean }> = 
       <Grid container spacing={2}>
         {list.map(a => (
           <Grid size={{xs: 12, md:6}} key={a.id}>
-            <AssignmentCardSmall a={a} />
+            <AssignmentCardSmall a={a} onOpen={onAssignmentOpen} />
           </Grid>
         ))}
       </Grid>
@@ -138,6 +147,7 @@ export interface StudentPageProps {
   activeTabOverride?: number;
   onTabChange?: (tab: number) => void;
   initialTab?: number;
+  hideOverviewTab?: boolean;
 }
 
 const StudentPage: React.FC<StudentPageProps> = ({
@@ -147,10 +157,13 @@ const StudentPage: React.FC<StudentPageProps> = ({
   activeTabOverride,
   onTabChange,
   initialTab = 0,
+  hideOverviewTab = false,
 }) => {
   const { studentId: routeStudentId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const theme = useTheme();
+  const fullScreenPreview = useMediaQuery(theme.breakpoints.down('sm'));
 
   const resolvedStudentId = studentIdOverride ?? routeStudentId;
 
@@ -158,6 +171,7 @@ const StudentPage: React.FC<StudentPageProps> = ({
   const [loading, setLoading] = useState(true);
   const [activeTabState, setActiveTabState] = useState(initialTab);
   const activeTab = activeTabOverride ?? activeTabState;
+  const [previewAssignment, setPreviewAssignment] = useState<AssignmentDto | null>(null);
 
   // Next lesson state
   const [upcoming, setUpcoming] = useState<Lesson[] | null>(null);
@@ -188,6 +202,19 @@ const StudentPage: React.FC<StudentPageProps> = ({
 
   // Assign modal state
   const [assignOpen, setAssignOpen] = useState(false);
+
+  const handleAssignmentOpen = useCallback(
+    (assignment: AssignmentDto) => {
+      if (embedded) {
+        setPreviewAssignment(assignment);
+      } else {
+        navigate(`/homework/${assignment.id}`);
+      }
+    },
+    [embedded, navigate],
+  );
+
+  const handlePreviewClose = () => setPreviewAssignment(null);
 
   useEffect(() => {
     const load = async () => {
@@ -306,6 +333,115 @@ const StudentPage: React.FC<StudentPageProps> = ({
     }
   };
 
+  const tabDefinitions = useMemo(() => {
+    if (!student) {
+      return [];
+    }
+    return [
+      {
+        label: "Overview",
+        hidden: hideOverviewTab,
+        content: (
+          <Grid container spacing={2}>
+            <Grid size={{ xs: 12, md: 8 }}>
+              <SectionCard title="Next lesson">
+                {upcoming === null ? (
+                  <Typography variant="body2" color="text.secondary">Loading next lesson…</Typography>
+                ) : upcomingError ? (
+                  <Typography variant="body2" color="error.main">{upcomingError}</Typography>
+                ) : upcoming.length > 0 ? (
+                  <NextLessonCard lesson={upcoming[0]} />
+                ) : (
+                  <Typography variant="body2" color="text.secondary">No next lesson scheduled.</Typography>
+                )}
+              </SectionCard>
+            </Grid>
+            <Grid size={{ xs: 12, md: 4 }}>
+              <SectionCard title="Progress">
+                <Typography variant="body2" color="text.secondary">Progress charts and stats will appear here.</Typography>
+              </SectionCard>
+            </Grid>
+          </Grid>
+        ),
+      },
+      {
+        label: "Homework",
+        hidden: false,
+        content: (
+          <SectionCard title="Assigned homework">
+            <StudentHomeworkTab studentId={student.id} isTeacher={isTeacher} onAssignmentOpen={handleAssignmentOpen} />
+          </SectionCard>
+        ),
+      },
+      {
+        label: "Dictionary",
+        hidden: false,
+        content: (
+          <SectionCard title="Dictionary">
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 2, flexWrap: 'wrap' }}>
+              <Typography variant="body2" color="text.secondary">Manage student vocabulary.</Typography>
+              {isTeacher && (
+                <Button
+                  variant="contained"
+                  startIcon={<PersonAddIcon />}
+                  onClick={() => setAssignOpen(true)}
+                  sx={{ borderRadius: 2 }}
+                >
+                  Assign words
+                </Button>
+              )}
+            </Box>
+            <Box sx={{ mb: 2, maxWidth: 420 }}>
+              <TextField
+                fullWidth
+                size="small"
+                placeholder="Search words…"
+                value={dictSearch}
+                onChange={(e) => setDictSearch(e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon />
+                    </InputAdornment>
+                  )
+                }}
+              />
+            </Box>
+            <Box sx={{ maxHeight: 480, overflowY: 'auto' }}>
+              <VocabularyList data={filteredAssigned} readOnly />
+            </Box>
+
+            {/* Assign words modal */}
+            <AssignModal
+              open={assignOpen}
+              studentId={student.id}
+              onClose={() => setAssignOpen(false)}
+            />
+          </SectionCard>
+        ),
+      },
+      {
+        label: "Activity",
+        hidden: false,
+        content: (
+          <SectionCard title="Activity">
+            <Typography variant="body2" color="text.secondary">Recent activity and notes will be shown here.</Typography>
+          </SectionCard>
+        ),
+      },
+    ];
+  }, [student, hideOverviewTab, upcoming, upcomingError, isTeacher, handleAssignmentOpen, dictSearch, filteredAssigned, assignOpen]);
+
+  const visibleTabs = tabDefinitions.filter((tab) => !tab.hidden);
+  const effectiveActiveTab = Math.min(activeTab, Math.max(visibleTabs.length - 1, 0));
+
+  useEffect(() => {
+    if (activeTabOverride !== undefined) return;
+    if (effectiveActiveTab !== activeTabState) {
+      setActiveTabState(effectiveActiveTab);
+    }
+  }, [activeTabOverride, activeTabState, effectiveActiveTab]);
+
   if (!resolvedStudentId) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 6 }}>
@@ -408,99 +544,94 @@ const StudentPage: React.FC<StudentPageProps> = ({
       {/* Tabs */}
       <Paper elevation={0} sx={{ borderRadius: 1, bgcolor: (t) => t.palette.background.paper }}>
         <Tabs
-          value={activeTab}
+          value={effectiveActiveTab}
           onChange={handleTabChange}
           variant="scrollable"
           scrollButtons="auto"
           sx={{ px: 1 }}
         >
-          <Tab label="Overview" />
-          <Tab label="Homework" />
-          <Tab label="Dictionary" />
-          <Tab label="Activity" />
+          {visibleTabs.map((tab) => (
+            <Tab key={tab.label} label={tab.label} />
+          ))}
         </Tabs>
       </Paper>
 
       <Box sx={contentSx}>
-        {activeTab === 0 && (
-          <Grid container spacing={2}>
-            <Grid size={{ xs: 12, md: 8 }}>
-              <SectionCard title="Next lesson">
-                {upcoming === null ? (
-                  <Typography variant="body2" color="text.secondary">Loading next lesson…</Typography>
-                ) : upcomingError ? (
-                  <Typography variant="body2" color="error.main">{upcomingError}</Typography>
-                ) : upcoming.length > 0 ? (
-                  <NextLessonCard lesson={upcoming[0]} />
-                ) : (
-                  <Typography variant="body2" color="text.secondary">No next lesson scheduled.</Typography>
-                )}
-              </SectionCard>
-            </Grid>
-            <Grid size={{ xs: 12, md: 4 }}>
-              <SectionCard title="Progress">
-                <Typography variant="body2" color="text.secondary">Progress charts and stats will appear here.</Typography>
-              </SectionCard>
-            </Grid>
-          </Grid>
-        )}
-
-        {activeTab === 1 && (
-          <SectionCard title="Assigned homework">
-            <StudentHomeworkTab studentId={student.id} isTeacher={isTeacher} />
-          </SectionCard>
-        )}
-
-        {activeTab === 2 && (
-          <SectionCard title="Dictionary">
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 2, flexWrap: 'wrap' }}>
-              <Typography variant="body2" color="text.secondary">Manage student vocabulary.</Typography>
-              {isTeacher && (
-                <Button
-                  variant="contained"
-                  startIcon={<PersonAddIcon />}
-                  onClick={() => setAssignOpen(true)}
-                  sx={{ borderRadius: 2 }}
-                >
-                  Assign words
-                </Button>
-              )}
-            </Box>
-            <Box sx={{ mb: 2, maxWidth: 420 }}>
-              <TextField
-                fullWidth
-                size="small"
-                placeholder="Search words…"
-                value={dictSearch}
-                onChange={(e) => setDictSearch(e.target.value)}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon />
-                    </InputAdornment>
-                  )
-                }}
-              />
-            </Box>
-            <Box sx={{ maxHeight: 480, overflowY: 'auto' }}>
-              <VocabularyList data={filteredAssigned} readOnly />
-            </Box>
-
-            {/* Assign words modal */}
-            <AssignModal
-              open={assignOpen}
-              studentId={student.id}
-              onClose={() => setAssignOpen(false)}
-            />
-          </SectionCard>
-        )}
-
-        {activeTab === 3 && (
-          <SectionCard title="Activity">
-            <Typography variant="body2" color="text.secondary">Recent activity and notes will be shown here.</Typography>
-          </SectionCard>
-        )}
+        {visibleTabs[effectiveActiveTab]?.content}
       </Box>
+
+      <Dialog
+        open={Boolean(previewAssignment)}
+        onClose={handlePreviewClose}
+        fullWidth
+        maxWidth="md"
+        fullScreen={fullScreenPreview}
+      >
+        {previewAssignment && (
+          <>
+            <DialogTitle>{previewAssignment.title}</DialogTitle>
+            <DialogContent dividers>
+              {previewAssignment.instructions && (
+                <Typography variant="body1" sx={{ mb: 2 }}>
+                  {previewAssignment.instructions}
+                </Typography>
+              )}
+              <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', mb: 3 }}>
+                <Chip label={`Tasks: ${previewAssignment.tasks.length}`} size="small" color="primary" />
+                {previewAssignment.dueAt && (
+                  <Chip
+                    label={`Due ${new Date(previewAssignment.dueAt).toLocaleString()}`}
+                    size="small"
+                    color="info"
+                    variant="outlined"
+                  />
+                )}
+              </Box>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {previewAssignment.tasks.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary">
+                    This homework does not contain any tasks yet.
+                  </Typography>
+                ) : (
+                  previewAssignment.tasks.map((task) => (
+                    <Paper key={task.id} variant="outlined" sx={{ p: 2, borderRadius: 1.5 }}>
+                      <Box display="flex" justifyContent="space-between" alignItems="flex-start" gap={2}>
+                        <Box sx={{ flex: 1 }}>
+                          <Typography variant="subtitle1" fontWeight={600}>{task.title}</Typography>
+                          {task.instructions && (
+                            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                              {task.instructions}
+                            </Typography>
+                          )}
+                        </Box>
+                        <Chip
+                          label={task.type.toLowerCase()}
+                          size="small"
+                          sx={{ textTransform: 'capitalize', fontWeight: 600 }}
+                          color="secondary"
+                          variant="outlined"
+                        />
+                      </Box>
+                    </Paper>
+                  ))
+                )}
+              </Box>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={handlePreviewClose}>Close</Button>
+              <Button
+                component="a"
+                href={`/homework/${previewAssignment.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                variant="contained"
+              >
+                Open full homework
+              </Button>
+            </DialogActions>
+          </>
+        )}
+      </Dialog>
 
       {/* Edit Dialog */}
       <Dialog

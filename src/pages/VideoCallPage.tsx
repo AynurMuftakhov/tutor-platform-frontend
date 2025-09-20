@@ -381,6 +381,7 @@ const DailyCallLayout: React.FC<{
                     studentId={resolvedStudentId}
                     activeTab={sharedProfileTab}
                     sharedBy={sharedProfileBy}
+                    resizable={false}
                 />
             )}
         </Box>
