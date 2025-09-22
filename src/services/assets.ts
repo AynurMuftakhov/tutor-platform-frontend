@@ -34,7 +34,7 @@ export async function uploadImageAsset({ file, onUploadProgress }: UploadImagePa
   formData.append('file', file);
 
   try {
-    const response = await api.post<UploadImageResponse>('/api/uploads/images', formData, {
+    const response = await api.post<UploadImageResponse>('lessons-service/api/uploads/images', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       onUploadProgress,
     });
@@ -55,7 +55,7 @@ export async function uploadImageAsset({ file, onUploadProgress }: UploadImagePa
 }
 
 export async function fetchImageAssets(params: { offset: number; limit: number }): Promise<ImageAssetPage> {
-  const response = await api.get('/api/assets/images', { params });
+  const response = await api.get('lessons-service/api/assets/images', { params });
   const data = response.data;
 
   if (Array.isArray(data)) {
