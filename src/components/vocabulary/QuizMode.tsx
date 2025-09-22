@@ -163,7 +163,7 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords
       currentBatchRef.current = firstBatch;
       lastSeedSizeRef.current = safeSize || desiredSize;
 
-      setQuestions(firstBatch.length > 0 ? generateQuestions(firstBatch, words, quizType) : []);
+      setQuestions(firstBatch.length > 0 ? generateQuestions(firstBatch, sanitized, quizType) : []);
       setTotalWordCount(sanitized.length);
       setRemainingCount(queueRef.current.length);
       setCurrentRound(1);
@@ -173,7 +173,7 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords
       setIsAnswered(false);
       setScore(0);
       setQuizComplete(false);
-    }, [generateQuestions, quizType, shuffleArray, words]);
+    }, [generateQuestions, quizType, shuffleArray]);
 
     const finalizeRound = useCallback(() => {
       clearAutoTimer();
@@ -195,7 +195,7 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords
       clearAutoTimer();
       incorrectQueueRef.current = [];
       incorrectSetRef.current.clear();
-      setQuestions(generateQuestions(currentBatchRef.current, words, quizType));
+      setQuestions(generateQuestions(currentBatchRef.current, baseWordsRef.current, quizType));
       setCurrentQuestionIndex(0);
       setSelectedAnswer(null);
       setIsAnswered(false);
@@ -204,7 +204,7 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords
       const futureRemaining = queueRef.current.length + incorrectQueueRef.current.length;
       setRemainingCount(futureRemaining);
       setHasNextRound(futureRemaining > 0);
-    }, [generateQuestions, quizType, words]);
+    }, [generateQuestions, quizType]);
 
     const handleStartNextRound = useCallback(() => {
       clearAutoTimer();
@@ -224,7 +224,7 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords
       const nextBatch = queueRef.current.splice(0, Math.min(sessionSize, queueRef.current.length));
       currentBatchRef.current = nextBatch;
 
-      setQuestions(generateQuestions(nextBatch, words, quizType));
+      setQuestions(generateQuestions(nextBatch, baseWordsRef.current, quizType));
       setCurrentQuestionIndex(0);
       setSelectedAnswer(null);
       setIsAnswered(false);
@@ -235,7 +235,7 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords
       const futureRemaining = queueRef.current.length + incorrectQueueRef.current.length;
       setRemainingCount(futureRemaining);
       setHasNextRound(futureRemaining > 0);
-    }, [generateQuestions, onComplete, quizType, sessionSize, words]);
+    }, [generateQuestions, onComplete, quizType, sessionSize]);
 
     const sessionSizeOptions = useMemo(() => {
       if (totalWordCount === 0) return [] as number[];
@@ -290,8 +290,8 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords
       setIsAnswered(false);
       setScore(0);
       setQuizComplete(false);
-      setQuestions(generateQuestions(currentBatchRef.current, words, quizType));
-    }, [generateQuestions, quizType, words]);
+      setQuestions(generateQuestions(currentBatchRef.current, baseWordsRef.current, quizType));
+    }, [generateQuestions, quizType]);
 
     // When session size changes restart the session with the new batch size
     useEffect(() => {
@@ -431,7 +431,17 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords
                             </Typography>
                           </Box>
                           {totalWordCount > 0 && sessionSizeOptions.length > 1 && (
-                            <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 180 } }}>
+                            <FormControl
+                              size="small"
+                              fullWidth
+                              sx={{
+                                minWidth: { xs: '100%', sm: 220 },
+                                alignSelf: { xs: 'stretch', sm: 'flex-end' },
+                                bgcolor: 'rgba(37, 115, 255, 0.04)',
+                                borderRadius: 2,
+                                px: { xs: 0, sm: 1 }
+                              }}
+                            >
                               <InputLabel id="session-size-label">Words per round</InputLabel>
                               <Select<number>
                                 labelId="session-size-label"
@@ -445,7 +455,9 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords
                                   </MenuItem>
                                 ))}
                               </Select>
-                              <FormHelperText>Changing this restarts the session</FormHelperText>
+                              <FormHelperText sx={{ mt: 0.5, color: 'text.secondary' }}>
+                                Changing this restarts the current round
+                              </FormHelperText>
                             </FormControl>
                           )}
                         </Stack>
