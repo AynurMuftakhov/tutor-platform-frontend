@@ -30,7 +30,6 @@ import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import VolumeUpIcon from '@mui/icons-material/VolumeUp';
 import { VocabularyWord } from '../../types';
 import { motion, AnimatePresence } from 'framer-motion';
-import type { SelectChangeEvent } from '@mui/material/Select';
 
 interface QuizModeProps {
     open: boolean;
@@ -41,9 +40,13 @@ interface QuizModeProps {
     // Optional callbacks for integration (e.g., homework progress)
     onAnswer?: (wordId: string, correct: boolean) => void;
     onComplete?: () => void;
+    // Initial words-per-round provided by setup dialog
+    initialSessionSize?: number;
+    // Allow starting even if fewer than 4 words are available
+    allowAnyCount?: boolean;
 }
 
-type QuizType = 'translation' | 'definition' | 'listening';
+ type QuizType = 'translation' | 'definition' | 'listening';
 type QuizQuestion = {
     word: VocabularyWord;
     options: string[];
@@ -51,7 +54,7 @@ type QuizQuestion = {
     type: QuizType;
 };
 
-const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords, onAnswer, onComplete }) => {
+const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords, onAnswer, onComplete, initialSessionSize, allowAnyCount }) => {
     const theme = useTheme();
     const [quizType, setQuizType] = useState<QuizType>('translation');
     const [questions, setQuestions] = useState<QuizQuestion[]>([]);
@@ -63,7 +66,9 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords
     const [loading, setLoading] = useState(false);
     const [sessionSize, setSessionSize] = useState<number>(10);
     const [totalWordCount, setTotalWordCount] = useState<number>(0);
+    const [totalUniqueWordCount, setTotalUniqueWordCount] = useState<number>(0);
     const [remainingCount, setRemainingCount] = useState<number>(0);
+    const [remainingUniqueCount, setRemainingUniqueCount] = useState<number>(0);
     const [currentRound, setCurrentRound] = useState<number>(1);
     const [hasNextRound, setHasNextRound] = useState<boolean>(false);
 
@@ -146,6 +151,13 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords
         });
     }, [shuffleArray]);
 
+    const computeRemainingUniqueCount = useCallback((): number => {
+      const ids = new Set<string>();
+      for (const w of queueRef.current) ids.add(w.id);
+      for (const w of incorrectQueueRef.current) ids.add(w.id);
+      return ids.size;
+    }, []);
+
     const seedSession = useCallback((baseList: VocabularyWord[], desiredSize: number) => {
       const sanitized = baseList.slice();
       baseWordsRef.current = sanitized;
@@ -165,7 +177,9 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords
 
       setQuestions(firstBatch.length > 0 ? generateQuestions(firstBatch, sanitized, quizType) : []);
       setTotalWordCount(sanitized.length);
+      setTotalUniqueWordCount(new Set(sanitized.map(w => w.id)).size);
       setRemainingCount(queueRef.current.length);
+      setRemainingUniqueCount(computeRemainingUniqueCount());
       setCurrentRound(1);
       setHasNextRound(queueRef.current.length > 0);
       setCurrentQuestionIndex(0);
@@ -184,6 +198,7 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords
 
       const remainingTotal = queueRef.current.length + incorrectQueueRef.current.length;
       setRemainingCount(remainingTotal);
+      setRemainingUniqueCount(computeRemainingUniqueCount());
       setHasNextRound(remainingTotal > 0);
 
       if (remainingTotal === 0 && onComplete) {
@@ -203,6 +218,7 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords
       setQuizComplete(false);
       const futureRemaining = queueRef.current.length + incorrectQueueRef.current.length;
       setRemainingCount(futureRemaining);
+      setRemainingUniqueCount(computeRemainingUniqueCount());
       setHasNextRound(futureRemaining > 0);
     }, [generateQuestions, quizType]);
 
@@ -217,6 +233,7 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords
       if (queueRef.current.length === 0) {
         setHasNextRound(false);
         setRemainingCount(0);
+        setRemainingUniqueCount(0);
         if (onComplete) onComplete();
         return;
       }
@@ -234,29 +251,10 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords
 
       const futureRemaining = queueRef.current.length + incorrectQueueRef.current.length;
       setRemainingCount(futureRemaining);
+      setRemainingUniqueCount(computeRemainingUniqueCount());
       setHasNextRound(futureRemaining > 0);
     }, [generateQuestions, onComplete, quizType, sessionSize]);
 
-    const sessionSizeOptions = useMemo(() => {
-      if (totalWordCount === 0) return [] as number[];
-      if (totalWordCount <= 10) {
-        return Array.from({ length: totalWordCount }, (_, idx) => idx + 1);
-      }
-      const presets = [5, 10, 15, 20];
-      const options = presets.filter(size => size < totalWordCount);
-      if (!options.includes(totalWordCount)) options.push(totalWordCount);
-      if (totalWordCount > 10 && !options.includes(10)) options.push(10);
-      const unique = Array.from(new Set(options)).filter(size => size > 0 && size <= totalWordCount);
-      unique.sort((a, b) => a - b);
-      return unique;
-    }, [totalWordCount]);
-
-    const handleSessionSizeChange = (event: SelectChangeEvent<number>) => {
-      const value = Number(event.target.value);
-      if (Number.isFinite(value) && value > 0) {
-        setSessionSize(value);
-      }
-    };
 
     // Initialize once per dialog open
     useEffect(() => {
@@ -267,14 +265,15 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords
       }
       if (initializedRef.current) return;
 
-      if (words.length < 4) return;
+      if (!allowAnyCount && words.length < 4) return;
       const qWords = (questionWords && questionWords.length > 0) ? questionWords : words;
       if (qWords.length === 0) return;
 
       setLoading(true);
       const defaultSize = Math.max(1, Math.min(10, qWords.length));
-      setSessionSize(defaultSize);
-      seedSession(qWords, defaultSize);
+      const chosen = initialSessionSize && initialSessionSize > 0 ? Math.min(initialSessionSize, qWords.length) : defaultSize;
+      setSessionSize(chosen);
+      seedSession(qWords, chosen);
       setLoading(false);
       initializedRef.current = true;
     }, [open, questionWords, seedSession, words]);
@@ -293,16 +292,7 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords
       setQuestions(generateQuestions(currentBatchRef.current, baseWordsRef.current, quizType));
     }, [generateQuestions, quizType]);
 
-    // When session size changes restart the session with the new batch size
-    useEffect(() => {
-      if (!open) return;
-      if (!initializedRef.current) return;
-      if (sessionSize === lastSeedSizeRef.current) return;
-      if (!baseWordsRef.current.length) return;
-      setLoading(true);
-      seedSession(baseWordsRef.current, sessionSize);
-      setLoading(false);
-    }, [open, seedSession, sessionSize]);
+    // In-quiz session size is fixed from setup dialog; do not allow changing inside quiz
 
     const handleAnswerSelect = (answer: string) => {
       if (isAnswered) return;
@@ -356,8 +346,8 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords
         }
     };
 
-    // If we don't have enough words
-    if (words.length < 4) {
+    // If we don't have enough words (unless allowed)
+    if (!allowAnyCount && words.length < 4) {
         return (
             <Dialog
                 open={open}
@@ -424,42 +414,15 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords
                         >
                           <Box>
                             <Typography variant="body2" color="text.secondary">
-                              Round {currentRound} · {questions.length} word{questions.length === 1 ? '' : 's'} this round
+                              Round {currentRound}
                             </Typography>
                             <Typography variant="body2" color="text.secondary">
-                              {totalWordCount} word{totalWordCount === 1 ? '' : 's'} assigned · {remainingCount > 0 ? `${remainingCount} waiting for the next round` : 'final round'}
+                              Assigned: {totalUniqueWordCount} unique word{totalUniqueWordCount === 1 ? '' : 's'}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              This round: {questions.length} question slot{questions.length === 1 ? '' : 's'}
                             </Typography>
                           </Box>
-                          {totalWordCount > 0 && sessionSizeOptions.length > 1 && (
-                            <FormControl
-                              size="small"
-                              fullWidth
-                              sx={{
-                                minWidth: { xs: '100%', sm: 220 },
-                                alignSelf: { xs: 'stretch', sm: 'flex-end' },
-                                bgcolor: 'rgba(37, 115, 255, 0.04)',
-                                borderRadius: 2,
-                                px: { xs: 0, sm: 1 }
-                              }}
-                            >
-                              <InputLabel id="session-size-label">Words per round</InputLabel>
-                              <Select<number>
-                                labelId="session-size-label"
-                                label="Words per round"
-                                value={sessionSize}
-                                onChange={handleSessionSizeChange}
-                              >
-                                {sessionSizeOptions.map(option => (
-                                  <MenuItem key={option} value={option}>
-                                    {option === totalWordCount ? `All (${option})` : option}
-                                  </MenuItem>
-                                ))}
-                              </Select>
-                              <FormHelperText sx={{ mt: 0.5, color: 'text.secondary' }}>
-                                Changing this restarts the current round
-                              </FormHelperText>
-                            </FormControl>
-                          )}
                         </Stack>
 
                         {/* Quiz Type Selection */}
@@ -676,11 +639,16 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords
                                 Round {currentRound} complete.
                             </Typography>
 
-                            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
                                 {hasNextRound
-                                    ? `Great work! ${remainingCount} word${remainingCount === 1 ? '' : 's'} are queued for the next round.`
+                                    ? `Great work! ${remainingUniqueCount} unique word${remainingUniqueCount === 1 ? '' : 's'} are waiting for the next round.`
                                     : 'Fantastic! You practiced every assigned word for this homework.'}
                             </Typography>
+                            {hasNextRound && (
+                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 3 }}>
+                                Hint: {remainingCount} total question slot{remainingCount === 1 ? '' : 's'} remaining
+                              </Typography>
+                            )}
                         </motion.div>
                     </Box>
                 )}
@@ -722,7 +690,7 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords
                         '&:hover': { bgcolor: '#1a5cd1' }
                       }}
                     >
-                      Learn remaining words{remainingCount > 0 ? ` (${remainingCount})` : ''}
+                      Learn remaining words{remainingUniqueCount > 0 ? ` (${remainingUniqueCount})` : ''}
                     </Button>
                   )}
                   <Button

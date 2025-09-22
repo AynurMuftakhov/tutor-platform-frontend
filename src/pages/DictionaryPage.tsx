@@ -42,6 +42,7 @@ import CategoryTabs from '../components/vocabulary/CategoryTabs';
 import GenerateWordDialog from '../components/vocabulary/GenerateWordDialog';
 import ReviewWordDialog from '../components/vocabulary/ReviewWordDialog';
 import QuizMode from '../components/vocabulary/QuizMode';
+import VocabularyRoundSetup from '../components/vocabulary/VocabularyRoundSetup';
 import AssignStudentModal from '../components/vocabulary/AssignStudentModal';
 import {VocabularyWord} from '../types';
 import { motion } from 'framer-motion';
@@ -140,6 +141,11 @@ const DictionaryPage: React.FC = () => {
     const [genOpen, setGenOpen] = useState(false);
     const [reviewOpen, setReviewOpen] = useState(false);
     const [quizOpen, setQuizOpen] = useState(false);
+    const [setupOpen, setSetupOpen] = useState(false);
+    const [initialSessionSize, setInitialSessionSize] = useState<number | undefined>(undefined);
+    const [repeatLearnedMode, setRepeatLearnedMode] = useState(false);
+    const [allowAnyCount, setAllowAnyCount] = useState(false);
+    const [questionWords, setQuestionWords] = useState<VocabularyWord[] | null>(null);
     const [assignOpen, setAssignOpen] = useState(false);
     const [selected, setSelected] = useState<VocabularyWord | null>(null);
     const [search, setSearch] = useState('');
@@ -404,7 +410,24 @@ const DictionaryPage: React.FC = () => {
                         <Stack direction="row" spacing={1}>
                             <Button
                                 variant="outlined"
-                                onClick={() => setQuizOpen(true)}
+                                onClick={() => {
+                                    setRepeatLearnedMode(false);
+                                    setAllowAnyCount(false);
+                                    // For student practice, use assigned words (quizWords). If less than 4, pad from learned
+                                    const base = quizWords.slice();
+                                    if (base.length < 4) {
+                                        const learnedOnly = quizWords.filter(w => learnedWords.has(w.id));
+                                        let idx = 0;
+                                        while (base.length < 4 && learnedOnly.length > 0) {
+                                            base.push(learnedOnly[idx % learnedOnly.length]);
+                                            idx++;
+                                        }
+                                        // If still less than 4 and no learned available, allow any count
+                                        if (base.length < 4) setAllowAnyCount(true);
+                                    }
+                                    setQuestionWords(base);
+                                    setSetupOpen(true);
+                                }}
                                 startIcon={<SchoolIcon />}
                                 sx={{
                                     borderRadius: 2,
@@ -417,6 +440,26 @@ const DictionaryPage: React.FC = () => {
                                 }}
                             >
                                 Practice
+                            </Button>
+                            <Button
+                                variant="contained"
+                                onClick={() => {
+                                    setRepeatLearnedMode(true);
+                                    const learnedOnly = quizWords.filter(w => learnedWords.has(w.id));
+                                    setQuestionWords(learnedOnly);
+                                    setAllowAnyCount(true);
+                                    setSetupOpen(true);
+                                }}
+                                sx={{
+                                    borderRadius: 2,
+                                    bgcolor: '#2573ff',
+                                    '&:hover': {
+                                        bgcolor: '#1a5cd1'
+                                    }
+                                }}
+                                disabled={quizWords.filter(w => learnedWords.has(w.id)).length === 0}
+                            >
+                                Repeat learned
                             </Button>
                         </Stack>
                     )}
@@ -688,13 +731,33 @@ const DictionaryPage: React.FC = () => {
                 }}
             />
 
+            <VocabularyRoundSetup
+                open={setupOpen}
+                onClose={() => setSetupOpen(false)}
+                words={quizWords}
+                questionWords={questionWords || undefined}
+                onStart={({ sessionSize }) => {
+                    setInitialSessionSize(sessionSize);
+                    setSetupOpen(false);
+                    setQuizOpen(true);
+                }}
+                allowAnyCount={allowAnyCount}
+            />
+
             <QuizMode
                 open={quizOpen}
                 onClose={() => {
                     setQuizOpen(false);
+                    setInitialSessionSize(undefined);
+                    setQuestionWords(null);
+                    setAllowAnyCount(false);
+                    setRepeatLearnedMode(false);
                     refetchWords(); // Refetch words when dialog is closed
                 }}
                 words={quizWords}
+                questionWords={questionWords || undefined}
+                initialSessionSize={initialSessionSize}
+                allowAnyCount={allowAnyCount}
             />
 
             {/* Modal for assigning words to students */}
