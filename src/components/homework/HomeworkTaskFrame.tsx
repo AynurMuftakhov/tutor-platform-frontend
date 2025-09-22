@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Box, Button, Card, CardContent, CircularProgress, Stack, Typography, LinearProgress, Chip } from '@mui/material';
+import { Box, Button, Card, CardContent, CircularProgress, Stack, Typography, LinearProgress, Chip, Pagination } from '@mui/material';
 import type { AssignmentDto, TaskDto } from '../../types/homework';
 import useHomeworkTaskLifecycle from '../../hooks/useHomeworkTaskLifecycle';
 import { useQuery } from '@tanstack/react-query';
@@ -25,6 +25,8 @@ const toFiniteNumber = (value: unknown): number | undefined => {
   }
   return undefined;
 };
+
+const LIST_PAGE_SIZE = 10;
 
 const HomeworkTaskFrame: React.FC<Props> = ({ assignment, task, readOnly }) => {
   const { markStarted, reportProgress, markCompleted } = useHomeworkTaskLifecycle(task.id, { minIntervalMs: 400 });
@@ -176,6 +178,7 @@ const HomeworkTaskFrame: React.FC<Props> = ({ assignment, task, readOnly }) => {
 
     const [quizOpen, setQuizOpen] = useState(false);
     const [quizQuestionWords, setQuizQuestionWords] = useState<any[] | null>(null);
+    const [listPage, setListPage] = useState(1);
     const [streaks, setStreaks] = useState<Record<string, number>>(() => {
       try {
         const raw = localStorage.getItem(`vocabTaskStreaks:${task.id}`);
@@ -261,6 +264,25 @@ const HomeworkTaskFrame: React.FC<Props> = ({ assignment, task, readOnly }) => {
       const order = new Map(wordIds.map((id, idx) => [id, idx] as const));
       return list.sort((a: any, b: any) => (order.get(a.id)! - order.get(b.id)!));
     }, [allWords, wordIds]);
+
+    const totalListPages = Math.max(1, Math.ceil(words.length / LIST_PAGE_SIZE));
+
+    useEffect(() => {
+      setListPage(prev => {
+        if (prev < 1) return 1;
+        if (prev > totalListPages) return totalListPages;
+        return prev;
+      });
+    }, [totalListPages]);
+
+    useEffect(() => {
+      setListPage(1);
+    }, [task.id]);
+
+    const pagedWords = useMemo(() => {
+      const start = (listPage - 1) * LIST_PAGE_SIZE;
+      return words.slice(start, start + LIST_PAGE_SIZE);
+    }, [words, listPage]);
 
     const preMastered = useMemo(() => {
       const set = new Set<string>();
@@ -361,15 +383,54 @@ const HomeworkTaskFrame: React.FC<Props> = ({ assignment, task, readOnly }) => {
           <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>Learn the words</Typography>
           </Stack>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            Streak each word correctly {masteryStreak === 1 ? 'once' : `${masteryStreak} times`} in a row (as assigned by your teacher) to mark it as learned.
+          </Typography>
           {/* Inline word list for the task */}
-          <Box sx={{ mt: 1 }}>
-            <VocabularyList
-              data={words}
-              readOnly
-              learnedWords={mergedMastered}
-            />
-            <Chip sx={{ mt:2 }} size="small" color={masteredCount === total ? 'success' : 'warning'} label={`${masteredCount}/${total} mastered`} />
-            <LinearProgress variant="determinate" value={progressPct} sx={{ height: 8, borderRadius: 4, mb: 2, mt:2 }} />
+          <Box sx={{ mt: 2 }}>
+            {words.length > 0 ? (
+              <>
+                <Box sx={{ maxHeight: 360, overflowY: 'auto', pr: 1 }}>
+                  <VocabularyList
+                    data={pagedWords}
+                    readOnly
+                    learnedWords={mergedMastered}
+                  />
+                </Box>
+                {totalListPages > 1 && (
+                  <Stack direction="row" justifyContent="center" sx={{ mt: 2 }}>
+                    <Pagination
+                      count={totalListPages}
+                      page={listPage}
+                      onChange={(_, value) => setListPage(value)}
+                      size="small"
+                      color="primary"
+                      showFirstButton
+                      showLastButton
+                    />
+                  </Stack>
+                )}
+              </>
+            ) : (
+              <Typography variant="body2" color="text.secondary" sx={{ py: 6, textAlign: 'center' }}>
+                No words selected for this task.
+              </Typography>
+            )}
+            {total > 0 && (
+              <>
+                <Chip
+                  sx={{ mt: 2 }}
+                  size="small"
+                  color={masteredCount === total ? 'success' : 'warning'}
+                  label={`${masteredCount}/${total} mastered`}
+                />
+                <LinearProgress
+                  variant="determinate"
+                  value={progressPct}
+                  sx={{ height: 8, borderRadius: 4, mt: 1.5, mb: 2 }}
+                />
+              </>
+            )}
           </Box>
           {!readOnly && (
             <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
@@ -409,9 +470,6 @@ const HomeworkTaskFrame: React.FC<Props> = ({ assignment, task, readOnly }) => {
               setQuizQuestionWords(null);
             }}
           />
-          {total === 0 && (
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>No words selected for this task.</Typography>
-          )}
           {preMastered.size > 0 && (
             <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>Some words are already mastered globally.</Typography>
           )}
