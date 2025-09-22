@@ -406,8 +406,6 @@ const HomeworkTaskFrame: React.FC<Props> = ({ assignment, task, readOnly }) => {
             questionWords={quizQuestionWords || unmasteredWords}
             onAnswer={handleAnswer}
             onComplete={() => {
-              // Close to reveal success if completed
-              setQuizOpen(false);
               setQuizQuestionWords(null);
             }}
           />
