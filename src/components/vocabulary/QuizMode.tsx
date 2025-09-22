@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
     Box,
     Typography,
@@ -16,6 +16,11 @@ import {
     DialogContent,
     DialogActions,
     IconButton,
+    Stack,
+    Select,
+    MenuItem,
+    InputLabel,
+    FormHelperText,
     useTheme
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
@@ -35,9 +40,13 @@ interface QuizModeProps {
     // Optional callbacks for integration (e.g., homework progress)
     onAnswer?: (wordId: string, correct: boolean) => void;
     onComplete?: () => void;
+    // Initial words-per-round provided by setup dialog
+    initialSessionSize?: number;
+    // Allow starting even if fewer than 4 words are available
+    allowAnyCount?: boolean;
 }
 
-type QuizType = 'translation' | 'definition' | 'listening';
+ type QuizType = 'translation' | 'definition' | 'listening';
 type QuizQuestion = {
     word: VocabularyWord;
     options: string[];
@@ -45,7 +54,7 @@ type QuizQuestion = {
     type: QuizType;
 };
 
-const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords, onAnswer, onComplete }) => {
+const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords, onAnswer, onComplete, initialSessionSize, allowAnyCount }) => {
     const theme = useTheme();
     const [quizType, setQuizType] = useState<QuizType>('translation');
     const [questions, setQuestions] = useState<QuizQuestion[]>([]);
@@ -55,10 +64,21 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords
     const [score, setScore] = useState(0);
     const [quizComplete, setQuizComplete] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [sessionSize, setSessionSize] = useState<number>(10);
+    const [totalWordCount, setTotalWordCount] = useState<number>(0);
+    const [totalUniqueWordCount, setTotalUniqueWordCount] = useState<number>(0);
+    const [remainingCount, setRemainingCount] = useState<number>(0);
+    const [remainingUniqueCount, setRemainingUniqueCount] = useState<number>(0);
+    const [currentRound, setCurrentRound] = useState<number>(1);
+    const [hasNextRound, setHasNextRound] = useState<boolean>(false);
 
-    // Lock the question pool per dialog open to avoid resets on parent re-renders
-    const sessionWordsRef = useRef<VocabularyWord[]>([]);
     const initializedRef = useRef(false);
+    const baseWordsRef = useRef<VocabularyWord[]>([]);
+    const queueRef = useRef<VocabularyWord[]>([]);
+    const currentBatchRef = useRef<VocabularyWord[]>([]);
+    const incorrectQueueRef = useRef<VocabularyWord[]>([]);
+    const incorrectSetRef = useRef<Set<string>>(new Set());
+    const lastSeedSizeRef = useRef<number>(10);
 
     // Auto-advance timer for correct answers
     const autoNextTimerRef = useRef<number | null>(null);
@@ -76,66 +96,21 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords
       };
     }, []);
 
-    // Initialize once per dialog open
-    useEffect(() => {
-      if (!open) {
-        initializedRef.current = false; // allow re-init on the next open
-        clearAutoTimer();
-        return;
+    const shuffleArray = useCallback(<T,>(input: T[]): T[] => {
+      const copy = [...input];
+      for (let i = copy.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copy[i], copy[j]] = [copy[j], copy[i]];
       }
-      if (initializedRef.current) return;
+      return copy;
+    }, []);
 
-      if (words.length < 4) return; // handled by "not enough words" UI path
-      const qWords = (questionWords && questionWords.length > 0) ? questionWords : words;
-      if (qWords.length === 0) return;
-
-      setLoading(true);
-
-      // Reset quiz state for a fresh session
-      setCurrentQuestionIndex(0);
-      setSelectedAnswer(null);
-      setIsAnswered(false);
-      setScore(0);
-      setQuizComplete(false);
-
-      // Lock the base pool for this session
-      sessionWordsRef.current = qWords.slice();
-
-      // Build questions once for this open
-      const newQuestions = generateQuestions(sessionWordsRef.current, words, quizType);
-      setQuestions(newQuestions);
-
-      setLoading(false);
-      initializedRef.current = true;
-    }, [open]);
-
-    // If user switches quiz type, rebuild from the locked pool (no parent-driven resets)
-    useEffect(() => {
-      if (!initializedRef.current) return;
-      clearAutoTimer();
-
-      setCurrentQuestionIndex(0);
-      setSelectedAnswer(null);
-      setIsAnswered(false);
-      setScore(0);
-      setQuizComplete(false);
-
-      const base = sessionWordsRef.current.length
-        ? sessionWordsRef.current
-        : ((questionWords && questionWords.length > 0) ? questionWords : words);
-
-      setQuestions(generateQuestions(base, words, quizType));
-    }, [quizType]);
-
-    const generateQuestions = (wordList: VocabularyWord[], poolForOptions: VocabularyWord[], type: QuizType): QuizQuestion[] => {
-        // Shuffle words and take up to 10
-        const shuffledWords = [...wordList].sort(() => Math.random() - 0.5).slice(0, 10);
+    const generateQuestions = useCallback((wordList: VocabularyWord[], poolForOptions: VocabularyWord[], type: QuizType): QuizQuestion[] => {
+        const shuffledWords = shuffleArray(wordList);
 
         return shuffledWords.map(word => {
-            // Get 3 random incorrect options
-            const incorrectOptions = poolForOptions
+            const incorrectOptions = shuffleArray(poolForOptions)
                 .filter(w => w.id !== word.id)
-                .sort(() => Math.random() - 0.5)
                 .slice(0, 3);
 
             let correctAnswer = '';
@@ -165,8 +140,7 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords
                     break;
             }
 
-            // Shuffle options
-            options = options.sort(() => Math.random() - 0.5);
+            options = shuffleArray(options);
 
             return {
                 word,
@@ -175,46 +149,184 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords
                 type
             };
         });
-    };
+    }, [shuffleArray]);
+
+    const computeRemainingUniqueCount = useCallback((): number => {
+      const ids = new Set<string>();
+      for (const w of queueRef.current) ids.add(w.id);
+      for (const w of incorrectQueueRef.current) ids.add(w.id);
+      return ids.size;
+    }, []);
+
+    const seedSession = useCallback((baseList: VocabularyWord[], desiredSize: number) => {
+      const sanitized = baseList.slice();
+      baseWordsRef.current = sanitized;
+      queueRef.current = shuffleArray(sanitized);
+      incorrectQueueRef.current = [];
+      incorrectSetRef.current = new Set();
+
+      const safeSize = sanitized.length > 0 ? Math.max(1, Math.min(desiredSize, sanitized.length)) : 0;
+      const firstBatch = safeSize > 0 ? queueRef.current.splice(0, safeSize) : [];
+      if (firstBatch.length === 0 && sanitized.length > 0) {
+        firstBatch.push(...sanitized);
+        queueRef.current = [];
+      }
+
+      currentBatchRef.current = firstBatch;
+      lastSeedSizeRef.current = safeSize || desiredSize;
+
+      setQuestions(firstBatch.length > 0 ? generateQuestions(firstBatch, sanitized, quizType) : []);
+      setTotalWordCount(sanitized.length);
+      setTotalUniqueWordCount(new Set(sanitized.map(w => w.id)).size);
+      setRemainingCount(queueRef.current.length);
+      setRemainingUniqueCount(computeRemainingUniqueCount());
+      setCurrentRound(1);
+      setHasNextRound(queueRef.current.length > 0);
+      setCurrentQuestionIndex(0);
+      setSelectedAnswer(null);
+      setIsAnswered(false);
+      setScore(0);
+      setQuizComplete(false);
+    }, [generateQuestions, quizType, shuffleArray]);
+
+    const finalizeRound = useCallback(() => {
+      clearAutoTimer();
+      setQuizComplete(true);
+      setSelectedAnswer(null);
+      setIsAnswered(false);
+      setCurrentQuestionIndex(0);
+
+      const remainingTotal = queueRef.current.length + incorrectQueueRef.current.length;
+      setRemainingCount(remainingTotal);
+      setRemainingUniqueCount(computeRemainingUniqueCount());
+      setHasNextRound(remainingTotal > 0);
+
+      if (remainingTotal === 0 && onComplete) {
+        onComplete();
+      }
+    }, [onComplete]);
+
+    const handleRetryCurrentRound = useCallback(() => {
+      clearAutoTimer();
+      incorrectQueueRef.current = [];
+      incorrectSetRef.current.clear();
+      setQuestions(generateQuestions(currentBatchRef.current, baseWordsRef.current, quizType));
+      setCurrentQuestionIndex(0);
+      setSelectedAnswer(null);
+      setIsAnswered(false);
+      setScore(0);
+      setQuizComplete(false);
+      const futureRemaining = queueRef.current.length + incorrectQueueRef.current.length;
+      setRemainingCount(futureRemaining);
+      setRemainingUniqueCount(computeRemainingUniqueCount());
+      setHasNextRound(futureRemaining > 0);
+    }, [generateQuestions, quizType]);
+
+    const handleStartNextRound = useCallback(() => {
+      clearAutoTimer();
+      if (incorrectQueueRef.current.length > 0) {
+        queueRef.current = [...incorrectQueueRef.current, ...queueRef.current];
+        incorrectQueueRef.current = [];
+        incorrectSetRef.current.clear();
+      }
+
+      if (queueRef.current.length === 0) {
+        setHasNextRound(false);
+        setRemainingCount(0);
+        setRemainingUniqueCount(0);
+        if (onComplete) onComplete();
+        return;
+      }
+
+      const nextBatch = queueRef.current.splice(0, Math.min(sessionSize, queueRef.current.length));
+      currentBatchRef.current = nextBatch;
+
+      setQuestions(generateQuestions(nextBatch, baseWordsRef.current, quizType));
+      setCurrentQuestionIndex(0);
+      setSelectedAnswer(null);
+      setIsAnswered(false);
+      setScore(0);
+      setQuizComplete(false);
+      setCurrentRound(prev => prev + 1);
+
+      const futureRemaining = queueRef.current.length + incorrectQueueRef.current.length;
+      setRemainingCount(futureRemaining);
+      setRemainingUniqueCount(computeRemainingUniqueCount());
+      setHasNextRound(futureRemaining > 0);
+    }, [generateQuestions, onComplete, quizType, sessionSize]);
+
+
+    // Initialize once per dialog open
+    useEffect(() => {
+      if (!open) {
+        initializedRef.current = false;
+        clearAutoTimer();
+        return;
+      }
+      if (initializedRef.current) return;
+
+      if (!allowAnyCount && words.length < 4) return;
+      const qWords = (questionWords && questionWords.length > 0) ? questionWords : words;
+      if (qWords.length === 0) return;
+
+      setLoading(true);
+      const defaultSize = Math.max(1, Math.min(10, qWords.length));
+      const chosen = initialSessionSize && initialSessionSize > 0 ? Math.min(initialSessionSize, qWords.length) : defaultSize;
+      setSessionSize(chosen);
+      seedSession(qWords, chosen);
+      setLoading(false);
+      initializedRef.current = true;
+    }, [open, questionWords, seedSession, words]);
+
+    // Rebuild when quiz type changes using the locked batch
+    useEffect(() => {
+      if (!initializedRef.current) return;
+      clearAutoTimer();
+      if (!currentBatchRef.current.length) return;
+
+      setCurrentQuestionIndex(0);
+      setSelectedAnswer(null);
+      setIsAnswered(false);
+      setScore(0);
+      setQuizComplete(false);
+      setQuestions(generateQuestions(currentBatchRef.current, baseWordsRef.current, quizType));
+    }, [generateQuestions, quizType]);
+
+    // In-quiz session size is fixed from setup dialog; do not allow changing inside quiz
 
     const handleAnswerSelect = (answer: string) => {
+      if (isAnswered) return;
       setSelectedAnswer(answer);
 
       const currentQuestion = questions[currentQuestionIndex];
       if (!currentQuestion) return;
 
       const correct = answer === currentQuestion.correctAnswer;
-
-      // Lock selection and evaluate immediately
       setIsAnswered(true);
 
       if (correct) {
         setScore(prev => prev + 1);
         if (onAnswer) onAnswer(currentQuestion.word.id, true);
-
-        // Auto-advance after 3 seconds
         clearAutoTimer();
+        const isLast = currentQuestionIndex >= questions.length - 1;
         autoNextTimerRef.current = window.setTimeout(() => {
-          setCurrentQuestionIndex(prevIdx => {
-            const isLast = prevIdx >= questions.length - 1;
-            if (isLast) {
-              setQuizComplete(true);
-              if (onComplete) onComplete();
-              return prevIdx;
-            }
-            return prevIdx + 1;
-          });
-          setSelectedAnswer(null);
-          setIsAnswered(false);
+          if (isLast) {
+            finalizeRound();
+          } else {
+            setCurrentQuestionIndex(prev => prev + 1);
+            setSelectedAnswer(null);
+            setIsAnswered(false);
+          }
         }, 1000);
       } else {
-        // Incorrect – no auto-advance; wait for user to click "Next"
         if (onAnswer) onAnswer(currentQuestion.word.id, false);
         clearAutoTimer();
+        if (!incorrectSetRef.current.has(currentQuestion.word.id)) {
+          incorrectSetRef.current.add(currentQuestion.word.id);
+          incorrectQueueRef.current.push(currentQuestion.word);
+        }
       }
     };
-
-    // (handleCheckAnswer deleted)
 
     const handleNextQuestion = () => {
       clearAutoTimer();
@@ -223,26 +335,8 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords
         setSelectedAnswer(null);
         setIsAnswered(false);
       } else {
-        setQuizComplete(true);
-        if (onComplete) {
-          onComplete();
-        }
+        finalizeRound();
       }
-    };
-
-    const handleRestartQuiz = () => {
-      const base = sessionWordsRef.current.length
-        ? sessionWordsRef.current
-        : ((questionWords && questionWords.length > 0) ? questionWords : words);
-      const newQuestions = generateQuestions(base, words, quizType);
-      setQuestions(newQuestions);
-
-      // Reset quiz state
-      setCurrentQuestionIndex(0);
-      setSelectedAnswer(null);
-      setIsAnswered(false);
-      setScore(0);
-      setQuizComplete(false);
     };
 
     const handlePlayAudio = () => {
@@ -252,8 +346,8 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords
         }
     };
 
-    // If we don't have enough words
-    if (words.length < 4) {
+    // If we don't have enough words (unless allowed)
+    if (!allowAnyCount && words.length < 4) {
         return (
             <Dialog
                 open={open}
@@ -311,6 +405,26 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords
             <DialogContent>
                 {!quizComplete ? (
                     <Box>
+                        <Stack
+                          direction={{ xs: 'column', sm: 'row' }}
+                          spacing={2}
+                          alignItems={{ xs: 'flex-start', sm: 'center' }}
+                          justifyContent="space-between"
+                          sx={{ mb: 3 }}
+                        >
+                          <Box>
+                            <Typography variant="body2" color="text.secondary">
+                              Round {currentRound}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              Assigned: {totalUniqueWordCount} unique word{totalUniqueWordCount === 1 ? '' : 's'}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              This round: {questions.length} question slot{questions.length === 1 ? '' : 's'}
+                            </Typography>
+                          </Box>
+                        </Stack>
+
                         {/* Quiz Type Selection */}
                         <Box sx={{ mb: 3, display: 'flex', justifyContent: 'center', gap: 1, flexWrap: 'wrap' }}>
                             <Button
@@ -521,13 +635,20 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords
                                 Your score: {score} / {questions.length}
                             </Typography>
 
-                            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                                {score === questions.length
-                                    ? 'Perfect! You got all answers correct.'
-                                    : score > questions.length / 2
-                                        ? 'Good job! Keep practicing to improve your vocabulary.'
-                                        : 'Keep practicing to improve your vocabulary skills.'}
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                                Round {currentRound} complete.
                             </Typography>
+
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                                {hasNextRound
+                                    ? `Great work! ${remainingUniqueCount} unique word${remainingUniqueCount === 1 ? '' : 's'} are waiting for the next round.`
+                                    : 'Fantastic! You practiced every assigned word for this homework.'}
+                            </Typography>
+                            {hasNextRound && (
+                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 3 }}>
+                                Hint: {remainingCount} total question slot{remainingCount === 1 ? '' : 's'} remaining
+                              </Typography>
+                            )}
                         </motion.div>
                     </Box>
                 )}
@@ -559,16 +680,30 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords
                   <Button onClick={onClose} color="inherit">
                     Close
                   </Button>
+                  {hasNextRound && (
+                    <Button
+                      onClick={handleStartNextRound}
+                      variant="contained"
+                      sx={{
+                        borderRadius: 2,
+                        bgcolor: '#2573ff',
+                        '&:hover': { bgcolor: '#1a5cd1' }
+                      }}
+                    >
+                      Learn remaining words{remainingUniqueCount > 0 ? ` (${remainingUniqueCount})` : ''}
+                    </Button>
+                  )}
                   <Button
-                    onClick={handleRestartQuiz}
-                    variant="contained"
+                    onClick={handleRetryCurrentRound}
+                    variant="outlined"
                     sx={{
                       borderRadius: 2,
-                      bgcolor: '#2573ff',
-                      '&:hover': { bgcolor: '#1a5cd1' }
+                      borderColor: '#2573ff',
+                      color: '#2573ff',
+                      '&:hover': { borderColor: '#1a5cd1', color: '#1a5cd1' }
                     }}
                   >
-                    Try Again
+                    Review this round again
                   </Button>
                 </>
               )}

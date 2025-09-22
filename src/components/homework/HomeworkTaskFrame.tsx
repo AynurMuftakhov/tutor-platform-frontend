@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Box, Button, Card, CardContent, CircularProgress, Stack, Typography, LinearProgress, Chip } from '@mui/material';
+import { Box, Button, Card, CardContent, CircularProgress, Stack, Typography, LinearProgress, Chip, Pagination } from '@mui/material';
 import type { AssignmentDto, TaskDto } from '../../types/homework';
 import useHomeworkTaskLifecycle from '../../hooks/useHomeworkTaskLifecycle';
 import { useQuery } from '@tanstack/react-query';
@@ -7,6 +7,7 @@ import { getLessonContent } from '../../services/api';
 import StudentRenderer from '../../features/lessonContent/student/StudentRenderer';
 import GrammarPlayer from '../grammar/GrammarPlayer';
 import QuizMode from '../vocabulary/QuizMode';
+import VocabularyRoundSetup from '../vocabulary/VocabularyRoundSetup';
 import { vocabApi } from '../../services/vocabulary.api';
 import VocabularyList from '../vocabulary/VocabularyList';
 
@@ -25,6 +26,8 @@ const toFiniteNumber = (value: unknown): number | undefined => {
   }
   return undefined;
 };
+
+const LIST_PAGE_SIZE = 10;
 
 const HomeworkTaskFrame: React.FC<Props> = ({ assignment, task, readOnly }) => {
   const { markStarted, reportProgress, markCompleted } = useHomeworkTaskLifecycle(task.id, { minIntervalMs: 400 });
@@ -176,6 +179,11 @@ const HomeworkTaskFrame: React.FC<Props> = ({ assignment, task, readOnly }) => {
 
     const [quizOpen, setQuizOpen] = useState(false);
     const [quizQuestionWords, setQuizQuestionWords] = useState<any[] | null>(null);
+    const [initialSessionSize, setInitialSessionSize] = useState<number | undefined>(undefined);
+    const [setupOpen, setSetupOpen] = useState(false);
+    const [repeatLearnedMode, setRepeatLearnedMode] = useState(false);
+    const [allowAnyCount, setAllowAnyCount] = useState(false);
+    const [listPage, setListPage] = useState(1);
     const [streaks, setStreaks] = useState<Record<string, number>>(() => {
       try {
         const raw = localStorage.getItem(`vocabTaskStreaks:${task.id}`);
@@ -188,6 +196,49 @@ const HomeworkTaskFrame: React.FC<Props> = ({ assignment, task, readOnly }) => {
       }
       return {};
     });
+
+    // Server-provided streaks (from previous sessions), filtered to current task words
+    const serverStreaks = useMemo(() => {
+      const rawMeta = (task.meta || {}) as any;
+      const candidate = rawMeta?.streaks || rawMeta?.streak_map;
+      const out: Record<string, number> = {};
+      if (candidate && typeof candidate === 'object') {
+        const allow = new Set(wordIds);
+        Object.entries(candidate as Record<string, unknown>).forEach(([k, v]) => {
+          if (allow.has(k)) {
+            const n = typeof v === 'number' ? v : typeof v === 'string' ? Number(v) : undefined;
+            if (typeof n === 'number' && Number.isFinite(n)) out[k] = Math.max(0, Math.floor(n));
+          }
+        });
+      }
+      return out;
+    }, [task.meta, wordIds]);
+
+    // Merge server streaks into local streaks once per task/word list change
+    useEffect(() => {
+      // Build merged map using max values and keep only allowed word IDs
+      const allow = new Set(wordIds);
+      const merged: Record<string, number> = {};
+      const allKeys = new Set<string>([...Object.keys(streaks), ...Object.keys(serverStreaks)]);
+      allKeys.forEach((k) => {
+        if (!allow.has(k)) return;
+        const a = streaks[k] ?? 0;
+        const b = serverStreaks[k] ?? 0;
+        const m = Math.max(0, Math.max(a, b));
+        if (m > 0) merged[k] = m;
+      });
+      // If different, update state so persistence effect stores the merged map
+      const same = () => {
+        const keysA = Object.keys(streaks);
+        const keysB = Object.keys(merged);
+        if (keysA.length !== keysB.length) return false;
+        for (const k of keysA) if (streaks[k] !== merged[k]) return false;
+        return true;
+      };
+      if (!same()) {
+        setStreaks(merged);
+      }
+    }, [task.id, JSON.stringify(serverStreaks), JSON.stringify(wordIds)]);
     const [masteredSet, setMasteredSet] = useState<Set<string>>(() => {
       const key = `vocabTaskProgress:${task.id}`;
       try {
@@ -262,6 +313,25 @@ const HomeworkTaskFrame: React.FC<Props> = ({ assignment, task, readOnly }) => {
       return list.sort((a: any, b: any) => (order.get(a.id)! - order.get(b.id)!));
     }, [allWords, wordIds]);
 
+    const totalListPages = Math.max(1, Math.ceil(words.length / LIST_PAGE_SIZE));
+
+    useEffect(() => {
+      setListPage(prev => {
+        if (prev < 1) return 1;
+        if (prev > totalListPages) return totalListPages;
+        return prev;
+      });
+    }, [totalListPages]);
+
+    useEffect(() => {
+      setListPage(1);
+    }, [task.id]);
+
+    const pagedWords = useMemo(() => {
+      const start = (listPage - 1) * LIST_PAGE_SIZE;
+      return words.slice(start, start + LIST_PAGE_SIZE);
+    }, [words, listPage]);
+
     const preMastered = useMemo(() => {
       const set = new Set<string>();
       if (!assignments) return set;
@@ -308,16 +378,19 @@ const HomeworkTaskFrame: React.FC<Props> = ({ assignment, task, readOnly }) => {
     const handleAnswer = (wordId: string, correct: boolean) => {
       if (readOnly) return;
       markStarted();
-      setStreaks(prev => {
-        const cur = { ...prev };
-        const next = correct ? (cur[wordId] || 0) + 1 : 0;
-        cur[wordId] = next;
-        if (next >= masteryStreak) {
-          setMasteredSet(set => new Set(set).add(wordId));
-        }
-        return cur;
-      });
-      const newlyMastered = correct && !mergedMastered.has(wordId) && (streaks[wordId] || 0) + 1 >= masteryStreak;
+
+      // Compute next streak map synchronously so we can report it to the backend
+      const current = streaks;
+      const nextMap: Record<string, number> = { ...current };
+      const nextVal = correct ? (nextMap[wordId] || 0) + 1 : 0;
+      nextMap[wordId] = nextVal;
+
+      if (nextVal >= masteryStreak) {
+        setMasteredSet(set => new Set(set).add(wordId));
+      }
+      setStreaks(nextMap);
+
+      const newlyMastered = correct && !mergedMastered.has(wordId) && nextVal >= masteryStreak;
       const nextMasteredCount = Math.min(total, masteredCount + (newlyMastered ? 1 : 0));
       const nextAttemptedCount = attemptedCount + 1;
       const nextCorrectCount = correctCount + (correct ? 1 : 0);
@@ -337,7 +410,7 @@ const HomeworkTaskFrame: React.FC<Props> = ({ assignment, task, readOnly }) => {
         stats,
         masteredWordIds: Array.from(masteredWordIds),
         lastEvent: { wordId, correct },
-        meta: { lastProgressAt: new Date().toISOString() }
+        meta: { lastProgressAt: new Date().toISOString(), streaks: nextMap }
       });
     };
 
@@ -348,7 +421,7 @@ const HomeworkTaskFrame: React.FC<Props> = ({ assignment, task, readOnly }) => {
           progressPct,
           stats: { total, attemptedCount, correctCount, masteredCount },
           masteredWordIds: Array.from(mergedMastered),
-          meta: { lastProgressAt: new Date().toISOString() }
+          meta: { lastProgressAt: new Date().toISOString(), streaks }
         });
       }
     }, [readOnly, total, masteredCount, progressPct, masteryPct, mergedMastered, markCompleted, attemptedCount, correctCount]);
@@ -361,15 +434,54 @@ const HomeworkTaskFrame: React.FC<Props> = ({ assignment, task, readOnly }) => {
           <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>Learn the words</Typography>
           </Stack>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            Streak each word correctly {masteryStreak === 1 ? 'once' : `${masteryStreak} times`} in a row (as assigned by your teacher) to mark it as learned.
+          </Typography>
           {/* Inline word list for the task */}
-          <Box sx={{ mt: 1 }}>
-            <VocabularyList
-              data={words}
-              readOnly
-              learnedWords={mergedMastered}
-            />
-            <Chip sx={{ mt:2 }} size="small" color={masteredCount === total ? 'success' : 'warning'} label={`${masteredCount}/${total} mastered`} />
-            <LinearProgress variant="determinate" value={progressPct} sx={{ height: 8, borderRadius: 4, mb: 2, mt:2 }} />
+          <Box sx={{ mt: 2 }}>
+            {words.length > 0 ? (
+              <>
+                <Box sx={{ maxHeight: 360, overflowY: 'auto', pr: 1 }}>
+                  <VocabularyList
+                    data={pagedWords}
+                    readOnly
+                    learnedWords={mergedMastered}
+                  />
+                </Box>
+                {totalListPages > 1 && (
+                  <Stack direction="row" justifyContent="center" sx={{ mt: 2 }}>
+                    <Pagination
+                      count={totalListPages}
+                      page={listPage}
+                      onChange={(_, value) => setListPage(value)}
+                      size="small"
+                      color="primary"
+                      showFirstButton
+                      showLastButton
+                    />
+                  </Stack>
+                )}
+              </>
+            ) : (
+              <Typography variant="body2" color="text.secondary" sx={{ py: 6, textAlign: 'center' }}>
+                No words selected for this task.
+              </Typography>
+            )}
+            {total > 0 && (
+              <>
+                <Chip
+                  sx={{ mt: 2 }}
+                  size="small"
+                  color={masteredCount === total ? 'success' : 'warning'}
+                  label={`${masteredCount}/${total} mastered`}
+                />
+                <LinearProgress
+                  variant="determinate"
+                  value={progressPct}
+                  sx={{ height: 8, borderRadius: 4, mt: 1.5, mb: 2 }}
+                />
+              </>
+            )}
           </Box>
           {!readOnly && (
             <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
@@ -384,6 +496,15 @@ const HomeworkTaskFrame: React.FC<Props> = ({ assignment, task, readOnly }) => {
                     const needed = Math.max(1, masteryStreak - have);
                     for (let i = 0; i < needed; i++) expanded.push(w);
                   });
+                  // Pad with learned words to ensure quiz is playable (requires 4 min in normal mode)
+                  if (expanded.length < 4) {
+                    const learnedPool = words.filter((w: any) => mergedMastered.has(w.id));
+                    let idx = 0;
+                    while (expanded.length < 4 && learnedPool.length > 0) {
+                      expanded.push(learnedPool[idx % learnedPool.length]);
+                      idx++;
+                    }
+                  }
                   if (shuffle) {
                     for (let i = expanded.length - 1; i > 0; i--) {
                       const j = Math.floor(Math.random() * (i + 1));
@@ -391,29 +512,55 @@ const HomeworkTaskFrame: React.FC<Props> = ({ assignment, task, readOnly }) => {
                     }
                   }
                   setQuizQuestionWords(expanded);
-                  setQuizOpen(true);
+                  setRepeatLearnedMode(false);
+                  setAllowAnyCount(expanded.length < 4);
+                  setSetupOpen(true);
                 }}
                 disabled={total === 0 || !!readOnly}
               >
                 {masteredCount === 0 ? 'Start' : masteredCount < total ? 'Resume' : 'Review'}
               </Button>
+                {masteredCount > 0 && masteredCount != total && ( <Button
+                variant="outlined"
+                onClick={() => {
+                  if (readOnly) return;
+                  markStarted();
+                  const learnedOnly = words.filter((w: any) => mergedMastered.has(w.id));
+                  setQuizQuestionWords(learnedOnly);
+                  setRepeatLearnedMode(true);
+                  setAllowAnyCount(true);
+                  setSetupOpen(true);
+                }}
+                disabled={mergedMastered.size === 0 || !!readOnly}
+              >
+                Repeat learned
+              </Button>)}
             </Stack>
           )}
+          <VocabularyRoundSetup
+            open={setupOpen}
+            onClose={() => setSetupOpen(false)}
+            words={words}
+            questionWords={quizQuestionWords || unmasteredWords}
+            onStart={({ sessionSize }) => {
+              setInitialSessionSize(sessionSize);
+              setSetupOpen(false);
+              setQuizOpen(true);
+            }}
+            allowAnyCount={allowAnyCount}
+          />
           <QuizMode
             open={quizOpen}
-            onClose={() => { setQuizOpen(false); setQuizQuestionWords(null); }}
+            onClose={() => { setQuizOpen(false); setQuizQuestionWords(null); setInitialSessionSize(undefined); setRepeatLearnedMode(false); setAllowAnyCount(false); }}
             words={words}
             questionWords={quizQuestionWords || unmasteredWords}
             onAnswer={handleAnswer}
             onComplete={() => {
-              // Close to reveal success if completed
-              setQuizOpen(false);
               setQuizQuestionWords(null);
             }}
+            initialSessionSize={initialSessionSize}
+            allowAnyCount={allowAnyCount}
           />
-          {total === 0 && (
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>No words selected for this task.</Typography>
-          )}
           {preMastered.size > 0 && (
             <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>Some words are already mastered globally.</Typography>
           )}
