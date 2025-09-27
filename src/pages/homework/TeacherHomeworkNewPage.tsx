@@ -197,6 +197,66 @@ const TeacherHomeworkNewPage: React.FC = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   }, [estimatedDurationSec]);
 
+  const highlightedTranscript = useMemo(() => {
+    if (!transcriptDraft) {
+      return [] as React.ReactNode[];
+    }
+
+    const escapeRegExp = (value: string) => value.replace(/([-\\^$*+?.()|[\]{}])/g, '\\$1');
+    const uniqueWords = Array.from(
+      new Set(
+        selectedWordChips
+          .map((word) => word.text.trim())
+          .filter((word) => word.length > 0),
+      ),
+    );
+
+    if (uniqueWords.length === 0) {
+      return [transcriptDraft];
+    }
+
+    const pattern = new RegExp(
+      uniqueWords
+        .sort((a, b) => b.length - a.length)
+        .map((word) => escapeRegExp(word))
+        .join('|'),
+      'gi',
+    );
+
+    const nodes: React.ReactNode[] = [];
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = pattern.exec(transcriptDraft)) !== null) {
+      if (match.index > lastIndex) {
+        nodes.push(transcriptDraft.slice(lastIndex, match.index));
+      }
+
+      const matchedText = match[0];
+      nodes.push(
+        <Box
+          key={`hit-${match.index}-${matchedText}-${nodes.length}`}
+          component="strong"
+          sx={{ fontWeight: 700, color: '#1d4ed8' }}
+        >
+          {matchedText}
+        </Box>,
+      );
+
+      lastIndex = match.index + matchedText.length;
+    }
+
+    if (lastIndex < transcriptDraft.length) {
+      nodes.push(transcriptDraft.slice(lastIndex));
+    }
+
+    if (nodes.length === 0) {
+      return [transcriptDraft];
+    }
+
+    return nodes;
+  }, [selectedWordChips, transcriptDraft]);
+
   useEffect(() => {
     if (isListeningTask) {
       setSourceKind('GENERATED_AUDIO');
@@ -713,6 +773,27 @@ const TeacherHomeworkNewPage: React.FC = () => {
                       minRows={6}
                       placeholder="The rainforest is a vibrant, sustainable habitat..."
                     />
+                    {transcriptDraft && (
+                      <Box
+                        sx={{
+                          borderRadius: 2,
+                          border: '1px solid rgba(37,115,255,0.16)',
+                          bgcolor: 'rgba(37,115,255,0.04)',
+                          px: 2,
+                          py: 1.5,
+                        }}
+                      >
+                        <Typography variant="overline" sx={{ letterSpacing: 1, color: '#1d4ed8' }}>
+                          Preview with highlighted words
+                        </Typography>
+                        <Typography
+                          variant="body1"
+                          sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.6, color: '#1a1c1f' }}
+                        >
+                          {highlightedTranscript}
+                        </Typography>
+                      </Box>
+                    )}
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'flex-start', sm: 'center' }}>
                       {formattedEstimatedDuration && (
                         <Typography variant="body2" color="text.secondary">
