@@ -1,8 +1,13 @@
 // Homework domain types matching backend
 
-export type HomeworkTaskType = 'VIDEO' | 'READING' | 'GRAMMAR' | 'VOCAB' | 'LINK';
+export type HomeworkTaskType = 'VIDEO' | 'READING' | 'GRAMMAR' | 'VOCAB' | 'LINK' | 'LISTENING';
 export type HomeworkTaskStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED';
-export type SourceKind = 'MATERIAL' | 'LESSON_CONTENT' | 'EXTERNAL_URL' | 'VOCAB_LIST';
+export type SourceKind =
+  | 'MATERIAL'
+  | 'LESSON_CONTENT'
+  | 'EXTERNAL_URL'
+  | 'VOCAB_LIST'
+  | 'GENERATED_AUDIO';
 
 export interface TaskDto {
   id: string;

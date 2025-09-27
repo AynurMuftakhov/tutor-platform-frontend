@@ -51,3 +51,5 @@ export interface GenerateExerciseResponse {
     tokensUsed: number;
   };
 }
+
+export * from './listeningTranscript';

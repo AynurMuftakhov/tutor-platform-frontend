@@ -2,7 +2,15 @@ import axios from 'axios';
 import {Student} from "../pages/MyStudentsPage";
 import { NotificationMessage} from "../context/NotificationsSocketContext";
 import { ApiError } from '../context/ApiErrorContext';
-import {GenerateExerciseRequest, GenerateExerciseResponse} from "../types";
+import {
+    GenerateExerciseRequest,
+    GenerateExerciseResponse,
+    GenerateListeningTranscriptPayload,
+    ListeningTranscriptResponse,
+    ValidateListeningTranscriptPayload,
+    ValidateListeningTranscriptResponse,
+    UpdateListeningTranscriptPayload,
+} from "../types";
 import { LESSON_CONTENTS_BASE } from '../constants/api';
 import type { PageModel, BlockContentPayload } from '../types/lessonContent';
 
@@ -615,6 +623,46 @@ export interface MicDiagPayload {
 export const postMicDiag = async (payload: MicDiagPayload) => {
   const res = await api.post(`/users-service/api/diag/mic-log`, payload);
   return res.data;
+};
+
+export const generateListeningTranscript = async (
+  payload: GenerateListeningTranscriptPayload,
+): Promise<ListeningTranscriptResponse> => {
+  const response = await api.post<ListeningTranscriptResponse>(
+    `/lessons-service/api/listening/transcripts:generate`,
+    payload,
+  );
+  return response.data;
+};
+
+export const updateListeningTranscript = async (
+  transcriptId: string,
+  payload: UpdateListeningTranscriptPayload,
+): Promise<ListeningTranscriptResponse> => {
+  const response = await api.put<ListeningTranscriptResponse>(
+    `/lessons-service/api/listening/transcripts/${transcriptId}`,
+    payload,
+  );
+  return response.data;
+};
+
+export const getListeningTranscript = async (
+  transcriptId: string,
+): Promise<ListeningTranscriptResponse> => {
+  const response = await api.get<ListeningTranscriptResponse>(
+    `/lessons-service/api/listening/transcripts/${transcriptId}`,
+  );
+  return response.data;
+};
+
+export const validateListeningTranscript = async (
+  payload: ValidateListeningTranscriptPayload,
+): Promise<ValidateListeningTranscriptResponse> => {
+  const response = await api.post<ValidateListeningTranscriptResponse>(
+    `/lessons-service/api/listening/transcripts:validate`,
+    payload,
+  );
+  return response.data;
 };
 
 export default api;
