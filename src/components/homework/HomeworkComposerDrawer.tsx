@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  Alert,
   Autocomplete,
   Box,
   Button,
@@ -9,28 +10,43 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   Drawer,
   FormControlLabel,
   Checkbox,
   IconButton,
   MenuItem,
   Paper,
+  Slider,
   Stack,
   TextField,
   Typography,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import ContentPasteIcon from '@mui/icons-material/ContentPaste';
-import {useQuery} from '@tanstack/react-query';
+import {useMutation, useQuery} from '@tanstack/react-query';
 import {useAuth} from '../../context/AuthContext';
 import {useCreateAssignment} from '../../hooks/useHomeworks';
 import {useAssignWords} from '../../hooks/useAssignments';
 import {CreateAssignmentDto, HomeworkTaskType, SourceKind, AssignmentDto} from '../../types/homework';
 import {toOffsetDateTime} from '../../utils/datetime';
-import {fetchStudents, fetchUserById} from '../../services/api';
+import {
+  fetchStudents,
+  fetchUserById,
+  generateListeningTranscript,
+  updateListeningTranscript,
+  validateListeningTranscript,
+} from '../../services/api';
 import {vocabApi} from '../../services/vocabulary.api';
 import VocabularyList from '../vocabulary/VocabularyList';
-import type {VocabularyWord} from '../../types';
+import type {
+  GenerateListeningTranscriptPayload,
+  ListeningTranscriptResponse,
+  ValidateListeningTranscriptPayload,
+  ValidateListeningTranscriptResponse,
+  VocabularyWord,
+} from '../../types';
+import { ENGLISH_LEVELS } from '../../types/ENGLISH_LEVELS';
 
 export interface HomeworkComposerDrawerProps {
   open: boolean;
@@ -74,7 +90,31 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
   const [shuffle, setShuffle] = React.useState<boolean>(true);
   const [timeLimitMin, setTimeLimitMin] = React.useState<string>('');
 
+  // Listening transcript generation state
+  const [listeningDurationSecTarget, setListeningDurationSecTarget] = React.useState<number>(90);
+  const [listeningTheme, setListeningTheme] = React.useState('');
+  const [listeningLanguage, setListeningLanguage] = React.useState('en-US');
+  const [listeningCefr, setListeningCefr] = React.useState('B1');
+  const [listeningStyle, setListeningStyle] = React.useState('neutral');
+  const [listeningSeed, setListeningSeed] = React.useState('');
+  const [listeningMustIncludeAll, setListeningMustIncludeAll] = React.useState(true);
+  const [transcriptId, setTranscriptId] = React.useState<string | null>(null);
+  const [transcriptDraft, setTranscriptDraft] = React.useState('');
+  const [transcriptMetadata, setTranscriptMetadata] = React.useState<ListeningTranscriptResponse['metadata']>({
+    language: listeningLanguage,
+    theme: listeningTheme,
+    cefr: listeningCefr,
+    style: listeningStyle,
+  });
+  const [estimatedDurationSec, setEstimatedDurationSec] = React.useState<number | null>(null);
+  const [wordCoverage, setWordCoverage] = React.useState<Record<string, boolean>>({});
+  const [coverageMissing, setCoverageMissing] = React.useState<string[]>([]);
+  const [transcriptError, setTranscriptError] = React.useState<string | null>(null);
+  const [transcriptInfo, setTranscriptInfo] = React.useState<string | null>(null);
+  const [hasUnsavedTranscriptEdits, setHasUnsavedTranscriptEdits] = React.useState(false);
+
   const isVocabList = taskType === 'VOCAB' && sourceKind === 'VOCAB_LIST';
+  const isListeningTask = taskType === 'LISTENING';
 
   // Load vocabulary words
   const { data: allWords = [] } = useQuery<VocabularyWord[]>({
@@ -96,6 +136,33 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
     const map = new Map(allWords.map(w => [w.id, w] as const));
     return selectedWordIds.map(id => map.get(id)).filter(Boolean) as VocabularyWord[];
   }, [allWords, selectedWordIds]);
+
+  const listeningWordIds = React.useMemo(
+    () => selectedWordIds.filter((id) => id && id.trim().length > 0),
+    [selectedWordIds],
+  );
+
+  const listeningWordRequirementMet = listeningWordIds.length >= 3;
+
+  const cefrOptions = React.useMemo(() => Array.from(new Set(Object.values(ENGLISH_LEVELS).map(level => level.code))), []);
+  const languageOptions = React.useMemo(() => ['en-US', 'en-GB', 'en-AU', 'es-ES', 'fr-FR', 'de-DE'], []);
+  const styleOptions = React.useMemo(() => ['neutral', 'storytelling', 'documentary', 'conversational', 'inspirational'], []);
+  const taskTypeOptions: HomeworkTaskType[] = ['VIDEO', 'READING', 'GRAMMAR', 'VOCAB', 'LISTENING', 'LINK'];
+  const durationMarks = React.useMemo(() => (
+    [
+      { value: 45, label: '0:45' },
+      { value: 60, label: '1:00' },
+      { value: 90, label: '1:30' },
+      { value: 120, label: '2:00' },
+    ]
+  ), []);
+  const sourceKindOptions: SourceKind[] = ['MATERIAL', 'LESSON_CONTENT', 'EXTERNAL_URL', 'VOCAB_LIST', 'GENERATED_AUDIO'];
+
+  const formatDurationLabel = (value: number) => {
+    const mins = Math.floor(value / 60);
+    const secs = Math.max(0, value % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
 
   // fetch student options debounced by query
   React.useEffect(() => {
@@ -147,6 +214,27 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
       setMasteryStreak(2);
       setShuffle(true);
       setTimeLimitMin('');
+      setListeningDurationSecTarget(90);
+      setListeningTheme('');
+      setListeningLanguage('en-US');
+      setListeningCefr('B1');
+      setListeningStyle('neutral');
+      setListeningSeed('');
+      setListeningMustIncludeAll(true);
+      setTranscriptId(null);
+      setTranscriptDraft('');
+      setTranscriptMetadata({
+        language: 'en-US',
+        theme: undefined,
+        cefr: 'B1',
+        style: 'neutral',
+      });
+      setEstimatedDurationSec(null);
+      setWordCoverage({});
+      setCoverageMissing([]);
+      setTranscriptError(null);
+      setTranscriptInfo(null);
+      setHasUnsavedTranscriptEdits(false);
     }
   }, [open]);
 
@@ -156,17 +244,299 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
     try { new URL(sourceUrl.trim()); return true; } catch { return false; }
   }, [sourceKind, sourceUrl]);
 
+  const isVocabSelectionInvalid = selectedWordIds.length < 5 || selectedWordIds.length > 100;
+
+  const generateTranscriptMutation = useMutation<
+    ListeningTranscriptResponse,
+    Error,
+    GenerateListeningTranscriptPayload
+  >({
+    mutationFn: async (payload) => {
+      if (!user?.id) {
+        throw new Error('You need to be signed in to generate transcripts.');
+      }
+      return generateListeningTranscript(user.id, payload);
+    },
+  });
+
+  const updateTranscriptMutation = useMutation<
+    ListeningTranscriptResponse,
+    Error,
+    { transcriptId: string; transcript: string }
+  >({
+    mutationFn: async ({ transcriptId, transcript }) => {
+      if (!user?.id) {
+        throw new Error('You need to be signed in to save transcripts.');
+      }
+      return updateListeningTranscript(user.id, transcriptId, { transcript });
+    },
+  });
+
+  const validateTranscriptMutation = useMutation<
+    ValidateListeningTranscriptResponse,
+    Error,
+    ValidateListeningTranscriptPayload
+  >({
+    mutationFn: (payload) => validateListeningTranscript(payload),
+  });
+
+  const coverageEntries = React.useMemo(() => {
+    if (selectedWordChips.length === 0) return [] as Array<{ word: string; covered: boolean }>;
+    return selectedWordChips.map((word) => {
+      const normalized = word.text.trim();
+      const lower = normalized.toLowerCase();
+      const covered = Boolean(
+        wordCoverage[normalized] ?? wordCoverage[lower] ?? wordCoverage[word.text] ?? false,
+      );
+      return { word: normalized, covered };
+    });
+  }, [selectedWordChips, wordCoverage]);
+
+  const formattedEstimatedDuration = React.useMemo(() => {
+    if (estimatedDurationSec == null) return null;
+    const mins = Math.floor(estimatedDurationSec / 60);
+    const secs = Math.max(0, estimatedDurationSec % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  }, [estimatedDurationSec]);
+
+  const highlightedTranscript = React.useMemo(() => {
+    if (!transcriptDraft) {
+      return [] as React.ReactNode[];
+    }
+
+    const escapeRegExp = (value: string) => value.replace(/([-\\^$*+?.()|[\]{}])/g, '\\$1');
+    const uniqueWords = Array.from(
+      new Set(
+        selectedWordChips
+          .map((word) => word.text.trim())
+          .filter((word) => word.length > 0),
+      ),
+    );
+
+    if (uniqueWords.length === 0) {
+      return [transcriptDraft];
+    }
+
+    const pattern = new RegExp(
+      uniqueWords
+        .sort((a, b) => b.length - a.length)
+        .map((word) => escapeRegExp(word))
+        .join('|'),
+      'gi',
+    );
+
+    const nodes: React.ReactNode[] = [];
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = pattern.exec(transcriptDraft)) !== null) {
+      if (match.index > lastIndex) {
+        nodes.push(transcriptDraft.slice(lastIndex, match.index));
+      }
+
+      const matchedText = match[0];
+      nodes.push(
+        <Box
+          key={`hit-${match.index}-${matchedText}-${nodes.length}`}
+          component="strong"
+          sx={{ fontWeight: 700, color: '#1d4ed8' }}
+        >
+          {matchedText}
+        </Box>,
+      );
+
+      lastIndex = match.index + matchedText.length;
+    }
+
+    if (lastIndex < transcriptDraft.length) {
+      nodes.push(transcriptDraft.slice(lastIndex));
+    }
+
+    if (nodes.length === 0) {
+      return [transcriptDraft];
+    }
+
+    return nodes;
+  }, [selectedWordChips, transcriptDraft]);
+
+  React.useEffect(() => {
+    if (isListeningTask) {
+      setSourceKind('GENERATED_AUDIO');
+    } else if (sourceKind === 'GENERATED_AUDIO') {
+      setSourceKind('EXTERNAL_URL');
+    }
+  }, [isListeningTask, sourceKind]);
+
+  React.useEffect(() => {
+    if (!isListeningTask) {
+      setTranscriptId(null);
+      setTranscriptDraft('');
+      setWordCoverage({});
+      setCoverageMissing([]);
+      setEstimatedDurationSec(null);
+      setTranscriptError(null);
+      setTranscriptInfo(null);
+      setHasUnsavedTranscriptEdits(false);
+    }
+  }, [isListeningTask]);
+
+  React.useEffect(() => {
+    if (!isListeningTask || transcriptId) return;
+    setTranscriptMetadata({
+      language: listeningLanguage,
+      theme: listeningTheme || undefined,
+      cefr: listeningCefr,
+      style: listeningStyle,
+    });
+  }, [isListeningTask, transcriptId, listeningLanguage, listeningTheme, listeningCefr, listeningStyle]);
+
+  const buildCoverageMissing = (coverage: Record<string, boolean> | undefined) =>
+    Object.entries(coverage ?? {})
+      .filter(([, covered]) => !covered)
+      .map(([word]) => word);
+
+  const handleGenerateTranscript = async () => {
+    setTranscriptError(null);
+    setTranscriptInfo(null);
+
+    if (!isListeningTask) return;
+
+    if (!listeningWordRequirementMet) {
+      setTranscriptError('Select at least 3 focus words to guide the story.');
+      return;
+    }
+
+    const payload: GenerateListeningTranscriptPayload = {
+      wordIds: listeningWordIds,
+      durationSecTarget: listeningDurationSecTarget,
+      theme: listeningTheme || undefined,
+      cefr: listeningCefr || undefined,
+      language: listeningLanguage || undefined,
+      style: listeningStyle || undefined,
+      constraints: listeningMustIncludeAll ? { mustIncludeAllWords: true } : undefined,
+    };
+
+    if (listeningSeed.trim()) {
+      const parsedSeed = Number(listeningSeed.trim());
+      if (Number.isNaN(parsedSeed)) {
+        setTranscriptError('Seed must be a number.');
+        return;
+      }
+      payload.seed = parsedSeed;
+    }
+
+    try {
+      const result = await generateTranscriptMutation.mutateAsync(payload);
+      setTranscriptId(result.transcriptId);
+      setTranscriptDraft(result.transcript ?? '');
+      setWordCoverage(result.wordCoverage ?? {});
+      setCoverageMissing(buildCoverageMissing(result.wordCoverage));
+      setEstimatedDurationSec(result.estimatedDurationSec ?? null);
+      setTranscriptMetadata(
+        result.metadata ?? {
+          language: listeningLanguage,
+          theme: listeningTheme || undefined,
+          cefr: listeningCefr,
+          style: listeningStyle,
+        },
+      );
+      setHasUnsavedTranscriptEdits(false);
+      setTranscriptInfo('Transcript generated. Tweak the draft if needed, then save.');
+    } catch (error) {
+      console.error('Failed to generate transcript', error);
+      setTranscriptError(
+        error instanceof Error ? error.message : 'Failed to generate transcript. Please try again.',
+      );
+    }
+  };
+
+  const handleSaveTranscript = async () => {
+    if (!transcriptId) return;
+
+    setTranscriptError(null);
+    setTranscriptInfo(null);
+
+    try {
+      const result = await updateTranscriptMutation.mutateAsync({
+        transcriptId,
+        transcript: transcriptDraft.trim(),
+      });
+      setTranscriptDraft(result.transcript ?? transcriptDraft);
+      setWordCoverage(result.wordCoverage ?? {});
+      setCoverageMissing(buildCoverageMissing(result.wordCoverage));
+      setEstimatedDurationSec(result.estimatedDurationSec ?? estimatedDurationSec);
+      setTranscriptMetadata(result.metadata ?? transcriptMetadata);
+      setHasUnsavedTranscriptEdits(false);
+      setTranscriptInfo('Transcript saved.');
+    } catch (error) {
+      console.error('Failed to save transcript', error);
+      setTranscriptError(
+        error instanceof Error ? error.message : 'Could not save transcript. Please try again.',
+      );
+    }
+  };
+
+  const handleValidateTranscript = async () => {
+    setTranscriptError(null);
+    setTranscriptInfo(null);
+
+    if (!transcriptDraft.trim()) {
+      setTranscriptError('Transcript text cannot be empty.');
+      return;
+    }
+
+    if (!listeningWordRequirementMet) {
+      setTranscriptError('Make sure you selected enough vocabulary words before validating.');
+      return;
+    }
+
+    try {
+      const result = await validateTranscriptMutation.mutateAsync({
+        transcript: transcriptDraft,
+        wordIds: listeningWordIds,
+      });
+      setWordCoverage(result.wordCoverage ?? {});
+      setCoverageMissing(buildCoverageMissing(result.wordCoverage));
+      setTranscriptInfo(
+        result.missing.length === 0
+          ? 'Every target word is present. Ready for audio!'
+          : 'Some words are still missing. Consider tweaking the text.',
+      );
+    } catch (error) {
+      console.error('Failed to validate transcript', error);
+      setTranscriptError(
+        error instanceof Error ? error.message : 'Validation failed. Try again in a moment.',
+      );
+    }
+  };
+
   const isValid = React.useMemo(() => {
     if (!studentId || !title.trim()) return false;
     if (isVocabList) {
-      return selectedWordIds.length >= 5 && selectedWordIds.length <= 100;
+      return !isVocabSelectionInvalid;
+    }
+    if (isListeningTask) {
+      if (!transcriptId || hasUnsavedTranscriptEdits || !listeningWordRequirementMet) {
+        return false;
+      }
+      return true;
     }
     if (sourceKind === 'EXTERNAL_URL') {
       return urlValid;
     }
-    // other combinations considered valid for now (MATERIAL/LESSON_CONTENT pickers are future work)
     return true;
-  }, [studentId, title, isVocabList, selectedWordIds.length, sourceKind, urlValid]);
+  }, [
+    studentId,
+    title,
+    isVocabList,
+    isVocabSelectionInvalid,
+    isListeningTask,
+    transcriptId,
+    hasUnsavedTranscriptEdits,
+    listeningWordRequirementMet,
+    sourceKind,
+    urlValid,
+  ]);
 
   const handlePasteFromClipboard = async () => {
     try {
@@ -191,6 +561,34 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
         contentRef: { wordIds: selectedWordIds, settings },
         vocabWordIds: selectedWordIds,
       });
+    } else if (isListeningTask && transcriptId) {
+      const generatorParams = {
+        wordIds: listeningWordIds,
+        durationSecTarget: listeningDurationSecTarget,
+        theme: listeningTheme || undefined,
+        cefr: listeningCefr || undefined,
+        language: listeningLanguage || undefined,
+        style: listeningStyle || undefined,
+        constraints: listeningMustIncludeAll ? { mustIncludeAllWords: true } : undefined,
+        seed: listeningSeed.trim() ? Number(listeningSeed.trim()) : undefined,
+      };
+
+      tasks.push({
+        title: taskTitle,
+        type: 'LISTENING',
+        sourceKind: 'GENERATED_AUDIO',
+        instructions: undefined,
+        contentRef: {
+          transcriptId,
+          transcript: transcriptDraft.trim(),
+          wordIds: listeningWordIds,
+          estimatedDurationSec: estimatedDurationSec ?? listeningDurationSecTarget,
+          metadata: transcriptMetadata,
+          wordCoverage,
+          generatorParams,
+        },
+        vocabWordIds: selectedWordIds,
+      });
     } else {
       tasks.push({
         title: taskTitle,
@@ -205,6 +603,27 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
 
   const submit = async (openAfterCreate: boolean) => {
     if (!user?.id || !isValid) return;
+
+    if (isListeningTask) {
+      setTranscriptError(null);
+      setTranscriptInfo(null);
+
+      if (!transcriptId) {
+        setTranscriptError('Generate the transcript before creating the homework.');
+        return;
+      }
+
+      if (hasUnsavedTranscriptEdits) {
+        setTranscriptError('Save your transcript edits before continuing.');
+        return;
+      }
+
+      if (!listeningWordRequirementMet) {
+        setTranscriptError('Please verify the selected vocabulary before creating the task.');
+        return;
+      }
+    }
+
     const payload: CreateAssignmentDto = {
       studentId,
       title,
@@ -293,12 +712,28 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
             <Typography variant="h6" sx={{ mb: 2 }}>Task</Typography>
             <Stack gap={2}>
               {/*<TextField label="Task title" value={taskTitle} onChange={e => setTaskTitle(e.target.value)} fullWidth />*/}
-              <TextField select label="Task type" value={taskType} onChange={e => setTaskType(e.target.value as HomeworkTaskType)}>
-                {['VOCAB'].map(t => (<MenuItem key={t} value={t}>{t}</MenuItem>))}
+              <TextField
+                select
+                label="Task type"
+                value={taskType}
+                onChange={e => setTaskType(e.target.value as HomeworkTaskType)}
+              >
+                {taskTypeOptions.map(t => (<MenuItem key={t} value={t}>{t}</MenuItem>))}
               </TextField>
-              <TextField select label="Source kind" value={sourceKind} onChange={e => setSourceKind(e.target.value as SourceKind)}>
-                {['VOCAB_LIST'].map(s => (<MenuItem key={s} value={s}>{s}</MenuItem>))}
-              </TextField>
+              {!isListeningTask ? (
+                <TextField
+                  select
+                  label="Source kind"
+                  value={sourceKind}
+                  onChange={e => setSourceKind(e.target.value as SourceKind)}
+                >
+                  {sourceKindOptions
+                    .filter(s => s !== 'GENERATED_AUDIO')
+                    .map(s => (<MenuItem key={s} value={s}>{s}</MenuItem>))}
+                </TextField>
+              ) : (
+                <TextField label="Source kind" value="GENERATED_AUDIO" InputProps={{ readOnly: true }} disabled />
+              )}
 
               {sourceKind === 'EXTERNAL_URL' && (
                 <Stack direction="row" gap={1} alignItems="center">
@@ -307,12 +742,24 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
                 </Stack>
               )}
 
-              {isVocabList && (
-                <Stack gap={1} sx={{ mt: 1 }}>
+              {(isVocabList || isListeningTask) && (
+                <Stack gap={isListeningTask ? 2 : 1} sx={{ mt: 1 }}>
                   <Stack direction="row" gap={1} alignItems="center">
-                    <Button variant="outlined" onClick={() => setPickerOpen(true)}>Select words</Button>
-                    <Chip size="small" color={selectedWordIds.length >= 5 ? 'success' : 'warning'} label={`${selectedWordIds.length} selected`} />
-                    <Typography variant="caption" color="text.secondary">Choose 5–100 words</Typography>
+                    <Button variant="outlined" onClick={() => setPickerOpen(true)}>
+                      {isListeningTask ? 'Pick focus words' : 'Select words'}
+                    </Button>
+                    <Chip
+                      size="small"
+                      color={
+                        isVocabList
+                          ? (!isVocabSelectionInvalid ? 'success' : 'warning')
+                          : (listeningWordRequirementMet ? 'success' : 'warning')
+                      }
+                      label={`${selectedWordIds.length} selected`}
+                    />
+                    <Typography variant="caption" color="text.secondary">
+                      {isVocabList ? 'Choose 5–100 words' : 'Pick 3+ words to anchor the transcript'}
+                    </Typography>
                   </Stack>
                   {selectedWordChips.length > 0 && (
                     <Stack direction="row" gap={1} useFlexGap flexWrap="wrap">
@@ -324,16 +771,184 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
                       )}
                     </Stack>
                   )}
-                  {(selectedWordIds.length < 5 || selectedWordIds.length > 100) && (
+                  {isVocabList && isVocabSelectionInvalid && (
                     <Typography variant="caption" color="error">Please select between 5 and 100 words.</Typography>
                   )}
-                  <TextField type="number" label="Mastery streak" value={masteryStreak}
-                             onChange={e => setMasteryStreak(Math.max(1, Math.min(10, Number(e.target.value) || 0)))}
-                             InputLabelProps={{ shrink: true }} inputProps={{ min: 1, max: 10 }} />
-                  {/*<FormControlLabel control={<Checkbox checked={shuffle} onChange={(e)=> setShuffle(e.target.checked)} />} label="Shuffle words" />*/}
-     {/*             <TextField type="number" label="Time limit (minutes)" value={timeLimitMin}
-                             onChange={e => setTimeLimitMin(e.target.value)} InputLabelProps={{ shrink: true }}
-                             helperText="Optional" />*/}
+                  {isListeningTask && !listeningWordRequirementMet && (
+                    <Typography variant="caption" color="error">
+                      Please select at least 3 words to proceed.
+                    </Typography>
+                  )}
+
+                  {isVocabList && (
+                    <TextField
+                      type="number"
+                      label="Mastery streak"
+                      value={masteryStreak}
+                      onChange={e => setMasteryStreak(Math.max(1, Math.min(10, Number(e.target.value) || 0)))}
+                      InputLabelProps={{ shrink: true }}
+                      inputProps={{ min: 1, max: 10 }}
+                    />
+                  )}
+
+                  {isListeningTask && (
+                    <>
+                      <Divider flexItem sx={{ borderStyle: 'dashed', opacity: 0.6 }} />
+
+                      <Stack gap={1.5}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>Generation preferences</Typography>
+                        <Box>
+                          <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500 }} gutterBottom>
+                            Target duration
+                          </Typography>
+                          <Slider
+                            value={listeningDurationSecTarget}
+                            onChange={(_, value) => setListeningDurationSecTarget(Array.isArray(value) ? value[0] : value)}
+                            min={45}
+                            max={150}
+                            step={15}
+                            marks={durationMarks}
+                            valueLabelDisplay="on"
+                            valueLabelFormat={(value) => formatDurationLabel(value as number)}
+                            sx={{ px: 1 }}
+                          />
+                        </Box>
+                        <TextField
+                          fullWidth
+                          label="Theme"
+                          placeholder="Wildlife conservation"
+                          value={listeningTheme}
+                          onChange={(e) => setListeningTheme(e.target.value)}
+                        />
+                      </Stack>
+
+                      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                        <TextField select label="Language" value={listeningLanguage} onChange={(e) => setListeningLanguage(e.target.value)} fullWidth>
+                          {languageOptions.map(lang => <MenuItem key={lang} value={lang}>{lang}</MenuItem>)}
+                        </TextField>
+                        <TextField select label="CEFR" value={listeningCefr} onChange={(e) => setListeningCefr(e.target.value)} fullWidth>
+                          {cefrOptions.map(level => <MenuItem key={level} value={level}>{level}</MenuItem>)}
+                        </TextField>
+                      </Stack>
+
+                      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                        <TextField select label="Narration style" value={listeningStyle} onChange={(e) => setListeningStyle(e.target.value)} fullWidth>
+                          {styleOptions.map(style => <MenuItem key={style} value={style}>{style}</MenuItem>)}
+                        </TextField>
+                        <TextField
+                          label="Seed (optional)"
+                          value={listeningSeed}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (/^-?\d*$/.test(val)) {
+                              setListeningSeed(val);
+                            }
+                          }}
+                          placeholder="42"
+                          inputProps={{ inputMode: 'numeric', pattern: '-?[0-9]*' }}
+                          fullWidth
+                        />
+                      </Stack>
+
+                      <FormControlLabel
+                        control={<Checkbox checked={listeningMustIncludeAll} onChange={(e) => setListeningMustIncludeAll(e.target.checked)} />}
+                        label="Force every selected word to appear"
+                      />
+
+                      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }}>
+                        <Button
+                          variant="contained"
+                          onClick={handleGenerateTranscript}
+                          disabled={generateTranscriptMutation.isPending}
+                          sx={{ minWidth: 200 }}
+                        >
+                          {generateTranscriptMutation.isPending ? <CircularProgress size={18} sx={{ color: 'white' }} /> : 'Generate transcript'}
+                        </Button>
+                        <Button
+                          variant="outlined"
+                          onClick={handleValidateTranscript}
+                          disabled={validateTranscriptMutation.isPending || !transcriptDraft}
+                        >
+                          {validateTranscriptMutation.isPending ? <CircularProgress size={18} /> : 'Validate coverage'}
+                        </Button>
+                        <Button
+                          variant="outlined"
+                          color="success"
+                          onClick={handleSaveTranscript}
+                          disabled={!transcriptId || !hasUnsavedTranscriptEdits || updateTranscriptMutation.isPending}
+                        >
+                          {updateTranscriptMutation.isPending ? <CircularProgress size={18} /> : 'Save edits'}
+                        </Button>
+                      </Stack>
+
+                      {transcriptError && <Alert severity="error">{transcriptError}</Alert>}
+                      {transcriptInfo && <Alert severity="info">{transcriptInfo}</Alert>}
+
+                      <Stack spacing={1.5}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>Transcript draft</Typography>
+                        <TextField
+                          value={transcriptDraft}
+                          onChange={(e) => {
+                            setTranscriptDraft(e.target.value);
+                            setHasUnsavedTranscriptEdits(true);
+                          }}
+                          multiline
+                          minRows={5}
+                          placeholder="The rainforest is a vibrant, sustainable habitat..."
+                        />
+                        {transcriptDraft && (
+                          <Box
+                            sx={{
+                              borderRadius: 2,
+                              border: '1px solid rgba(37,115,255,0.16)',
+                              bgcolor: 'rgba(37,115,255,0.04)',
+                              px: 2,
+                              py: 1.5,
+                            }}
+                          >
+                            <Typography variant="overline" sx={{ letterSpacing: 1, color: '#1d4ed8' }}>
+                              Preview with highlighted words
+                            </Typography>
+                            <Typography
+                              variant="body2"
+                              sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.6, color: '#1a1c1f' }}
+                            >
+                              {highlightedTranscript}
+                            </Typography>
+                          </Box>
+                        )}
+                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'flex-start', sm: 'center' }}>
+                          {formattedEstimatedDuration && (
+                            <Typography variant="body2" color="text.secondary">
+                              Estimated runtime: {formattedEstimatedDuration}
+                            </Typography>
+                          )}
+                          {transcriptId && (
+                            <Typography variant="body2" color="text.secondary">
+                              Draft saved as #{transcriptId.slice(0, 8)}
+                            </Typography>
+                          )}
+                        </Stack>
+                        {coverageEntries.length > 0 && (
+                          <Stack spacing={0.5}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>Word coverage</Typography>
+                            <Stack spacing={0.5}>
+                              {coverageEntries.map(entry => (
+                                <Typography key={entry.word} variant="body2" sx={{ color: entry.covered ? '#047857' : '#b91c1c' }}>
+                                  {entry.covered ? '✔︎' : '✕'} {entry.word}
+                                </Typography>
+                              ))}
+                            </Stack>
+                            {coverageMissing.length > 0 && (
+                              <Typography variant="caption" color="error">
+                                Missing: {coverageMissing.join(', ')}
+                              </Typography>
+                            )}
+                          </Stack>
+                        )}
+                      </Stack>
+                    </>
+                  )}
                 </Stack>
               )}
             </Stack>
@@ -352,7 +967,7 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
 
       {/* Nested vocabulary selector dialog */}
       <Dialog open={pickerOpen} onClose={() => setPickerOpen(false)} fullWidth maxWidth="md">
-        <DialogTitle>Select vocabulary words</DialogTitle>
+        <DialogTitle>{isListeningTask ? 'Select focus words' : 'Select vocabulary words'}</DialogTitle>
         <DialogContent>
           <Stack gap={2} sx={{ mt: 1 }}>
             <TextField label="Search" value={wordSearch} onChange={e => setWordSearch(e.target.value)} fullWidth />
