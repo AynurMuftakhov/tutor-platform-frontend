@@ -102,7 +102,7 @@ const ListeningAudioGenerationPanel: React.FC<ListeningAudioGenerationPanelProps
   onDurationUpdate,
   onStatusChange,
 }) => {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
 
   const [search, setSearch] = useState('');
@@ -235,7 +235,6 @@ const ListeningAudioGenerationPanel: React.FC<ListeningAudioGenerationPanelProps
       persistJobState(null);
       setJob(null);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey]);
 
   // Track document visibility for adaptive polling
@@ -461,7 +460,7 @@ const ListeningAudioGenerationPanel: React.FC<ListeningAudioGenerationPanelProps
     };
 
     try {
-      const response: ListeningAudioJobStartResponse = await startListeningAudioGeneration(payload, token, idempotencyKey);
+      const response: ListeningAudioJobStartResponse = await startListeningAudioGeneration(user?.id as string, payload, token, idempotencyKey);
       setJob({ jobId: response.jobId, status: response.status });
       setJobStartedAt(Date.now());
       setPollIndex(0);

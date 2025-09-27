@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { resolveUrl } from './assets';
 import {Student} from "../pages/MyStudentsPage";
 import { NotificationMessage} from "../context/NotificationsSocketContext";
 import { ApiError } from '../context/ApiErrorContext';
@@ -676,23 +677,25 @@ export const validateListeningTranscript = async (
 };
 
 export const listListeningVoices = async (): Promise<ListeningVoice[]> => {
-  const response = await api.get<ListeningVoice[]>(`/api/listening/voices`);
+  const response = await api.get<ListeningVoice[]>(`/lessons-service/api/listening/voices`);
   return response.data;
 };
 
 export const startListeningAudioGeneration = async (
+  teacherId: string,
   payload: StartListeningAudioJobPayload,
   token: string,
   idempotencyKey: string,
 ): Promise<ListeningAudioJobStartResponse> => {
   const response = await api.post<ListeningAudioJobStartResponse>(
-    `/api/listening/audio:generate`,
+    `lessons-service/api/listening/audio/generate`,
     payload,
     {
       headers: {
         Authorization: `Bearer ${token}`,
         'Idempotency-Key': idempotencyKey,
       },
+      params: { teacherId },
     },
   );
   return response.data;
@@ -702,9 +705,14 @@ export const getListeningAudioJobStatus = async (
   jobId: string,
 ): Promise<ListeningAudioJobStatusResponse> => {
   const response = await api.get<ListeningAudioJobStatusResponse>(
-    `/api/listening/audio/jobs/${jobId}`,
+    `lessons-service/api/listening/audio/jobs/${jobId}`,
   );
-  return response.data;
+  const data = response.data;
+  // Normalize audioUrl using shared resolver (env-aware)
+  if (data && typeof data.audioUrl === 'string' && data.audioUrl) {
+    data.audioUrl = resolveUrl(data.audioUrl);
+  }
+  return data;
 };
 
 export default api;

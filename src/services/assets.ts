@@ -6,7 +6,7 @@ const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
 const SUPPORTED_TYPES = new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif']);
 const SUPPORTED_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif']);
 
-export function resolveImageUrl(url: string): string {
+export function resolveUrl(url: string): string {
   if (!url) return url;
   const trimmed = url.trim();
   // Absolute or data URL
@@ -63,7 +63,7 @@ export async function uploadImageAsset({ file, onUploadProgress }: UploadImagePa
       onUploadProgress,
     });
     const data = response.data;
-    return { ...data, url: resolveImageUrl(data.url) };
+    return { ...data, url: resolveUrl(data.url) };
   } catch (error) {
     if (axios.isAxiosError(error)) {
       const err = error as AxiosError;
@@ -83,7 +83,7 @@ export async function fetchImageAssets(params: { offset: number; limit: number }
   const response = await api.get('lessons-service/api/assets/images', { params });
   const data = response.data;
 
-  const mapItems = (arr: any[]): any[] => arr.map((it) => ({ ...it, url: resolveImageUrl(it.url) }));
+  const mapItems = (arr: any[]): any[] => arr.map((it) => ({ ...it, url: resolveUrl(it.url) }));
 
   if (Array.isArray(data)) {
     return { items: mapItems(data) };

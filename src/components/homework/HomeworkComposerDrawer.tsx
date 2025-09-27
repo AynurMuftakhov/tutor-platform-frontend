@@ -754,7 +754,7 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
               >
                 {taskTypeOptions.map(t => (<MenuItem key={t} value={t}>{t}</MenuItem>))}
               </TextField>
-              {!isListeningTask && !isVocabList ? (
+              {!isListeningTask && !isVocabList && (
                 <TextField
                   select
                   label="Source kind"
@@ -765,11 +765,7 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
                     .filter(s => s !== 'GENERATED_AUDIO' && s !== 'VOCAB_LIST')
                     .map(s => (<MenuItem key={s} value={s}>{s}</MenuItem>))}
                 </TextField>
-              ) : ( isListeningTask ? (
-                <TextField label="Source kind" value="GENERATED_AUDIO" InputProps={{ readOnly: true }} disabled />
-              ) : (
-                      <TextField label="Source kind" value="VOCAB_LIST" InputProps={{ readOnly: true }} disabled />
-                  ))}
+              )}
 
               {sourceKind === 'EXTERNAL_URL' && (
                 <Stack direction="row" gap={1} alignItems="center">
