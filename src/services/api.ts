@@ -626,31 +626,37 @@ export const postMicDiag = async (payload: MicDiagPayload) => {
 };
 
 export const generateListeningTranscript = async (
+  teacherId: string,
   payload: GenerateListeningTranscriptPayload,
 ): Promise<ListeningTranscriptResponse> => {
   const response = await api.post<ListeningTranscriptResponse>(
-    `/lessons-service/api/listening/transcripts:generate`,
+    `/lessons-service/api/listening/transcripts/generate`,
     payload,
+    { params: { teacherId } },
   );
   return response.data;
 };
 
 export const updateListeningTranscript = async (
+  teacherId: string,
   transcriptId: string,
   payload: UpdateListeningTranscriptPayload,
 ): Promise<ListeningTranscriptResponse> => {
   const response = await api.put<ListeningTranscriptResponse>(
     `/lessons-service/api/listening/transcripts/${transcriptId}`,
     payload,
+    { params: { teacherId } },
   );
   return response.data;
 };
 
 export const getListeningTranscript = async (
+  teacherId: string,
   transcriptId: string,
 ): Promise<ListeningTranscriptResponse> => {
   const response = await api.get<ListeningTranscriptResponse>(
     `/lessons-service/api/listening/transcripts/${transcriptId}`,
+    { params: { teacherId } },
   );
   return response.data;
 };
@@ -659,7 +665,7 @@ export const validateListeningTranscript = async (
   payload: ValidateListeningTranscriptPayload,
 ): Promise<ValidateListeningTranscriptResponse> => {
   const response = await api.post<ValidateListeningTranscriptResponse>(
-    `/lessons-service/api/listening/transcripts:validate`,
+    `/lessons-service/api/listening/transcripts/validate`,
     payload,
   );
   return response.data;

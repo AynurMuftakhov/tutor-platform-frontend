@@ -3,6 +3,7 @@ export interface ListeningTranscriptMetadata {
   theme?: string;
   cefr?: string;
   style?: string;
+  [key: string]: unknown;
 }
 
 export interface ListeningTranscriptResponse {
@@ -14,14 +15,14 @@ export interface ListeningTranscriptResponse {
 }
 
 export interface GenerateListeningTranscriptPayload {
-  wordIds: number[];
+  wordIds: string[];
   durationSecTarget: number;
   theme?: string;
   cefr?: string;
   language?: string;
   style?: string;
   seed?: number;
-  constraints?: { mustIncludeAllWords?: boolean };
+  constraints?: Record<string, unknown>;
 }
 
 export interface UpdateListeningTranscriptPayload {
@@ -30,7 +31,7 @@ export interface UpdateListeningTranscriptPayload {
 
 export interface ValidateListeningTranscriptPayload {
   transcript: string;
-  wordIds: number[];
+  wordIds: string[];
 }
 
 export interface ValidateListeningTranscriptResponse {

@@ -118,14 +118,12 @@ const TeacherHomeworkNewPage: React.FC = () => {
     return selectedWordIds.map(id => map.get(id)).filter(Boolean) as VocabularyWord[];
   }, [allWords, selectedWordIds]);
 
-  const numericWordIds = useMemo(() => {
-    return selectedWordIds
-      .map((id) => Number(id))
-      .filter((num) => Number.isFinite(num) && !Number.isNaN(num));
-  }, [selectedWordIds]);
+  const listeningWordIds = useMemo(
+    () => selectedWordIds.filter((id) => id && id.trim().length > 0),
+    [selectedWordIds],
+  );
 
-  const hasInvalidWordIds = selectedWordIds.length > 0 && numericWordIds.length !== selectedWordIds.length;
-  const listeningWordRequirementMet = selectedWordIds.length >= 3;
+  const listeningWordRequirementMet = listeningWordIds.length >= 3;
 
   const cefrOptions = useMemo(() => Array.from(new Set(Object.values(ENGLISH_LEVELS).map(level => level.code))), []);
   const languageOptions = useMemo(() => ['en-US', 'en-GB', 'en-AU', 'es-ES', 'fr-FR', 'de-DE'], []);
@@ -152,15 +150,28 @@ const TeacherHomeworkNewPage: React.FC = () => {
     create.isPending ||
     !studentId ||
     (isVocabList && isVocabSelectionInvalid) ||
-    (isListeningTask && (!transcriptId || hasUnsavedTranscriptEdits || !listeningWordRequirementMet || hasInvalidWordIds));
+    (isListeningTask && (!transcriptId || hasUnsavedTranscriptEdits || !listeningWordRequirementMet));
 
-  const generateTranscriptMutation = useMutation<ListeningTranscriptResponse, Error, GenerateListeningTranscriptPayload>({
-    mutationFn: (payload) => generateListeningTranscript(payload),
+  const generateTranscriptMutation = useMutation<
+    ListeningTranscriptResponse,
+    Error,
+    GenerateListeningTranscriptPayload
+  >({
+    mutationFn: async (payload) => {
+      if (!user?.id) {
+        throw new Error('You need to be signed in to generate transcripts.');
+      }
+      return generateListeningTranscript(user.id, payload);
+    },
   });
   const updateTranscriptMutation = useMutation<ListeningTranscriptResponse, Error, { transcriptId: string; transcript: string }>(
     {
-      mutationFn: ({ transcriptId, transcript }) =>
-        updateListeningTranscript(transcriptId, { transcript }),
+      mutationFn: async ({ transcriptId, transcript }) => {
+        if (!user?.id) {
+          throw new Error('You need to be signed in to save transcripts.');
+        }
+        return updateListeningTranscript(user.id, transcriptId, { transcript });
+      },
     }
   );
   const validateTranscriptMutation = useMutation<ValidateListeningTranscriptResponse, Error, ValidateListeningTranscriptPayload>({
@@ -233,13 +244,8 @@ const TeacherHomeworkNewPage: React.FC = () => {
       return;
     }
 
-    if (hasInvalidWordIds) {
-      setTranscriptError('Some selected words are unavailable for generation.');
-      return;
-    }
-
     const payload: GenerateListeningTranscriptPayload = {
-      wordIds: numericWordIds,
+      wordIds: listeningWordIds,
       durationSecTarget: listeningDurationSecTarget,
       theme: listeningTheme || undefined,
       cefr: listeningCefr || undefined,
@@ -317,15 +323,15 @@ const TeacherHomeworkNewPage: React.FC = () => {
       return;
     }
 
-    if (!listeningWordRequirementMet || hasInvalidWordIds) {
-      setTranscriptError('Make sure you selected valid vocabulary words before validating.');
+    if (!listeningWordRequirementMet) {
+      setTranscriptError('Make sure you selected enough vocabulary words before validating.');
       return;
     }
 
     try {
       const result = await validateTranscriptMutation.mutateAsync({
         transcript: transcriptDraft,
-        wordIds: numericWordIds,
+        wordIds: listeningWordIds,
       });
       setWordCoverage(result.wordCoverage ?? {});
       setCoverageMissing(buildCoverageMissing(result.wordCoverage));
@@ -402,13 +408,13 @@ const TeacherHomeworkNewPage: React.FC = () => {
         return;
       }
 
-      if (!listeningWordRequirementMet || hasInvalidWordIds) {
+      if (!listeningWordRequirementMet) {
         setTranscriptError('Please verify the selected vocabulary before creating the task.');
         return;
       }
 
       const generatorParams = {
-        wordIds: numericWordIds,
+        wordIds: listeningWordIds,
         durationSecTarget: listeningDurationSecTarget,
         theme: listeningTheme || undefined,
         cefr: listeningCefr || undefined,
@@ -426,7 +432,7 @@ const TeacherHomeworkNewPage: React.FC = () => {
         contentRef: {
           transcriptId,
           transcript: transcriptDraft.trim(),
-          wordIds: numericWordIds,
+          wordIds: listeningWordIds,
           estimatedDurationSec: estimatedDurationSec ?? listeningDurationSecTarget,
           metadata: transcriptMetadata,
           wordCoverage,
@@ -544,7 +550,11 @@ const TeacherHomeworkNewPage: React.FC = () => {
                   </Button>
                   <Chip
                     size="small"
-                    color={isVocabList ? (!isVocabSelectionInvalid ? 'success' : 'warning') : (listeningWordRequirementMet && !hasInvalidWordIds ? 'success' : 'warning')}
+                    color={
+                      isVocabList
+                        ? (!isVocabSelectionInvalid ? 'success' : 'warning')
+                        : (listeningWordRequirementMet ? 'success' : 'warning')
+                    }
                     label={`${selectedWordIds.length} selected`}
                   />
                   <Typography variant="caption" color="text.secondary">
@@ -564,9 +574,9 @@ const TeacherHomeworkNewPage: React.FC = () => {
                 {isVocabList && isVocabSelectionInvalid && (
                   <Typography variant="caption" color="error">Please select between 5 and 100 words.</Typography>
                 )}
-                {isListeningTask && (!listeningWordRequirementMet || hasInvalidWordIds) && (
+                {isListeningTask && !listeningWordRequirementMet && (
                   <Typography variant="caption" color="error">
-                    {hasInvalidWordIds ? 'Some selected words could not be parsed. Please reselect them.' : 'Please select at least 3 words to proceed.'}
+                    Please select at least 3 words to proceed.
                   </Typography>
                 )}
                 {isVocabList && (
