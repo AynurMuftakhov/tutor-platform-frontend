@@ -74,14 +74,14 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
   const [selectedStudent, setSelectedStudent] = React.useState<{ id: string; name: string; email?: string; avatar?: string } | null>(null);
   const [studentLoading, setStudentLoading] = React.useState(false);
 
-  const [title, setTitle] = React.useState('Homework');
+  const [title, setTitle] = React.useState('Homework-' + new Date().toISOString().slice(0, 10));
   const [instructions, setInstructions] = React.useState('');
   const [dueAt, setDueAt] = React.useState('');
 
   // Task fields
   const [taskTitle, setTaskTitle] = React.useState('Task 1');
-  const [taskType, setTaskType] = React.useState<HomeworkTaskType>('VIDEO');
-  const [sourceKind, setSourceKind] = React.useState<SourceKind>('EXTERNAL_URL');
+  const [taskType, setTaskType] = React.useState<HomeworkTaskType>('VOCAB');
+  const [sourceKind, setSourceKind] = React.useState<SourceKind>('VOCAB_LIST');
   const [sourceUrl, setSourceUrl] = React.useState('');
 
   // VOCAB_LIST selection & settings
@@ -116,7 +116,7 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
   const [hasUnsavedTranscriptEdits, setHasUnsavedTranscriptEdits] = React.useState(false);
   const [audioContentRef, setAudioContentRef] = React.useState<ListeningGeneratedAudioContentRef | null>(null);
 
-  const isVocabList = taskType === 'VOCAB' && sourceKind === 'VOCAB_LIST';
+  const isVocabList = taskType === 'VOCAB';
   const isListeningTask = taskType === 'LISTENING';
 
   // Load vocabulary words
@@ -148,9 +148,9 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
   const listeningWordRequirementMet = listeningWordIds.length >= 3;
 
   const cefrOptions = React.useMemo(() => Array.from(new Set(Object.values(ENGLISH_LEVELS).map(level => level.code))), []);
-  const languageOptions = React.useMemo(() => ['en-US', 'en-GB', 'en-AU', 'es-ES', 'fr-FR', 'de-DE'], []);
+  const languageOptions = React.useMemo(() => ['en-US', 'en-GB'], []);
   const styleOptions = React.useMemo(() => ['neutral', 'storytelling', 'documentary', 'conversational', 'inspirational'], []);
-  const taskTypeOptions: HomeworkTaskType[] = ['VIDEO', 'READING', 'GRAMMAR', 'VOCAB', 'LISTENING', 'LINK'];
+  const taskTypeOptions: HomeworkTaskType[] = [/*'VIDEO', 'READING', 'GRAMMAR' 'LINK',*/ 'VOCAB', 'LISTENING', ];
   const durationMarks = React.useMemo(() => (
     [
       { value: 45, label: '0:45' },
@@ -159,7 +159,7 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
       { value: 120, label: '2:00' },
     ]
   ), []);
-  const sourceKindOptions: SourceKind[] = ['MATERIAL', 'LESSON_CONTENT', 'EXTERNAL_URL', 'VOCAB_LIST', 'GENERATED_AUDIO'];
+  const sourceKindOptions: SourceKind[] = [/*'MATERIAL', 'LESSON_CONTENT', 'EXTERNAL_URL',*/ 'VOCAB_LIST', 'GENERATED_AUDIO'];
 
   const formatDurationLabel = (value: number) => {
     const mins = Math.floor(value / 60);
@@ -373,6 +373,8 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
       setSourceKind('GENERATED_AUDIO');
     } else if (sourceKind === 'GENERATED_AUDIO') {
       setSourceKind('EXTERNAL_URL');
+    } else if (isVocabList){
+        setSourceKind('VOCAB_LIST');
     }
   }, [isListeningTask, sourceKind]);
 
@@ -752,7 +754,7 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
               >
                 {taskTypeOptions.map(t => (<MenuItem key={t} value={t}>{t}</MenuItem>))}
               </TextField>
-              {!isListeningTask ? (
+              {!isListeningTask && !isVocabList ? (
                 <TextField
                   select
                   label="Source kind"
@@ -760,12 +762,14 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
                   onChange={e => setSourceKind(e.target.value as SourceKind)}
                 >
                   {sourceKindOptions
-                    .filter(s => s !== 'GENERATED_AUDIO')
+                    .filter(s => s !== 'GENERATED_AUDIO' && s !== 'VOCAB_LIST')
                     .map(s => (<MenuItem key={s} value={s}>{s}</MenuItem>))}
                 </TextField>
-              ) : (
+              ) : ( isListeningTask ? (
                 <TextField label="Source kind" value="GENERATED_AUDIO" InputProps={{ readOnly: true }} disabled />
-              )}
+              ) : (
+                      <TextField label="Source kind" value="VOCAB_LIST" InputProps={{ readOnly: true }} disabled />
+                  ))}
 
               {sourceKind === 'EXTERNAL_URL' && (
                 <Stack direction="row" gap={1} alignItems="center">
@@ -848,7 +852,7 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
                         <TextField
                           fullWidth
                           label="Theme"
-                          placeholder="Wildlife conservation"
+                          placeholder="General Topic"
                           value={listeningTheme}
                           onChange={(e) => setListeningTheme(e.target.value)}
                         />
@@ -867,19 +871,6 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
                         <TextField select label="Narration style" value={listeningStyle} onChange={(e) => setListeningStyle(e.target.value)} fullWidth>
                           {styleOptions.map(style => <MenuItem key={style} value={style}>{style}</MenuItem>)}
                         </TextField>
-                        <TextField
-                          label="Seed (optional)"
-                          value={listeningSeed}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            if (/^-?\d*$/.test(val)) {
-                              setListeningSeed(val);
-                            }
-                          }}
-                          placeholder="42"
-                          inputProps={{ inputMode: 'numeric', pattern: '-?[0-9]*' }}
-                          fullWidth
-                        />
                       </Stack>
 
                       <FormControlLabel
