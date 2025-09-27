@@ -26,7 +26,7 @@ import MaterialsPicker, { PickerMaterialType } from './MaterialsPicker';
 import GrammarTaskPicker from './GrammarTaskPicker';
 import { useQuery } from '@tanstack/react-query';
 import type { ImageAsset, ImageAssetPage } from '../../../types/assets';
-import { fetchImageAssets, uploadImageAsset, validateImageFile } from '../../../services/assets';
+import { fetchImageAssets, uploadImageAsset, validateImageFile, resolveImageUrl } from '../../../services/assets';
 
 function sanitizeHtml(input: string): string {
   // Minimal sanitizer: remove <script>...</script> tags
@@ -142,12 +142,22 @@ const SectionForm: React.FC<{ section: Section; onChange: (patch: { title?: stri
 );
 
 const RowForm: React.FC<{ row: Row; onChange: (patch: { ariaLabel?: string }) => void }>
-  = ({ row, onChange }) => (
-  <Stack spacing={1.5}>
-    <Typography variant="subtitle2">Row</Typography>
-    <TextField size="small" label="ARIA label" value={row.ariaLabel || ''} onChange={(e) => onChange({ ariaLabel: e.target.value })} />
-  </Stack>
-);
+  = ({ row, onChange }) => {
+  const { state, actions } = useEditorStore();
+  const handleDelete = () => {
+    const sectionId = state.selectedRowPath?.sectionId || state.selectedColumnPath?.sectionId || state.selectedSectionId;
+    if (!sectionId) return;
+    actions.deleteRow(sectionId, row.id);
+  };
+  return (
+    <Stack spacing={1.5}>
+      <Typography variant="subtitle2">Row</Typography>
+      <TextField size="small" label="ARIA label" value={row.ariaLabel || ''} onChange={(e) => onChange({ ariaLabel: e.target.value })} />
+      <Divider />
+      <Button variant="outlined" color="error" size="small" onClick={handleDelete}>Delete row</Button>
+    </Stack>
+  );
+};
 
 const ColumnForm: React.FC<{ column: Column; onChange: (patch: { ariaLabel?: string }) => void; onSpanChange: (span: number) => void }>
   = ({ column, onChange, onSpanChange }) => (
@@ -168,7 +178,7 @@ const ColumnForm: React.FC<{ column: Column; onChange: (patch: { ariaLabel?: str
 type AnyBlock = any;
 
 const BlockForm: React.FC<{ type: string; payloadId: string; value: AnyBlock; onChange: (patch: AnyBlock) => void; onErrorChange: (err?: string) => void }>
-  = ({ type, value, onChange, onErrorChange }) => {
+  = ({ type, value, onChange, onErrorChange, payloadId }) => {
   const [error, setError] = useState<string | undefined>(undefined);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerTypes, setPickerTypes] = useState<PickerMaterialType[]>([]);
@@ -176,6 +186,13 @@ const BlockForm: React.FC<{ type: string; payloadId: string; value: AnyBlock; on
   const [tasksOpen, setTasksOpen] = useState(false);
 
   useEffect(() => { onErrorChange(error); }, [error]);
+
+  const { actions } = useEditorStore();
+
+  const deleteThisBlock = () => {
+    if (!payloadId) return;
+    actions.deleteByIds([payloadId]);
+  };
 
   if (type === 'text') {
     return (
@@ -191,16 +208,22 @@ const BlockForm: React.FC<{ type: string; payloadId: string; value: AnyBlock; on
             onChange({ html });
           }}
         />
+        <Divider />
+        <Button variant="outlined" color="error" size="small" onClick={deleteThisBlock}>Delete block</Button>
       </Stack>
     );
   }
   if (type === 'image') {
     return (
-      <ImageBlockForm
-        value={value}
-        onChange={onChange}
-        onUploadError={setError}
-      />
+      <Stack spacing={1.5}>
+        <ImageBlockForm
+          value={value}
+          onChange={onChange}
+          onUploadError={setError}
+        />
+        <Divider />
+        <Button variant="outlined" color="error" size="small" onClick={deleteThisBlock}>Delete block</Button>
+      </Stack>
     );
   }
   if (type === 'audio' || type === 'video') {
@@ -227,6 +250,8 @@ const BlockForm: React.FC<{ type: string; payloadId: string; value: AnyBlock; on
           <NumberField label="End (sec)" value={value?.endSec} onChange={(n) => onChange({ endSec: n })} min={0} />
         </Stack>
         {(!nonNegative || !rangeOk) && <FormHelperText error>End must be ≥ start; both non-negative.</FormHelperText>}
+        <Divider />
+        <Button variant="outlined" color="error" size="small" onClick={deleteThisBlock}>Delete block</Button>
       </Stack>
     );
   }
@@ -257,12 +282,18 @@ const BlockForm: React.FC<{ type: string; payloadId: string; value: AnyBlock; on
           </Select>
         </FormControl>
         <FormControlLabel control={<Switch checked={Boolean(value?.shuffle)} onChange={(e) => onChange({ shuffle: e.target.checked })} />} label="Shuffle" />
+        <Divider />
+        <Button variant="outlined" color="error" size="small" onClick={deleteThisBlock}>Delete block</Button>
       </Stack>
     );
   }
 
   return (
-    <Typography variant="body2" color="text.secondary">No editor for this block type yet.</Typography>
+    <Stack spacing={1.5}>
+      <Typography variant="body2" color="text.secondary">No editor for this block type yet.</Typography>
+      <Divider />
+      <Button variant="outlined" color="error" size="small" onClick={deleteThisBlock}>Delete block</Button>
+    </Stack>
   );
 };
 
@@ -424,7 +455,7 @@ const ImageBlockForm: React.FC<{ value: ImageBlockPayload | undefined; onChange:
     }
     setUrlError(undefined);
     setUploadError(undefined);
-    setPendingImage({ url: trimmed, alt: sanitizeOptional(deriveAltFromUrl(trimmed)) });
+    setPendingImage({ url: resolveImageUrl(trimmed), alt: sanitizeOptional(deriveAltFromUrl(trimmed)) });
   }, [urlInput]);
 
   const handleInsert = useCallback(() => {
@@ -459,7 +490,7 @@ const ImageBlockForm: React.FC<{ value: ImageBlockPayload | undefined; onChange:
       <Typography variant="subtitle2">Image</Typography>
       <Stack spacing={1}>
         {value?.url ? (
-          <Box component="img" src={value.url} alt={value.alt || ''} loading="lazy" sx={{ width: '100%', borderRadius: 1, border: (t) => `1px solid ${t.palette.divider}` }} />
+          <Box component="img" src={resolveImageUrl(value.url || '')} alt={value.alt || ''} loading="lazy" sx={{ width: '100%', borderRadius: 1, border: (t) => `1px solid ${t.palette.divider}` }} />
         ) : (
           <Box sx={{ border: (t) => `1px dashed ${t.palette.divider}`, borderRadius: 1, p: 2, textAlign: 'center', color: 'text.secondary' }}>
             <Typography variant="caption">No image inserted</Typography>
