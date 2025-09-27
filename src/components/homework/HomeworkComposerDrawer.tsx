@@ -420,7 +420,7 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
 
     const payload: GenerateListeningTranscriptPayload = {
       wordIds: listeningWordIds,
-      durationSecTarget: listeningDurationSecTarget,
+      maxWords: listeningDurationSecTarget,
       theme: listeningTheme || undefined,
       cefr: listeningCefr || undefined,
       language: listeningLanguage || undefined,
@@ -582,7 +582,7 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
     } else if (isListeningTask && transcriptId && audioContentRef) {
       const generatorParams = {
         wordIds: listeningWordIds,
-        durationSecTarget: listeningDurationSecTarget,
+        maxWords: listeningDurationSecTarget,
         theme: listeningTheme || undefined,
         cefr: listeningCefr || undefined,
         language: listeningLanguage || undefined,
@@ -821,7 +821,7 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
                   )}
                   {isListeningTask && (
                     <Typography variant="caption" color="text.secondary">
-                      We'll also add a matching vocabulary practice task for these focus words.
+                      We&#39;ll also add a matching vocabulary practice task for these focus words.
                     </Typography>
                   )}
                   {isVocabList && isVocabSelectionInvalid && (
@@ -852,18 +852,16 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
                         <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>Generation preferences</Typography>
                         <Box>
                           <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500 }} gutterBottom>
-                            Target duration
+                            Target max words
                           </Typography>
-                          <Slider
+                          <TextField
+                            type="number"
                             value={listeningDurationSecTarget}
-                            onChange={(_, value) => setListeningDurationSecTarget(Array.isArray(value) ? value[0] : value)}
-                            min={45}
-                            max={150}
-                            step={15}
-                            marks={durationMarks}
-                            valueLabelDisplay="on"
-                            valueLabelFormat={(value) => formatDurationLabel(value as number)}
-                            sx={{ px: 1 }}
+                            onChange={(e) => setListeningDurationSecTarget(Math.max(1, Number(e.target.value) || 0))}
+                            InputLabelProps={{ shrink: true }}
+                            inputProps={{ min: 1 }}
+                            placeholder="e.g., 120"
+                            fullWidth
                           />
                         </Box>
                         <TextField

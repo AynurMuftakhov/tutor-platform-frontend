@@ -84,7 +84,7 @@ export interface ListeningTranscriptResponse {
 
 export interface GenerateListeningTranscriptPayload {
   wordIds: string[];
-  durationSecTarget: number;
+  maxWords: number;
   theme?: string;
   cefr?: string;
   language?: string;
