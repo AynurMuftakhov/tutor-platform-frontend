@@ -235,6 +235,7 @@ const ListeningAudioGenerationPanel: React.FC<ListeningAudioGenerationPanelProps
       persistJobState(null);
       setJob(null);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey]);
 
   // Track document visibility for adaptive polling
@@ -506,6 +507,8 @@ const ListeningAudioGenerationPanel: React.FC<ListeningAudioGenerationPanelProps
 
   const currentStatus = job?.status ?? (audioContent ? 'SUCCEEDED' : null);
 
+  const showAdvancedHint = advancedOpen ? 'Hide advanced voice controls' : 'Show advanced voice controls';
+
   return (
     <Stack spacing={2} sx={{ mt: 3 }}>
       <Divider flexItem sx={{ borderStyle: 'dashed', opacity: 0.6 }} />
@@ -513,6 +516,10 @@ const ListeningAudioGenerationPanel: React.FC<ListeningAudioGenerationPanelProps
         <GraphicEqIcon color="primary" fontSize="small" />
         <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>Audio generation</Typography>
       </Stack>
+      <Typography variant="body2" color="text.secondary">
+        Choose a narration voice, optionally tweak the delivery, then generate an MP3 preview for this listening task.
+      </Typography>
+
       <Paper variant="outlined" sx={{ p: 2 }}>
         <Stack spacing={2}>
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ xs: 'stretch', md: 'flex-start' }}>
@@ -521,9 +528,156 @@ const ListeningAudioGenerationPanel: React.FC<ListeningAudioGenerationPanelProps
                 <VolumeUpIcon fontSize="small" color="action" />
                 <Typography variant="subtitle2">Voice</Typography>
               </Stack>
+              <TextField
+                size="small"
+                label="Search voices"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Type to filter"
+              />
+              <Stack spacing={1} sx={{ maxHeight: 240, overflowY: 'auto', pr: 1 }}>
+                {filteredVoices.map((voice) => {
+                  const isSelected = voice.voiceId === selectedVoiceId;
+                  const isPreviewing = previewingVoiceRef.current === voice.voiceId;
+                  return (
+                    <Paper
+                      key={voice.voiceId}
+                      variant={isSelected ? 'outlined' : 'elevation'}
+                      elevation={isSelected ? 0 : 1}
+                      sx={{
+                        borderColor: isSelected ? 'primary.main' : undefined,
+                        px: 1.5,
+                        py: 1,
+                        cursor: 'pointer',
+                        transition: 'border-color 0.2s ease',
+                        '&:hover': { borderColor: 'primary.main', boxShadow: '0 0 0 1px rgba(37,115,255,0.24)' },
+                      }}
+                      onClick={() => {
+                        setSelectedVoiceId(voice.voiceId);
+                        if (voice.settings) {
+                          setVoiceSettings((prev) => ({ ...prev, ...voice.settings }));
+                        }
+                      }}
+                    >
+                      <Stack direction="row" alignItems="center" spacing={1.5}>
+                        <Radio
+                          checked={isSelected}
+                          value={voice.voiceId}
+                          onChange={() => setSelectedVoiceId(voice.voiceId)}
+                          inputProps={{ 'aria-label': voice.name }}
+                        />
+                        <Box sx={{ flexGrow: 1 }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                            {voice.name}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {voice.voiceId}
+                          </Typography>
+                        </Box>
+                        {voice.previewUrl && (
+                          <IconButton
+                            aria-label={`Preview ${voice.name}`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handlePreview(voice);
+                            }}
+                            size="small"
+                          >
+                            {isPreviewing ? <StopIcon fontSize="small" /> : <PlayArrowIcon fontSize="small" />}
+                          </IconButton>
+                        )}
+                      </Stack>
+                    </Paper>
+                  );
+                })}
+                {!voicesQuery.isLoading && filteredVoices.length === 0 && (
+                  <Typography variant="body2" color="text.secondary">
+                    No voices match your search.
+                  </Typography>
+                )}
+                {voicesQuery.isLoading && (
+                  <Stack direction="row" spacing={1} alignItems="center" justifyContent="center" py={2}>
+                    <CircularProgress size={18} />
+                    <Typography variant="body2">Loading voices…</Typography>
+                  </Stack>
+                )}
+              </Stack>
             </Stack>
             <Divider flexItem orientation="vertical" sx={{ display: { xs: 'none', md: 'block' } }} />
+            <Stack spacing={2} flex={1}>
+              <Button
+                variant="text"
+                onClick={() => setAdvancedOpen((prev) => !prev)}
+                sx={{ alignSelf: 'flex-start', px: 0 }}
+              >
+                {showAdvancedHint}
+              </Button>
+              <Collapse in={advancedOpen} unmountOnExit>
+                <Stack spacing={2}>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Stability ({voiceSettings.stability?.toFixed(2) ?? '—'})</Typography>
+                    <Slider
+                      value={voiceSettings.stability ?? DEFAULT_VOICE_SETTINGS.stability ?? 0}
+                      onChange={(_, value) =>
+                        setVoiceSettings((prev) => ({ ...prev, stability: Array.isArray(value) ? value[0] : value }))
+                      }
+                      step={0.05}
+                      min={0}
+                      max={1}
+                    />
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Similarity boost ({voiceSettings.similarity_boost?.toFixed(2) ?? '—'})
+                    </Typography>
+                    <Slider
+                      value={voiceSettings.similarity_boost ?? DEFAULT_VOICE_SETTINGS.similarity_boost ?? 0}
+                      onChange={(_, value) =>
+                        setVoiceSettings((prev) => ({ ...prev, similarity_boost: Array.isArray(value) ? value[0] : value }))
+                      }
+                      step={0.05}
+                      min={0}
+                      max={1}
+                    />
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Style ({voiceSettings.style?.toFixed(2) ?? '—'})</Typography>
+                    <Slider
+                      value={voiceSettings.style ?? DEFAULT_VOICE_SETTINGS.style ?? 0}
+                      onChange={(_, value) =>
+                        setVoiceSettings((prev) => ({ ...prev, style: Array.isArray(value) ? value[0] : value }))
+                      }
+                      step={0.05}
+                      min={0}
+                      max={1}
+                    />
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Speed ({voiceSettings.speed?.toFixed(2) ?? '—'})</Typography>
+                    <Slider
+                      value={voiceSettings.speed ?? DEFAULT_VOICE_SETTINGS.speed ?? 1}
+                      onChange={(_, value) =>
+                        setVoiceSettings((prev) => ({ ...prev, speed: Array.isArray(value) ? value[0] : value }))
+                      }
+                      step={0.05}
+                      min={0.5}
+                      max={1.5}
+                    />
+                  </Box>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Switch
+                      checked={voiceSettings.use_speaker_boost ?? DEFAULT_VOICE_SETTINGS.use_speaker_boost ?? false}
+                      onChange={(event) =>
+                        setVoiceSettings((prev) => ({ ...prev, use_speaker_boost: event.target.checked }))
+                      }
+                    />
+                    <Typography variant="body2">Use speaker boost</Typography>
+                  </Stack>
+                </Stack>
+              </Collapse>
+            </Stack>
           </Stack>
+
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }}>
             <Button
               variant="contained"

@@ -490,6 +490,83 @@ const TeacherHomeworkNewPage: React.FC = () => {
 
       const generatorParams = {
         wordIds: listeningWordIds,
+        durationSecTarget: listeningDurationSecTarget,
+        theme: listeningTheme || undefined,
+        cefr: listeningCefr || undefined,
+        language: listeningLanguage || undefined,
+        style: listeningStyle || undefined,
+        constraints: listeningMustIncludeAll ? { mustIncludeAllWords: true } : undefined,
+        seed: listeningSeed.trim() ? Number(listeningSeed.trim()) : undefined,
+      };
+
+      const durationSec = audioContentRef?.durationSec ?? estimatedDurationSec ?? listeningDurationSecTarget;
+      const transcriptText = audioContentRef?.transcript ?? transcriptDraft.trim();
+
+      const vocabularySettings: any = { masteryStreak, shuffle };
+      const vocabularyTimeLimit = parseInt(timeLimitMin, 10);
+      if (!isNaN(vocabularyTimeLimit)) vocabularySettings.timeLimitMin = vocabularyTimeLimit;
+
+      const baseTitle = taskTitle.trim() || 'Listening task';
+      if (listeningWordIds.length > 0) {
+        tasks.push({
+          title: `${baseTitle} · Vocabulary`,
+          type: 'VOCAB',
+          sourceKind: 'VOCAB_LIST',
+          instructions: undefined,
+          contentRef: { wordIds: selectedWordIds, settings: vocabularySettings },
+          vocabWordIds: selectedWordIds,
+        });
+      }
+
+      const listeningContentRef = {
+        generatorRequestId: audioContentRef.generatorRequestId,
+        audioMaterialId: audioContentRef.audioMaterialId,
+        audioUrl: audioContentRef.audioUrl,
+        transcriptId,
+        transcript: transcriptText,
+        durationSec,
+        wordIds: listeningWordIds,
+        theme: audioContentRef.theme ?? (listeningTheme || undefined),
+        cefr: audioContentRef.cefr ?? (listeningCefr || undefined),
+        metadata: transcriptMetadata,
+        wordCoverage,
+        generatorParams,
+        voiceId: audioContentRef.voiceId,
+      };
+
+      tasks.push({
+        title: `${baseTitle} · Listening`,
+        type: 'LISTENING',
+        sourceKind: 'GENERATED_AUDIO',
+        instructions: undefined,
+        contentRef: listeningContentRef,
+        vocabWordIds: selectedWordIds,
+      });
+    } else if (isListeningTask) {
+      setTranscriptError(null);
+      setTranscriptInfo(null);
+      if (!transcriptId) {
+        setTranscriptError('Generate the transcript before creating the homework.');
+        return;
+      }
+
+      if (hasUnsavedTranscriptEdits) {
+        setTranscriptError('Save your transcript edits before continuing.');
+        return;
+      }
+
+      if (!listeningWordRequirementMet) {
+        setTranscriptError('Please verify the selected vocabulary before creating the task.');
+        return;
+      }
+
+      if (!audioContentRef) {
+        setTranscriptError('Generate audio for the transcript before saving this task.');
+        return;
+      }
+
+      const generatorParams = {
+        wordIds: listeningWordIds,
         maxWords: listeningDurationSecTarget,
         theme: listeningTheme || undefined,
         cefr: listeningCefr || undefined,
