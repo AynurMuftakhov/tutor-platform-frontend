@@ -502,6 +502,22 @@ const TeacherHomeworkNewPage: React.FC = () => {
       const durationSec = audioContentRef?.durationSec ?? estimatedDurationSec ?? listeningDurationSecTarget;
       const transcriptText = audioContentRef?.transcript ?? transcriptDraft.trim();
 
+      const vocabularySettings: any = { masteryStreak, shuffle };
+      const vocabularyTimeLimit = parseInt(timeLimitMin, 10);
+      if (!isNaN(vocabularyTimeLimit)) vocabularySettings.timeLimitMin = vocabularyTimeLimit;
+
+      const baseTitle = taskTitle.trim() || 'Listening task';
+      if (listeningWordIds.length > 0) {
+        tasks.push({
+          title: `${baseTitle} · Vocabulary`,
+          type: 'VOCAB',
+          sourceKind: 'VOCAB_LIST',
+          instructions: undefined,
+          contentRef: { wordIds: selectedWordIds, settings: vocabularySettings },
+          vocabWordIds: selectedWordIds,
+        });
+      }
+
       const listeningContentRef = {
         generatorRequestId: audioContentRef.generatorRequestId,
         audioMaterialId: audioContentRef.audioMaterialId,
@@ -519,7 +535,7 @@ const TeacherHomeworkNewPage: React.FC = () => {
       };
 
       tasks.push({
-        title: taskTitle,
+        title: `${baseTitle} · Listening`,
         type: 'LISTENING',
         sourceKind: 'GENERATED_AUDIO',
         instructions: undefined,
@@ -678,7 +694,7 @@ const TeacherHomeworkNewPage: React.FC = () => {
                 )}
                 {isListeningTask && (
                   <Typography variant="caption" color="text.secondary">
-                    Vocabulary mastery settings are ignored for listening tasks.
+                    We'll also add a matching vocabulary practice task for these focus words.
                   </Typography>
                 )}
               </Stack>
