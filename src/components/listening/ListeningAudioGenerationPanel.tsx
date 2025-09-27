@@ -235,7 +235,6 @@ const ListeningAudioGenerationPanel: React.FC<ListeningAudioGenerationPanelProps
       persistJobState(null);
       setJob(null);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey]);
 
   // Track document visibility for adaptive polling

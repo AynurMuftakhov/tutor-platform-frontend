@@ -204,7 +204,7 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
     if (!open) {
       // reset draft when closed
       setStudentQ('');
-      setTitle('Homework');
+      setTitle('Homework-' + new Date().toISOString().slice(0, 10));
       setInstructions('');
       setDueAt('');
       setTaskTitle('Task 1');
