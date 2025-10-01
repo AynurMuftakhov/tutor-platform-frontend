@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Box, Button, Card, CardContent, CircularProgress, Stack, Typography, LinearProgress, Chip, Pagination } from '@mui/material';
+import { Box, Button, Card, CardContent, CircularProgress, Stack, Typography, LinearProgress, Chip, Pagination, Accordion, AccordionSummary, AccordionDetails } from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import type { AssignmentDto, TaskDto, UpdateProgressPayload } from '../../types/homework';
 import useHomeworkTaskLifecycle from '../../hooks/useHomeworkTaskLifecycle';
 import { useQuery } from '@tanstack/react-query';
@@ -166,177 +167,6 @@ const HomeworkTaskFrame: React.FC<Props> = ({ assignment, task, readOnly }) => {
     );
   }
 
-  if (task.type === 'LISTENING') {
-    const content = (task.contentRef as any) || {};
-    const audioUrl: string | undefined = content.audioUrl;
-    const transcript: string | undefined = content.transcript;
-    const initialDuration = toFiniteNumber(content.durationSec) ?? toFiniteNumber(content.estimatedDurationSec);
-    const [listenedPct, setListenedPct] = useState(() => clamp(toFiniteNumber(task.progressPct) ?? 0));
-    const [durationSeconds, setDurationSeconds] = useState<number>(initialDuration ?? 0);
-    const [playedSeconds, setPlayedSeconds] = useState<number>(Math.round(((initialDuration ?? 0) * listenedPct) / 100));
-    const [isComplete, setIsComplete] = useState(task.status === 'COMPLETED');
-    const [transcriptRevealed, setTranscriptRevealed] = useState(
-      !REVEAL_TRANSCRIPT_AFTER_COMPLETION || task.status === 'COMPLETED',
-    );
-    const lastReportRef = useRef<{ pct: number; ts: number }>({ pct: listenedPct, ts: Date.now() });
-
-    useEffect(() => {
-      if (task.status === 'COMPLETED') {
-        setIsComplete(true);
-        setTranscriptRevealed(true);
-        setListenedPct(100);
-      }
-    }, [task.status]);
-
-    useEffect(() => {
-      if (isComplete) {
-        setTranscriptRevealed(true);
-      }
-    }, [isComplete]);
-
-    const formatTime = (seconds: number) => {
-      const safe = Math.max(0, seconds || 0);
-      const mins = Math.floor(safe / 60);
-      const secs = Math.floor(safe % 60);
-      return `${mins}:${secs.toString().padStart(2, '0')}`;
-    };
-
-    const handleLoadedMetadata = (event: React.SyntheticEvent<HTMLAudioElement, Event>) => {
-      const element = event.currentTarget;
-      const mediaDuration = element.duration || durationSeconds || 0;
-      if (mediaDuration > 0) {
-        setDurationSeconds(mediaDuration);
-        const resumePct = clamp(toFiniteNumber(task.progressPct) ?? 0);
-        if (resumePct > 0 && resumePct < 100) {
-          element.currentTime = Math.min(mediaDuration * (resumePct / 100), Math.max(0, mediaDuration - 1));
-        }
-        setPlayedSeconds(element.currentTime);
-      }
-    };
-
-    const reportIfNeeded = (pct: number, audio: HTMLAudioElement) => {
-      if (readOnly) return;
-      const now = Date.now();
-      const last = lastReportRef.current;
-      if (pct >= last.pct + 5 || now - last.ts > 4_000) {
-        const duration = Math.floor(audio.duration || durationSeconds || 0);
-        reportProgress({
-          progressPct: pct,
-          meta: { playedSec: Math.floor(audio.currentTime), durationSec: duration },
-        });
-        lastReportRef.current = { pct, ts: now };
-      }
-    };
-
-    const handleTimeUpdate = (event: React.SyntheticEvent<HTMLAudioElement, Event>) => {
-      const element = event.currentTarget;
-      const duration = element.duration || durationSeconds || 0;
-      if (!duration) return;
-      const pct = clamp(Math.round((element.currentTime / duration) * 100));
-      setListenedPct(pct);
-      setPlayedSeconds(element.currentTime);
-      reportIfNeeded(pct, element);
-      if (!readOnly && pct >= 90 && !isComplete) {
-        setIsComplete(true);
-        markCompleted({
-          progressPct: Math.min(100, pct),
-          meta: {
-            playedSec: Math.floor(element.currentTime),
-            durationSec: Math.floor(duration),
-          },
-        });
-      }
-    };
-
-    const handleEnded = (event: React.SyntheticEvent<HTMLAudioElement, Event>) => {
-      const element = event.currentTarget;
-      const duration = Math.floor(element.duration || durationSeconds || 0);
-      setListenedPct(100);
-      setPlayedSeconds(element.duration || durationSeconds || 0);
-      if (!readOnly) {
-        markCompleted({
-          progressPct: 100,
-          meta: { playedSec: duration, durationSec: duration },
-        });
-      }
-    };
-
-    if (!audioUrl) {
-      return (
-        <Card variant="outlined">
-          <CardContent>
-            <Typography variant="subtitle1" sx={{ mb: 1 }}>{task.title}</Typography>
-            <Typography color="text.secondary">Audio preview is unavailable for this task.</Typography>
-          </CardContent>
-        </Card>
-      );
-    }
-
-    return (
-      <Card variant="outlined">
-        <CardContent>
-          <Typography variant="subtitle1" sx={{ mb: 1 }}>{task.title}</Typography>
-          <Stack spacing={2}>
-            <Box>
-              <audio
-                controls
-                src={audioUrl}
-                onPlay={() => {
-                  if (!readOnly) markStarted();
-                }}
-                onTimeUpdate={handleTimeUpdate}
-                onLoadedMetadata={handleLoadedMetadata}
-                onEnded={handleEnded}
-                preload="auto"
-                aria-label="Listening task audio"
-                style={{ width: '100%' }}
-              >
-                Your browser does not support the audio element.
-              </audio>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                {formatTime(playedSeconds)} / {formatTime(durationSeconds)}
-              </Typography>
-            </Box>
-            <Stack spacing={1}>
-              <LinearProgress variant="determinate" value={listenedPct} />
-              <Typography variant="caption" color="text.secondary">
-                {listenedPct}% listened
-              </Typography>
-            </Stack>
-
-            {REVEAL_TRANSCRIPT_AFTER_COMPLETION && transcript && !transcriptRevealed && (
-              <Button
-                variant="outlined"
-                onClick={() => setTranscriptRevealed(true)}
-                disabled={!isComplete}
-              >
-                {isComplete ? 'Reveal transcript' : 'Listen to at least 90% to reveal the transcript'}
-              </Button>
-            )}
-
-            {transcript && (!REVEAL_TRANSCRIPT_AFTER_COMPLETION || transcriptRevealed) && (
-              <Box
-                sx={{
-                  borderRadius: 2,
-                  border: '1px solid rgba(37,115,255,0.16)',
-                  bgcolor: 'rgba(37,115,255,0.04)',
-                  px: 2,
-                  py: 1.5,
-                }}
-              >
-                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
-                  Transcript
-                </Typography>
-                <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
-                  {transcript}
-                </Typography>
-              </Box>
-            )}
-          </Stack>
-        </CardContent>
-      </Card>
-    );
-  }
 
   if (task.type === 'LISTENING') {
     return (
@@ -414,9 +244,7 @@ const ListeningTaskPlayer: React.FC<ListeningTaskPlayerProps> = ({
   const [durationSeconds, setDurationSeconds] = useState<number>(initialDuration ?? 0);
   const [playedSeconds, setPlayedSeconds] = useState<number>(Math.round(((initialDuration ?? 0) * initialProgress) / 100));
   const [isComplete, setIsComplete] = useState(task.status === 'COMPLETED');
-  const [transcriptRevealed, setTranscriptRevealed] = useState(
-    !REVEAL_TRANSCRIPT_AFTER_COMPLETION || task.status === 'COMPLETED',
-  );
+  const [transcriptRevealed, setTranscriptRevealed] = useState(false);
   const lastReportRef = useRef<{ pct: number; ts: number }>({ pct: initialProgress, ts: Date.now() });
 
   useEffect(() => {
@@ -427,23 +255,18 @@ const ListeningTaskPlayer: React.FC<ListeningTaskPlayerProps> = ({
     setPlayedSeconds(Math.round((baseDuration * progress) / 100));
     const completed = task.status === 'COMPLETED';
     setIsComplete(completed);
-    setTranscriptRevealed(!REVEAL_TRANSCRIPT_AFTER_COMPLETION || completed);
+    // Keep transcript hidden by default; user can expand manually when allowed
+    setTranscriptRevealed(false);
     lastReportRef.current = { pct: progress, ts: Date.now() };
   }, [task.id]);
 
   useEffect(() => {
     if (task.status === 'COMPLETED') {
       setIsComplete(true);
-      setTranscriptRevealed(true);
       setListenedPct(100);
     }
   }, [task.status]);
 
-  useEffect(() => {
-    if (isComplete) {
-      setTranscriptRevealed(true);
-    }
-  }, [isComplete]);
 
   const formatTime = (seconds: number) => {
     const safe = Math.max(0, seconds || 0);
@@ -555,33 +378,70 @@ const ListeningTaskPlayer: React.FC<ListeningTaskPlayerProps> = ({
             </Typography>
           </Stack>
 
-          {REVEAL_TRANSCRIPT_AFTER_COMPLETION && transcript && !transcriptRevealed && (
-            <Button
-              variant="outlined"
-              onClick={() => setTranscriptRevealed(true)}
-              disabled={!isComplete}
-            >
-              {isComplete ? 'Reveal transcript' : 'Listen to at least 90% to reveal the transcript'}
-            </Button>
-          )}
-
-          {transcript && (!REVEAL_TRANSCRIPT_AFTER_COMPLETION || transcriptRevealed) && (
-            <Box
-              sx={{
-                borderRadius: 2,
-                border: '1px solid rgba(37,115,255,0.16)',
-                bgcolor: 'rgba(37,115,255,0.04)',
-                px: 2,
-                py: 1.5,
+          {transcript && (
+            <Accordion
+              expanded={transcriptRevealed}
+              onChange={(_, expanded) => {
+                if (REVEAL_TRANSCRIPT_AFTER_COMPLETION && !isComplete) return;
+                setTranscriptRevealed(expanded);
               }}
-            >
-              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
-                Transcript
-              </Typography>
-              <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
-                {transcript}
-              </Typography>
-            </Box>
+              disabled={REVEAL_TRANSCRIPT_AFTER_COMPLETION && !isComplete}
+           >
+              <AccordionSummary
+                expandIcon={<ExpandMoreIcon />}
+              >
+                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                  Transcript {REVEAL_TRANSCRIPT_AFTER_COMPLETION && !isComplete ? '· Listen to 90% to unlock' : ''}
+                </Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
+                  {(() => {
+                    // Highlight selected words (focus words) in the transcript
+                    const wc = (content as any)?.wordCoverage as Record<string, boolean> | undefined;
+                    const text = transcript || '';
+                    if (!text || !wc || Object.keys(wc).length === 0) {
+                      return text;
+                    }
+                    const escapeRegExp = (value: string) => value.replace(/([-\\^$*+?.()|[\]{}])/g, '\\$1');
+                    // Only use words explicitly marked as covered (true)
+                    const uniqueWords = Array.from(
+                      new Set(
+                        Object.entries(wc)
+                          .filter(([, covered]) => !!covered)
+                          .map(([word]) => word.trim())
+                          .filter(Boolean)
+                      )
+                    );
+                    if (uniqueWords.length === 0) return text;
+                    const pattern = new RegExp(
+                      uniqueWords
+                        .sort((a, b) => b.length - a.length)
+                        .map((w) => escapeRegExp(w))
+                        .join('|'),
+                      'gi',
+                    );
+                    const nodes: React.ReactNode[] = [];
+                    let lastIndex = 0;
+                    let match: RegExpExecArray | null;
+                    while ((match = pattern.exec(text)) !== null) {
+                      if (match.index > lastIndex) {
+                        nodes.push(text.slice(lastIndex, match.index));
+                      }
+                      const matchedText = match[0];
+                      nodes.push(
+                        <Box key={`hit-${match.index}-${matchedText}-${nodes.length}`} component="strong" sx={{ fontWeight: 700 }}>
+                          {matchedText}
+                        </Box>
+                      );
+                      lastIndex = match.index + matchedText.length;
+                    }
+                    if (lastIndex < text.length) nodes.push(text.slice(lastIndex));
+                    return nodes.length ? nodes : text;
+                  })()}
+                </Typography>
+              </AccordionDetails>
+            </Accordion>
           )}
         </Stack>
       </CardContent>
