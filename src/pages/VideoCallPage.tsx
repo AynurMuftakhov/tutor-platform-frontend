@@ -7,7 +7,11 @@ import {
     CircularProgress,
     IconButton,
     Tooltip,
-    Alert
+    Alert,
+    FormControlLabel,
+    Switch,
+    Chip,
+    Divider
 } from '@mui/material';
 import {LiveKitRoom, VideoConference, useRoomContext} from '@livekit/components-react';
 import MicIcon from '@mui/icons-material/Mic';
@@ -37,6 +41,8 @@ import RtcErrorBanner from '../components/rtc/RtcErrorBanner';
 import LibraryBooksIcon from "@mui/icons-material/LibraryBooks";
 import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
 import StudentProfileDrawer from "../components/videoCall/StudentProfileDrawer";
+import CloseIcon from "@mui/icons-material/Close";
+import StudentPage from "../pages/StudentPage";
 
 interface VideoCallPageProps {
     identity?: string;
@@ -213,6 +219,12 @@ const DailyCallLayout: React.FC<{
     const TAB_HOMEWORK = 0;
     const TAB_DICTIONARY = 1;
 
+    // Split view for Student panel (tutor side) – reuse workspace pattern
+    const [workspaceOpen, openWorkspace, closeWorkspace, splitRatio, setSplitRatio] = useWorkspaceToggle();
+
+    const theme = useTheme();
+    const isSmallScreen = useMediaQuery(theme.breakpoints.down('md'));
+
     const generateDirectLinkDaily = useCallback(() => {
         const baseUrl = window.location.origin;
         const rn = roomName ?? '';
@@ -246,9 +258,8 @@ const DailyCallLayout: React.FC<{
     const handleStudentShareToggle = (value: boolean) => {
         setShareStudentProfile(value);
         if (value) {
-            if (!studentProfileOpen) {
-                setStudentProfileOpen(true);
-            }
+            // ensure split view is open so teacher sees the panel too
+            openWorkspace();
             sendStudentPanelState(true);
         } else {
             sendStudentPanelState(false);
@@ -398,7 +409,7 @@ const DailyCallLayout: React.FC<{
             {isTutor && studentId && (
                 <Tooltip title={shareStudentProfile ? 'Sharing student profile' : 'Open student profile'}>
                     <IconButton
-                        onClick={() => setStudentProfileOpen(true)}
+                        onClick={() => { openWorkspace(); }}
                         sx={{
                             position: 'absolute',
                             top: 100,
@@ -418,22 +429,47 @@ const DailyCallLayout: React.FC<{
                 </Tooltip>
             )}
 
-            <RtcHost onLeft={onLeave} />
+            <Box sx={{ display: 'grid', gridTemplateColumns: !workspaceOpen || isSmallScreen ? '100%' : `${splitRatio}% 6px 1fr`, gridTemplateRows: '100%', height: '100%' }}>
+                            <Box sx={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
+                                <RtcHost onLeft={onLeave} />
+                            </Box>
+                            {workspaceOpen && !isSmallScreen && (
+                                <DraggableDivider onDrag={setSplitRatio} />
+                            )}
+                            {workspaceOpen && (
+                                <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', borderLeft: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
+                                        <Box>
+                                            <Typography variant="overline" sx={{ letterSpacing: 1, color: 'primary.main' }}>Student insights</Typography>
+                                            <Typography variant="h6" sx={{ fontWeight: 700 }}>Student profile</Typography>
+                                        </Box>
+                                        <Box sx={{ display:'flex', alignItems:'center', gap:1 }}>
+                                            <FormControlLabel control={<Switch size="small" checked={shareStudentProfile} onChange={(e)=>handleStudentShareToggle(e.target.checked)} />} label="Show to student" sx={{ m:0, '& .MuiFormControlLabel-label': { fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.6 } }} />
+                                            {shareStudentProfile && (<Chip size="small" color="success" label="Sharing" sx={{ fontWeight: 600 }} />)}
+                                            <IconButton onClick={()=>{ handleStudentDrawerClose(); closeWorkspace(); }} size="small"><CloseIcon /></IconButton>
+                                        </Box>
+                                    </Box>
+                                    <Box sx={{ flex:1, overflow:'auto', p: 1.5 }}>
+                                        {studentId ? (
+                                            <StudentPage
+                                                studentIdOverride={studentId}
+                                                embedded
+                                                hideOverviewTab
+                                                activeTabOverride={studentProfileTab}
+                                                onTabChange={handleStudentProfileTabChange}
+                                                onWordOpen={sendWordOpenToStudent}
+                                                onEmbeddedAssignmentOpen={sendAssignmentOpenToStudent}
+                                            />
+                                        ) : (
+                                            <Box sx={{ height:'100%', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                                                <Typography color="text.secondary">No student selected.</Typography>
+                                            </Box>
+                                        )}
+                                    </Box>
+                                </Box>
+                            )}
+                        </Box>
 
-            {isTutor && studentId && (
-                <StudentProfileDrawer
-                    open={studentProfileOpen}
-                    onClose={handleStudentDrawerClose}
-                    studentId={studentId}
-                    showShareToggle
-                    shareEnabled={shareStudentProfile}
-                    onShareChange={handleStudentShareToggle}
-                    activeTab={studentProfileTab}
-                    onTabChange={handleStudentProfileTabChange}
-                    onWordOpen={sendWordOpenToStudent}
-                    onEmbeddedAssignmentOpen={sendAssignmentOpenToStudent}
-                />
-            )}
             {!isTutor && resolvedStudentId && (
                 <StudentProfileDrawer
                     open={sharedProfileOpen}
