@@ -498,7 +498,14 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                                     color="primary"
                                     size="small"
                                     sx={{ textTransform: 'none' }}
-                                    onClick={() => navigate(`/lessons/${currentLessonId}`)}
+                                    onClick={() => {
+                                        navigate('/video-call', {
+                                            state: {
+                                                identity: user?.id,
+                                                roomName: `lesson-${currentLessonId}`,
+                                            },
+                                        });
+                                    }}
                                 >
                                     Join Lesson
                                 </Button>

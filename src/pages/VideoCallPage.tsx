@@ -364,6 +364,16 @@ const DailyCallLayout: React.FC<{
         }
     }, [shareStudentProfile, dailyCall, sendStudentPanelState, isTutor]);
 
+    // Student side: mirror shared panel state into split view
+    useEffect(() => {
+        if (isTutor) return;
+        if (sharedProfileOpen) {
+            openWorkspace();
+        } else {
+            closeWorkspace();
+        }
+    }, [isTutor, sharedProfileOpen, openWorkspace, closeWorkspace]);
+
     return (
         <Box sx={{ width: '100%', height: '100vh', overflow: 'hidden', position: 'relative' }}>
             {!!failureMessage && (
@@ -444,21 +454,27 @@ const DailyCallLayout: React.FC<{
                                             <Typography variant="h6" sx={{ fontWeight: 700 }}>Student profile</Typography>
                                         </Box>
                                         <Box sx={{ display:'flex', alignItems:'center', gap:1 }}>
-                                            <FormControlLabel control={<Switch size="small" checked={shareStudentProfile} onChange={(e)=>handleStudentShareToggle(e.target.checked)} />} label="Show to student" sx={{ m:0, '& .MuiFormControlLabel-label': { fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.6 } }} />
-                                            {shareStudentProfile && (<Chip size="small" color="success" label="Sharing" sx={{ fontWeight: 600 }} />)}
+                                            {isTutor ? (
+                                                <>
+                                                    <FormControlLabel control={<Switch size="small" checked={shareStudentProfile} onChange={(e)=>handleStudentShareToggle(e.target.checked)} />} label="Show to student" sx={{ m:0, '& .MuiFormControlLabel-label': { fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.6 } }} />
+                                                    {shareStudentProfile && (<Chip size="small" color="success" label="Sharing" sx={{ fontWeight: 600 }} />)}
+                                                </>
+                                            ) : (
+                                                sharedProfileBy ? <Chip size="small" color="primary" variant="outlined" label={`Shared by ${sharedProfileBy}`} sx={{ fontWeight: 600 }} /> : null
+                                            )}
                                             <IconButton onClick={()=>{ handleStudentDrawerClose(); closeWorkspace(); }} size="small"><CloseIcon /></IconButton>
                                         </Box>
                                     </Box>
                                     <Box sx={{ flex:1, overflow:'auto', p: 1.5 }}>
-                                        {studentId ? (
+                                        {(isTutor ? !!studentId : !!resolvedStudentId) ? (
                                             <StudentPage
-                                                studentIdOverride={studentId}
+                                                studentIdOverride={(isTutor ? studentId : resolvedStudentId) as string}
                                                 embedded
                                                 hideOverviewTab
                                                 activeTabOverride={studentProfileTab}
                                                 onTabChange={handleStudentProfileTabChange}
-                                                onWordOpen={sendWordOpenToStudent}
-                                                onEmbeddedAssignmentOpen={sendAssignmentOpenToStudent}
+                                                onWordOpen={isTutor ? sendWordOpenToStudent : undefined}
+                                                onEmbeddedAssignmentOpen={isTutor ? sendAssignmentOpenToStudent : undefined}
                                             />
                                         ) : (
                                             <Box sx={{ height:'100%', display:'flex', alignItems:'center', justifyContent:'center' }}>
@@ -470,21 +486,6 @@ const DailyCallLayout: React.FC<{
                             )}
                         </Box>
 
-            {!isTutor && resolvedStudentId && (
-                <StudentProfileDrawer
-                    open={sharedProfileOpen}
-                    onClose={() => setSharedProfileOpen(false)}
-                    studentId={resolvedStudentId}
-                    activeTab={sharedProfileTab}
-                    sharedBy={sharedProfileBy}
-                    // command props from Daily messages
-                    openWordIdCommand={openWordIdCmd}
-                    onConsumeOpenWordCommand={() => setOpenWordIdCmd(null)}
-                    openAssignmentIdCommand={openAssignmentIdCmd}
-                    openTaskIdCommand={openTaskIdCmd}
-                    onConsumeOpenAssignmentCommand={() => { setOpenAssignmentIdCmd(null); setOpenTaskIdCmd(null); }}
-                />
-            )}
         </Box>
     );
 };
