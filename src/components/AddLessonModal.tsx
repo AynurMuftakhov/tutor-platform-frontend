@@ -22,7 +22,7 @@ import {
 import { createLesson } from "../services/api";
 import DateTimeInput from "./DateTimeInput";
 import dayjs from "dayjs";
-import {Student} from "../pages/MyStudentsPage";
+import { Student } from "../features/students/types";
 import {useAuth} from "../context/AuthContext";
 
 interface AddLessonModalProps {

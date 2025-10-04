@@ -23,7 +23,7 @@ import {AssignWordsRequest} from '../../types';
 import {useQuery} from '@tanstack/react-query';
 import {fetchStudents} from "../../services/api";
 import {useAuth} from "../../context/AuthContext";
-import {Student} from "../../pages/MyStudentsPage";
+import { Student } from "../../features/students/types";
 
 interface Props {
     open: boolean;
