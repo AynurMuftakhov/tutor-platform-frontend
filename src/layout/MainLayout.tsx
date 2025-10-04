@@ -473,37 +473,109 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 Skip to content
             </a>
             <NotificationToasterWrapper />
-            <Box sx={{  display: 'flex', width: '100%' }}>
+            <Box sx={{ display: 'flex', width: '100%', minHeight: '100vh' }}>
                 <CssBaseline />
                 {!isVideoCallPage && (
-                    <Box
-                        component="header"
-                        sx={{
-                            position: 'sticky',
-                            top: 0,
-                            zIndex: theme.zIndex.drawer + 1,
-                            width: { xs: '100%', lg: `calc(100% - ${drawerWidth})` },
-                            ml: { xs: 0, lg: drawerWidth },
-                            backgroundColor: scrolled ? alpha(theme.palette.background.paper, 0.85) : 'transparent',
-                            backdropFilter: scrolled ? 'blur(12px)' : 'none',
-                            borderBottom: scrolled ? `1px solid ${alpha(theme.palette.divider, 0.4)}` : '1px solid transparent',
-                            boxShadow: scrolled ? '0 12px 32px rgba(15, 23, 42, 0.08)' : 'none',
-                            transition: 'background-color 0.3s ease, box-shadow 0.3s ease, backdrop-filter 0.3s ease, border-color 0.3s ease',
-                        }}
-                    >
-                        <AppBar
-                            position="sticky"
-                            elevation={0}
-                            color="transparent"
+                    <>
+                        <Drawer
+                            variant="temporary"
+                            open={mobileOpen}
+                            onClose={closeDrawer}
+                            ModalProps={{
+                                keepMounted: true,
+                                slotProps: {
+                                    backdrop: {
+                                        sx: {
+                                            backgroundColor: "rgba(15, 23, 42, 0.45)",
+                                        },
+                                    },
+                                },
+                            }}
                             sx={{
-                                boxShadow: 'none',
-                                backgroundColor: 'transparent',
-                                backgroundImage: 'none',
-                                color: 'text.primary',
-                                width: '100%',
+                                display: { xs: "block", lg: "none" },
+                                "& .MuiDrawer-paper": {
+                                    boxSizing: "border-box",
+                                    width: drawerWidth,
+                                    transform: mobileOpen ? "translateX(0)" : "translateX(-100%)",
+                                    transition: theme.transitions.create("transform", {
+                                        easing: mobileOpen
+                                            ? theme.transitions.easing.easeOut
+                                            : theme.transitions.easing.sharp,
+                                        duration: mobileOpen
+                                            ? theme.transitions.duration.enteringScreen
+                                            : theme.transitions.duration.leavingScreen,
+                                    }),
+                                },
                             }}
                         >
-                            <Toolbar sx={{ display: "flex", justifyContent: "space-between", py: 0.75, px: { xs: 2, sm: 3 } }}>
+                            <FocusTrap
+                                active={mobileOpen && isLgDown}
+                                focusTrapOptions={{
+                                    clickOutsideDeactivates: true,
+                                    escapeDeactivates: true,
+                                    returnFocusOnDeactivate: false,
+                                    onDeactivate: () => {
+                                        menuButtonRef.current?.focus();
+                                    },
+                                }}
+                            >
+                                <Box role="presentation" sx={{ height: "100%", outline: "none" }}>
+                                    {drawer}
+                                </Box>
+                            </FocusTrap>
+                        </Drawer>
+
+                        <Drawer
+                            variant="permanent"
+                            sx={{
+                                display: { xs: "none", lg: "block" },
+                                width: drawerWidth,
+                                flexShrink: 0,
+                                "& .MuiDrawer-paper": { boxSizing: "border-box", width: drawerWidth },
+                            }}
+                            open
+                        >
+                            {drawer}
+                        </Drawer>
+                    </>
+                )}
+
+                <Box
+                    sx={{
+                        flexGrow: 1,
+                        minWidth: 0,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        position: 'relative',
+                    }}
+                >
+                    {!isVideoCallPage && (
+                        <Box
+                            component="header"
+                            sx={{
+                                position: 'sticky',
+                                top: 0,
+                                zIndex: theme.zIndex.drawer + 1,
+                                backgroundColor: scrolled ? alpha(theme.palette.background.paper, 0.85) : 'transparent',
+                                backdropFilter: scrolled ? 'blur(12px)' : 'none',
+                                borderBottom: scrolled ? `1px solid ${alpha(theme.palette.divider, 0.4)}` : '1px solid transparent',
+                                boxShadow: scrolled ? '0 12px 32px rgba(15, 23, 42, 0.08)' : 'none',
+                                transition: 'background-color 0.3s ease, box-shadow 0.3s ease, backdrop-filter 0.3s ease, border-color 0.3s ease',
+                            }}
+                        >
+                            <AppBar
+                                position="sticky"
+                                elevation={0}
+                                color="transparent"
+                                sx={{
+                                    boxShadow: 'none',
+                                    backgroundColor: 'transparent',
+                                    backgroundImage: 'none',
+                                    color: 'text.primary',
+                                    width: '100%',
+                                }}
+                            >
+                                <Toolbar sx={{ display: "flex", justifyContent: "space-between", py: 0.75, px: { xs: 2, sm: 3 } }}>
                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
                             {!isVideoCallPage && (
                                 <IconButton
@@ -881,189 +953,124 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             </Box>
         )}
 
-                {!isVideoCallPage && (
-                    <>
-                        <Drawer
-                            variant="temporary"
-                            open={mobileOpen}
-                            onClose={closeDrawer}
-                            ModalProps={{
-                                keepMounted: true,
-                                slotProps: {
-                                    backdrop: {
-                                        sx: {
-                                            backgroundColor: "rgba(15, 23, 42, 0.45)",
-                                        },
-                                    },
-                                },
-                            }}
-                            sx={{
-                                display: { xs: "block", lg: "none" },
-                                "& .MuiDrawer-paper": {
-                                    boxSizing: "border-box",
-                                    width: drawerWidth,
-                                    transform: mobileOpen ? "translateX(0)" : "translateX(-100%)",
-                                    transition: theme.transitions.create("transform", {
-                                        easing: mobileOpen
-                                            ? theme.transitions.easing.easeOut
-                                            : theme.transitions.easing.sharp,
-                                        duration: mobileOpen
-                                            ? theme.transitions.duration.enteringScreen
-                                            : theme.transitions.duration.leavingScreen,
-                                    }),
-                                },
-                            }}
-                        >
-                            <FocusTrap
-                                active={mobileOpen && isLgDown}
-                                focusTrapOptions={{
-                                    clickOutsideDeactivates: true,
-                                    escapeDeactivates: true,
-                                    returnFocusOnDeactivate: false,
-                                    onDeactivate: () => {
-                                        menuButtonRef.current?.focus();
-                                    },
-                                }}
-                            >
-                                <Box role="presentation" sx={{ height: "100%", outline: "none" }}>
-                                    {drawer}
-                                </Box>
-                            </FocusTrap>
-                        </Drawer>
-
-                        <Drawer
-                            variant="permanent"
-                            sx={{
-                                display: { xs: "none", lg: "block" },
-                                width: drawerWidth,
-                                flexShrink: 0,
-                                "& .MuiDrawer-paper": { boxSizing: "border-box", width: drawerWidth },
-                            }}
-                            open
-                        >
-                            {drawer}
-                        </Drawer>
-                    </>
-                )}
-
-                <Box
-                    component="main"
-                    id="main-content"
-                    tabIndex={-1}
-                    sx={{
-                        flexGrow: 1,
-                        display: "flex",
-                        flexDirection: "column",
-                        minWidth: 0,
-                        minHeight: '100vh',
-                        background: `linear-gradient(180deg, ${alpha(theme.palette.background.default, 0.8)} 0%, ${alpha(theme.palette.background.default, 1)} 100%)`,
-                        position: 'relative',
-                        width: isVideoCallPage ? '100%' : 'auto',
-                        overflow: 'visible',
-                        px: { xs: 2, sm: 3, md: 4, lg: 5 },
-                        pb: { xs: 8, md: 10 },
-                        scrollMarginTop: theme.spacing(12),
-                        '&::before': {
-                            content: '""',
-                            position: 'absolute',
-                            top: -100,
-                            right: -100,
-                            width: 300,
-                            height: 300,
-                            borderRadius: '50%',
-                            background: `radial-gradient(circle, ${alpha(theme.palette.primary.light, 0.08)} 0%, ${alpha(theme.palette.primary.light, 0)} 70%)`,
-                            zIndex: 0,
-                        },
-                        '&::after': {
-                            content: '""',
-                            position: 'absolute',
-                            bottom: -100,
-                            left: -100,
-                            width: 300,
-                            height: 300,
-                            borderRadius: '50%',
-                            background: `radial-gradient(circle, ${alpha(theme.palette.secondary.light, 0.08)} 0%, ${alpha(theme.palette.secondary.light, 0)} 70%)`,
-                            zIndex: 0,
-                        },
-                    }}
-                >
-                    {/* Logout Confirmation Dialog */}
-                    <Dialog
-                        open={isDialogOpen}
-                        onClose={closeDialog}
-                        PaperProps={{
-                            elevation: 3,
-                            sx: {
-                                borderRadius: 3,
-                                overflow: 'hidden'
-                            }
+                    <Box component="main"
+                        id="main-content"
+                        tabIndex={-1}
+                        sx={{
+                            flexGrow: 1,
+                            display: "flex",
+                            flexDirection: "column",
+                            minWidth: 0,
+                            minHeight: '100vh',
+                            background: `linear-gradient(180deg, ${alpha(theme.palette.background.default, 0.8)} 0%, ${alpha(theme.palette.background.default, 1)} 100%)`,
+                            position: 'relative',
+                            width: '100%',
+                            overflow: 'visible',
+                            px: { xs: 2, sm: 3, md: 4, lg: 5 },
+                            pb: { xs: 8, md: 10 },
+                            scrollMarginTop: theme.spacing(12),
+                            '&::before': {
+                                content: '""',
+                                position: 'absolute',
+                                top: -100,
+                                right: -100,
+                                width: 300,
+                                height: 300,
+                                borderRadius: '50%',
+                                background: `radial-gradient(circle, ${alpha(theme.palette.primary.light, 0.08)} 0%, ${alpha(theme.palette.primary.light, 0)} 70%)`,
+                                zIndex: 0,
+                            },
+                            '&::after': {
+                                content: '""',
+                                position: 'absolute',
+                                bottom: -100,
+                                left: -100,
+                                width: 300,
+                                height: 300,
+                                borderRadius: '50%',
+                                background: `radial-gradient(circle, ${alpha(theme.palette.secondary.light, 0.08)} 0%, ${alpha(theme.palette.secondary.light, 0)} 70%)`,
+                                zIndex: 0,
+                            },
                         }}
                     >
-                        <DialogTitle sx={{
-                            py: 2.5,
-                            px: 3,
-                            bgcolor: alpha(theme.palette.error.main, 0.05),
-                            borderBottom: `1px solid ${theme.palette.divider}`
-                        }}>
-                            <Typography variant="h6" fontWeight={600}>Confirm Logout</Typography>
-                        </DialogTitle>
-                        <DialogContent sx={{ py: 3, px: 3 }}>
-                            <Typography variant="body1">
-                                Are you sure you want to log out of your account?
-                            </Typography>
-                        </DialogContent>
-                        <DialogActions sx={{ px: 3, py: 2, borderTop: `1px solid ${theme.palette.divider}` }}>
-                            <Button
-                                onClick={closeDialog}
-                                variant="outlined"
-                                sx={{
-                                    borderRadius: 2,
-                                    px: 3
-                                }}
-                            >
-                                Cancel
-                            </Button>
-                            <Button
-                                onClick={handleLogout}
-                                variant="contained"
-                                color="error"
-                                sx={{
-                                    borderRadius: 2,
-                                    px: 3
-                                }}
-                            >
-                                Logout
-                            </Button>
-                        </DialogActions>
-                    </Dialog>
+                        {/* Logout Confirmation Dialog */}
+                        <Dialog
+                            open={isDialogOpen}
+                            onClose={closeDialog}
+                            PaperProps={{
+                                elevation: 3,
+                                sx: {
+                                    borderRadius: 3,
+                                    overflow: 'hidden'
+                                }
+                            }}
+                        >
+                            <DialogTitle sx={{
+                                py: 2.5,
+                                px: 3,
+                                bgcolor: alpha(theme.palette.error.main, 0.05),
+                                borderBottom: `1px solid ${theme.palette.divider}`
+                            }}>
+                                <Typography variant="h6" fontWeight={600}>Confirm Logout</Typography>
+                            </DialogTitle>
+                            <DialogContent sx={{ py: 3, px: 3 }}>
+                                <Typography variant="body1">
+                                    Are you sure you want to log out of your account?
+                                </Typography>
+                            </DialogContent>
+                            <DialogActions sx={{ px: 3, py: 2, borderTop: `1px solid ${theme.palette.divider}` }}>
+                                <Button
+                                    onClick={closeDialog}
+                                    variant="outlined"
+                                    sx={{
+                                        borderRadius: 2,
+                                        px: 3
+                                    }}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    onClick={handleLogout}
+                                    variant="contained"
+                                    color="error"
+                                    sx={{
+                                        borderRadius: 2,
+                                        px: 3
+                                    }}
+                                >
+                                    Logout
+                                </Button>
+                            </DialogActions>
+                        </Dialog>
 
-                    {/* Main Content Wrapper */}
-                    {pageHeaderElements.length > 0 && (
+                        {/* Main Content Wrapper */}
+                        {pageHeaderElements.length > 0 && (
+                            <Box
+                                sx={{
+                                    position: 'relative',
+                                    zIndex: 1,
+                                    width: '100%',
+                                }}
+                            >
+                                {pageHeaderElements}
+                            </Box>
+                        )}
+
                         <Box
+                            component={motion.div}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ duration: 0.5 }}
                             sx={{
                                 position: 'relative',
                                 zIndex: 1,
-                                width: '100%',
+                                flexGrow: 1,
+                                minHeight: 0,
+                                overflow: 'visible',
                             }}
                         >
-                            {pageHeaderElements}
+                            {mainContentElements}
                         </Box>
-                    )}
-
-                    <Box
-                        component={motion.div}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ duration: 0.5 }}
-                        sx={{
-                            position: 'relative',
-                            zIndex: 1,
-                            flexGrow: 1,
-                            minHeight: 0,
-                            overflow: 'visible',
-                        }}
-                    >
-                        {mainContentElements}
                     </Box>
                 </Box>
             </Box>
