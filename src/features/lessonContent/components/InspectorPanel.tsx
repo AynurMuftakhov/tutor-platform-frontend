@@ -26,7 +26,7 @@ import MaterialsPicker, { PickerMaterialType } from './MaterialsPicker';
 import GrammarTaskPicker from './GrammarTaskPicker';
 import { useQuery } from '@tanstack/react-query';
 import type { ImageAsset, ImageAssetPage } from '../../../types/assets';
-import { fetchImageAssets, uploadImageAsset, validateImageFile, resolveImageUrl } from '../../../services/assets';
+import { fetchImageAssets, uploadImageAsset, validateImageFile, resolveUrl } from '../../../services/assets';
 
 function sanitizeHtml(input: string): string {
   // Minimal sanitizer: remove <script>...</script> tags
@@ -455,7 +455,7 @@ const ImageBlockForm: React.FC<{ value: ImageBlockPayload | undefined; onChange:
     }
     setUrlError(undefined);
     setUploadError(undefined);
-    setPendingImage({ url: resolveImageUrl(trimmed), alt: sanitizeOptional(deriveAltFromUrl(trimmed)) });
+    setPendingImage({ url: resolveUrl(trimmed), alt: sanitizeOptional(deriveAltFromUrl(trimmed)) });
   }, [urlInput]);
 
   const handleInsert = useCallback(() => {
@@ -490,7 +490,7 @@ const ImageBlockForm: React.FC<{ value: ImageBlockPayload | undefined; onChange:
       <Typography variant="subtitle2">Image</Typography>
       <Stack spacing={1}>
         {value?.url ? (
-          <Box component="img" src={resolveImageUrl(value.url || '')} alt={value.alt || ''} loading="lazy" sx={{ width: '100%', borderRadius: 1, border: (t) => `1px solid ${t.palette.divider}` }} />
+          <Box component="img" src={resolveUrl(value.url || '')} alt={value.alt || ''} loading="lazy" sx={{ width: '100%', borderRadius: 1, border: (t) => `1px solid ${t.palette.divider}` }} />
         ) : (
           <Box sx={{ border: (t) => `1px dashed ${t.palette.divider}`, borderRadius: 1, p: 2, textAlign: 'center', color: 'text.secondary' }}>
             <Typography variant="caption">No image inserted</Typography>

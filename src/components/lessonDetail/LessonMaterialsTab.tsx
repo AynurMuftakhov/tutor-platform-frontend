@@ -16,6 +16,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import StandaloneMediaPlayer from "./StandaloneMediaPlayer";
 import {extractVideoId} from "../../utils/videoUtils";
 import GrammarViewerDialog from "../grammar/GrammarViewerDialog";
+import { resolveUrl } from '../../services/assets';
 
 interface LessonMaterialsTabProps {
   lessonId: string;
@@ -207,14 +208,25 @@ const LessonMaterialsTab: React.FC<LessonMaterialsTabProps> = ({ lessonId, isTea
             fullWidth
         >
             {currentMaterial && currentMaterial.sourceUrl && (
-                <Box sx={{ position: 'relative', height: 500 }}>
-                    <StandaloneMediaPlayer
-                        videoId={extractVideoId(currentMaterial.sourceUrl) || ''}
-                        startTime={0}
-                        endTime={0}
-                        onClose={handleClosePlayer}
-                    />
-                </Box>
+                currentMaterial.type === 'AUDIO' ? (
+                    <Box sx={{ p: 3 }}>
+                        <audio
+                            controls
+                            src={resolveUrl(currentMaterial.sourceUrl)}
+                            style={{ width: '100%' }}
+                            aria-label={currentMaterial.title || 'Audio material'}
+                        />
+                    </Box>
+                ) : (
+                    <Box sx={{ position: 'relative', height: 500 }}>
+                        <StandaloneMediaPlayer
+                            videoId={extractVideoId(currentMaterial.sourceUrl) || ''}
+                            startTime={0}
+                            endTime={0}
+                            onClose={handleClosePlayer}
+                        />
+                    </Box>
+                )
             )}
         </Dialog>
 

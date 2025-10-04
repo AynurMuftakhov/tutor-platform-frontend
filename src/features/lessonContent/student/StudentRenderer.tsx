@@ -20,7 +20,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getMaterial } from '../../../services/api';
 import type { Material } from '../../../types/material';
 import GrammarPlayer from '../../../components/grammar/GrammarPlayer';
-import { resolveImageUrl } from '../../../services/assets';
+import { resolveUrl } from '../../../services/assets';
 
 function useThrottled<T extends (...args: any[]) => void>(fn: T, ms: number): T {
     const lastArgs = React.useRef<any[] | null>(null);
@@ -83,7 +83,7 @@ const ImageBlockView: React.FC<{ payload: ImageBlockPayload }> = ({ payload }) =
       <Stack spacing={0.5}>
         <Box
           component="img"
-          src={resolveImageUrl(url || '')}
+          src={resolveUrl(url || '')}
           alt={alt || ''}
           loading="lazy"
           onClick={() => setOpen(true)}
@@ -97,7 +97,7 @@ const ImageBlockView: React.FC<{ payload: ImageBlockPayload }> = ({ payload }) =
       <Dialog open={open} onClose={() => setOpen(false)} maxWidth="lg">
         <DialogContent sx={{ p: 0 }}>
           <Box sx={{ position: 'relative' }}>
-            <Box component="img" src={resolveImageUrl(url || '')} alt={alt || ''} loading="lazy" sx={{ maxWidth: '90vw', maxHeight: '85vh', display: 'block' }} />
+            <Box component="img" src={resolveUrl(url || '')} alt={alt || ''} loading="lazy" sx={{ maxWidth: '90vw', maxHeight: '85vh', display: 'block' }} />
           </Box>
         </DialogContent>
       </Dialog>
