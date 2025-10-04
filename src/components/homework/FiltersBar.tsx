@@ -1,8 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import {
     Box,
-    Button,
-    Chip,
+    Button, Chip,
     Dialog,
     DialogActions,
     DialogContent,
@@ -29,6 +28,8 @@ import ScheduleIcon from '@mui/icons-material/Schedule';
 import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import TuneIcon from '@mui/icons-material/Tune';
+import CloseIcon from '@mui/icons-material/Close';
 
 dayjs.extend(utc);
 
@@ -52,6 +53,7 @@ export interface FiltersBarProps {
     onChange: (state: FiltersState) => void;
     /** Optional: make the bar sticky under your page header */
     sticky?: boolean;
+    collapsed?: boolean;
 }
 
 function toYMD(d: Dayjs): string { return d.utc().format('YYYY-MM-DD'); }
@@ -75,10 +77,17 @@ const DEFAULTS: FiltersState = {
     sort: 'assignedDesc',
 };
 
-const FiltersBar: React.FC<FiltersBarProps> = ({ value, onChange, sticky }) => {
+const FiltersBar: React.FC<FiltersBarProps> = ({ value, onChange, sticky, collapsed }) => {
     const theme = useTheme();
     const isXs = useMediaQuery(theme.breakpoints.down('sm'));
     const state = value;
+
+    // Collapsed panel state (for embedded/compact mode)
+    const [panelOpen, setPanelOpen] = useState(false);
+
+    const statusLabel = state.status === 'active' ? 'Active' : state.status === 'completed' ? 'Completed' : 'All';
+    const rangeLabel = state.range === 'last7' ? '7d' : state.range === 'last14' ? '14d' : state.range === 'last30' ? '30d' : state.range === 'thisMonth' ? (isXs ? 'Month' : 'This month') : 'Custom';
+    const sortLabel = state.sort === 'assignedDesc' ? 'Newest' : state.sort === 'assignedAsc' ? 'Oldest' : state.sort === 'dueAsc' ? 'Nearest due' : 'Farthest due';
 
     const pillPx = isXs ? 0.9 : 1.25;   // horizontal padding
     const pillPy = isXs ? 0.25 : 0.5;   // vertical padding
@@ -310,55 +319,105 @@ const FiltersBar: React.FC<FiltersBarProps> = ({ value, onChange, sticky }) => {
 
     return (
         <>
-            <Paper
-                elevation={0}
-                sx={{
-                    px: 1,
-                    py: { xs: 0.5, sm: 0.75 },
-                    borderRadius: 2,
-                    gap: { xs: 0.5, sm: 1 },
-                    display: 'flex',
-                    alignItems: 'center',
-                    flexWrap: 'wrap',
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    backdropFilter: 'saturate(1.1) blur(6px)',
-                    background:
-                        theme.palette.mode === 'light'
-                            ? 'rgba(255,255,255,0.8)'
-                            : 'rgba(22,22,26,0.7)',
-                    position: sticky ? 'sticky' : 'static',
-                    top: sticky ? 8 : 'auto',
-                    zIndex: sticky ? 2 : 'auto',
-                }}
-                aria-label="Homework filters"
-            >
-                {isXs ? (
-                    <Stack spacing={0.25} sx={{ width: '100%' }}>
-                        <Stack direction="row" spacing={0.5} sx={hScroll}>{statusGroup}</Stack>
-                        <Stack direction="row" spacing={0.5} sx={hScroll}>{dateGroup}</Stack>
-                        <Stack direction="row" spacing={0.5} alignItems="center" sx={hScroll}>
+            {collapsed ? (
+                <>
+                    <Paper
+                        elevation={0}
+                        sx={{
+                            px: 1,
+                            py: 0.5,
+                            borderRadius: 2,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1,
+                            border: '1px solid',
+                            borderColor: 'divider',
+                            bgcolor: 'background.paper',
+                            cursor: 'pointer',
+                        }}
+                        aria-label="Current filters"
+                        onClick={() => setPanelOpen(true)}
+                    >
+                        <Chip size="small" icon={<CheckCircleOutlineIcon />} label={statusLabel} />
+                        <Chip size="small" icon={<ScheduleIcon />} label={rangeLabel} />
+                        <Chip size="small" icon={<TrendingDownIcon />} label={sortLabel} />
+                        <Button size="small" startIcon={<TuneIcon />} sx={{ ml: 'auto' }}>Edit</Button>
+                    </Paper>
+
+                    {/* Collapsed full filter sheet */}
+                    <Dialog open={panelOpen} onClose={() => setPanelOpen(false)} fullWidth maxWidth="md" fullScreen={isXs}>
+                        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            Filters
+                            <Button onClick={() => setPanelOpen(false)} startIcon={<CloseIcon />}>Close</Button>
+                        </DialogTitle>
+                        <DialogContent sx={{ pt: 1 }}>
+                            {/** reuse the same groups in a vertical layout **/}
+                            <Stack spacing={1.5}>
+                                {statusGroup}
+                                {dateGroup}
+                                <Stack direction="row" spacing={1} alignItems="center">
+                                    {sortGroup}
+                                    {!isDefault && (
+                                        <Button size="small" startIcon={<RestartAltIcon />} onClick={resetAll} sx={{ ml: 'auto' }}>
+                                            Reset
+                                        </Button>
+                                    )}
+                                </Stack>
+                            </Stack>
+                        </DialogContent>
+                    </Dialog>
+                </>
+            ) : (
+                <Paper
+                    elevation={0}
+                    sx={{
+                        px: 1,
+                        py: { xs: 0.5, sm: 0.75 },
+                        borderRadius: 2,
+                        gap: { xs: 0.5, sm: 1 },
+                        display: 'flex',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        backdropFilter: 'saturate(1.1) blur(6px)',
+                        background:
+                            theme.palette.mode === 'light'
+                                ? 'rgba(255,255,255,0.8)'
+                                : 'rgba(22,22,26,0.7)',
+                        position: sticky ? 'sticky' : 'static',
+                        top: sticky ? 8 : 'auto',
+                        zIndex: sticky ? 2 : 'auto',
+                    }}
+                    aria-label="Homework filters"
+                >
+                    {isXs ? (
+                        <Stack spacing={0.25} sx={{ width: '100%' }}>
+                            <Stack direction="row" spacing={0.5} sx={hScroll}>{statusGroup}</Stack>
+                            <Stack direction="row" spacing={0.5} sx={hScroll}>{dateGroup}</Stack>
+                            <Stack direction="row" spacing={0.5} alignItems="center" sx={hScroll}>
+                                {sortGroup}
+                                {!isDefault && (
+                                    <Button size="small" startIcon={<RestartAltIcon />} onClick={resetAll} sx={{ ml: 'auto', flexShrink: 0 }}>
+                                        Reset
+                                    </Button>
+                                )}
+                            </Stack>
+                        </Stack>
+                    ) : (
+                        <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" sx={{ width: '100%' }}>
+                            {statusGroup}
+                            {dateGroup}
                             {sortGroup}
                             {!isDefault && (
-                                <Button size="small" startIcon={<RestartAltIcon />} onClick={resetAll} sx={{ ml: 'auto', flexShrink: 0 }}>
+                                <Button size="small" startIcon={<RestartAltIcon />} onClick={resetAll} sx={{ ml: 'auto' }}>
                                     Reset
                                 </Button>
                             )}
                         </Stack>
-                    </Stack>
-                ) : (
-                    <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" sx={{ width: '100%' }}>
-                        {statusGroup}
-                        {dateGroup}
-                        {sortGroup}
-                        {!isDefault && (
-                            <Button size="small" startIcon={<RestartAltIcon />} onClick={resetAll} sx={{ ml: 'auto' }}>
-                                Reset
-                            </Button>
-                        )}
-                    </Stack>
-                )}
-            </Paper>
+                    )}
+                </Paper>
+            )}
 
             {/* Custom range dialog */}
             <Dialog open={customOpen} onClose={cancelCustom} aria-labelledby="custom-range-title">

@@ -156,7 +156,7 @@ const StudentHomeworkTab: React.FC<{ studentId: string; isTeacher: boolean; onAs
         )}
       </Box>
       <Box sx={{ flex: 1, minWidth: 260 }}>
-        <FiltersBar value={filters} onChange={setFilters} />
+        <FiltersBar value={filters} onChange={setFilters} collapsed={embedded} />
       </Box>
       <HomeworkComposerDrawer
         open={composerOpen}
