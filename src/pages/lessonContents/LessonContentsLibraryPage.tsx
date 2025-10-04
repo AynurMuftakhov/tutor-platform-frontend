@@ -11,7 +11,6 @@ import { createLessonContent, getLessonContents, deleteLessonContent } from '../
 import { useNavigate } from 'react-router-dom';
 import type { LessonContent, PageModel, BlockContentPayload } from '../../types/lessonContent';
 import EditIcon from "@mui/icons-material/Edit";
-import LockOpenIcon from "@mui/icons-material/LockOpen";
 
 const LessonContentsLibraryPage: React.FC = () => {
   const navigate = useNavigate();
@@ -83,7 +82,14 @@ const LessonContentsLibraryPage: React.FC = () => {
   const items: LessonContent[] = useMemo(() => data?.content ?? [], [data]);
 
   return (
-    <Box p={3}>
+    <Box p={3}  sx={{
+        bgcolor: '#fafbfd',
+        height: '100dvh',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        position: 'relative'
+    }}>
       <Stack direction="row" alignItems="center" justifyContent="space-between" mb={2}>
         <Typography variant="h5">Lesson Contents</Typography>
         <Button variant="contained" startIcon={<AddIcon />} onClick={() => createMutation.mutate()}>
@@ -123,7 +129,8 @@ const LessonContentsLibraryPage: React.FC = () => {
       ) : view === 'grid' ? (
         <Box display="grid" gridTemplateColumns={{ xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr' }} gap={2}>
           {items.map((it) => (
-            <Box key={it.id} p={2} borderRadius={2} border={(theme) => `1px solid ${theme.palette.divider}`}>
+            <Box key={it.id} p={2} borderRadius={2} border={(theme) => `1px solid ${theme.palette.divider}`}
+            sx={{ bgcolor: '#ffffff'}}>
               <Typography variant="subtitle1" noWrap>{it.title || 'Untitled composition'}</Typography>
               <Stack direction="row" spacing={1} alignItems="center" mt={1}>
                 <Chip size="small" label={it.status} color={it.status === 'PUBLISHED' ? 'success' : 'default'} />
@@ -132,6 +139,7 @@ const LessonContentsLibraryPage: React.FC = () => {
               <Stack direction="row" spacing={1} mt={2}>
                 <Button size="small" variant="text" onClick={() => navigate(`/lesson-contents/${it.id}/editor`)}>Edit</Button>
                 <Button size="small" variant="text" onClick={() => navigate(`/lesson-contents/${it.id}/view`)}>View</Button>
+                <Button size="small" variant="outlined" onClick={() => navigate(`/lesson-contents/${it.id}/view?assign=1`)}>Assign</Button>
                 <Button size="small" variant="text" color="error" startIcon={<DeleteOutline fontSize="small" />} onClick={() => handleDelete(it.id)}>Delete</Button>
               </Stack>
             </Box>
@@ -140,7 +148,8 @@ const LessonContentsLibraryPage: React.FC = () => {
       ) : (
         <Stack spacing={1}>
           {items.map((it) => (
-            <Box key={it.id} p={2} borderRadius={2} border={(theme) => `1px solid ${theme.palette.divider}`} display="flex" alignItems="center" justifyContent="space-between">
+            <Box key={it.id} p={2} sx={{ bgcolor: '#ffffff'}}
+                 borderRadius={2} border={(theme) => `1px solid ${theme.palette.divider}`} display="flex" alignItems="center" justifyContent="space-between">
               <Box>
                 <Typography variant="subtitle1">{it.title || 'Untitled composition'}</Typography>
                 <Typography variant="caption" color="text.secondary">Updated {new Date(it.updatedAt).toLocaleString()}</Typography>
@@ -149,6 +158,7 @@ const LessonContentsLibraryPage: React.FC = () => {
                 <Chip size="small" label={it.status} color={it.status === 'PUBLISHED' ? 'success' : 'default'} />
                 <IconButton size="small" onClick={() => navigate(`/lesson-contents/${it.id}/editor`)} aria-label="Edit"><EditIcon fontSize="small" /></IconButton>
                 <IconButton size="small" onClick={() => navigate(`/lesson-contents/${it.id}/view`)} aria-label="View"><ViewListIcon fontSize="small" /></IconButton>
+                <Button size="small" variant="outlined" onClick={() => navigate(`/lesson-contents/${it.id}/view?assign=1`)}>Assign</Button>
                 <IconButton size="small" color="error" onClick={() => handleDelete(it.id)} aria-label="Delete" disabled={false}><DeleteOutline fontSize="small" /></IconButton>
               </Stack>
             </Box>

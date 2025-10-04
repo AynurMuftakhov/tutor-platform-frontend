@@ -23,6 +23,7 @@ import CheckIcon from "@mui/icons-material/Check";
 import SchoolIcon from "@mui/icons-material/School";
 import BookIcon from "@mui/icons-material/Book";
 import GridViewIcon from "@mui/icons-material/GridView";
+import AssignmentIcon from "@mui/icons-material/Assignment";
 import { motion } from "framer-motion";
 import useMediaQuery from '@mui/material/useMediaQuery';
 
@@ -60,6 +61,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             ? [{ label: "Students", icon: <PeopleIcon />, path: "/my-students" },
             ]
             : [ ]),
+        { label: "Homework", icon: <AssignmentIcon />, path: (user?.role === "tutor") ? "/t/homework" : "/homework" },
         { label: "Vocabulary", icon: <EventNoteIcon />, path: "/vocabulary" },
         { label: "Lessons", icon: <EventNoteIcon />, path: "/lessons" }
     ];
@@ -496,7 +498,14 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                                     color="primary"
                                     size="small"
                                     sx={{ textTransform: 'none' }}
-                                    onClick={() => navigate(`/lessons/${currentLessonId}`)}
+                                    onClick={() => {
+                                        navigate('/video-call', {
+                                            state: {
+                                                identity: user?.id,
+                                                roomName: `lesson-${currentLessonId}`,
+                                            },
+                                        });
+                                    }}
                                 >
                                     Join Lesson
                                 </Button>

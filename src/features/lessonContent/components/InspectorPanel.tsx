@@ -1,9 +1,32 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Box, Button, Chip, FormControl, FormControlLabel, FormHelperText, InputLabel, MenuItem, Radio, RadioGroup, Select, Stack, Switch, TextField, Typography } from '@mui/material';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Alert,
+  Box,
+  Button,
+  Chip,
+  CircularProgress,
+  Divider,
+  FormControl,
+  FormControlLabel,
+  FormHelperText,
+  InputLabel,
+  LinearProgress,
+  MenuItem,
+  Select,
+  Stack,
+  Switch,
+  Tab,
+  Tabs,
+  TextField,
+  Typography,
+} from '@mui/material';
 import { useEditorStore } from '../editorStore';
-import type { BlockRef, Column, Row, Section } from '../../../types/lessonContent';
+import type { BlockRef, Column, ImageBlockPayload, Row, Section } from '../../../types/lessonContent';
 import MaterialsPicker, { PickerMaterialType } from './MaterialsPicker';
 import GrammarTaskPicker from './GrammarTaskPicker';
+import { useQuery } from '@tanstack/react-query';
+import type { ImageAsset, ImageAssetPage } from '../../../types/assets';
+import { fetchImageAssets, uploadImageAsset, validateImageFile, resolveUrl } from '../../../services/assets';
 
 function sanitizeHtml(input: string): string {
   // Minimal sanitizer: remove <script>...</script> tags
@@ -119,12 +142,22 @@ const SectionForm: React.FC<{ section: Section; onChange: (patch: { title?: stri
 );
 
 const RowForm: React.FC<{ row: Row; onChange: (patch: { ariaLabel?: string }) => void }>
-  = ({ row, onChange }) => (
-  <Stack spacing={1.5}>
-    <Typography variant="subtitle2">Row</Typography>
-    <TextField size="small" label="ARIA label" value={row.ariaLabel || ''} onChange={(e) => onChange({ ariaLabel: e.target.value })} />
-  </Stack>
-);
+  = ({ row, onChange }) => {
+  const { state, actions } = useEditorStore();
+  const handleDelete = () => {
+    const sectionId = state.selectedRowPath?.sectionId || state.selectedColumnPath?.sectionId || state.selectedSectionId;
+    if (!sectionId) return;
+    actions.deleteRow(sectionId, row.id);
+  };
+  return (
+    <Stack spacing={1.5}>
+      <Typography variant="subtitle2">Row</Typography>
+      <TextField size="small" label="ARIA label" value={row.ariaLabel || ''} onChange={(e) => onChange({ ariaLabel: e.target.value })} />
+      <Divider />
+      <Button variant="outlined" color="error" size="small" onClick={handleDelete}>Delete row</Button>
+    </Stack>
+  );
+};
 
 const ColumnForm: React.FC<{ column: Column; onChange: (patch: { ariaLabel?: string }) => void; onSpanChange: (span: number) => void }>
   = ({ column, onChange, onSpanChange }) => (
@@ -145,8 +178,7 @@ const ColumnForm: React.FC<{ column: Column; onChange: (patch: { ariaLabel?: str
 type AnyBlock = any;
 
 const BlockForm: React.FC<{ type: string; payloadId: string; value: AnyBlock; onChange: (patch: AnyBlock) => void; onErrorChange: (err?: string) => void }>
-  = ({ type, value, onChange, onErrorChange }) => {
-  const [source, setSource] = useState<'material'|'url'>((value && value.materialId) ? 'material' : 'url');
+  = ({ type, value, onChange, onErrorChange, payloadId }) => {
   const [error, setError] = useState<string | undefined>(undefined);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerTypes, setPickerTypes] = useState<PickerMaterialType[]>([]);
@@ -154,6 +186,13 @@ const BlockForm: React.FC<{ type: string; payloadId: string; value: AnyBlock; on
   const [tasksOpen, setTasksOpen] = useState(false);
 
   useEffect(() => { onErrorChange(error); }, [error]);
+
+  const { actions } = useEditorStore();
+
+  const deleteThisBlock = () => {
+    if (!payloadId) return;
+    actions.deleteByIds([payloadId]);
+  };
 
   if (type === 'text') {
     return (
@@ -169,42 +208,21 @@ const BlockForm: React.FC<{ type: string; payloadId: string; value: AnyBlock; on
             onChange({ html });
           }}
         />
+        <Divider />
+        <Button variant="outlined" color="error" size="small" onClick={deleteThisBlock}>Delete block</Button>
       </Stack>
     );
   }
   if (type === 'image') {
-    const altError = source === 'url' && (!value?.alt || value.alt.trim() === '');
-    const urlError = source === 'url' && (!value?.url || value.url.trim() === '');
-    useEffect(() => {
-      const e = altError ? 'Alt is required' : urlError ? 'URL is required' : undefined;
-      setError(e);
-    }, [altError, urlError]);
     return (
       <Stack spacing={1.5}>
-        <Typography variant="subtitle2">Image</Typography>
-        <FormControl size="small">
-          <RadioGroup row value={source} onChange={(e) => setSource(e.target.value as any)}>
-            <FormControlLabel value="material" control={<Radio />} label="Material" />
-            <FormControlLabel value="url" control={<Radio />} label="URL" />
-          </RadioGroup>
-        </FormControl>
-        {source === 'url' ? (
-          <>
-            <TextField size="small" label="Image URL" value={value?.url ?? ''} onChange={(e) => onChange({ url: e.target.value })} error={urlError} helperText={urlError ? 'Required' : ''} />
-            <TextField size="small" label="Alt (required)" value={value?.alt ?? ''} onChange={(e) => onChange({ alt: e.target.value })} error={altError} helperText={altError ? 'Required' : ''} />
-            <TextField size="small" label="Caption" value={value?.caption ?? ''} onChange={(e) => onChange({ caption: e.target.value })} />
-          </>
-        ) : (
-          <>
-            <Stack direction="row" spacing={1} alignItems="center">
-              <Button variant="outlined" size="small" onClick={() => { setPickerTypes(['DOCUMENT']); setPickerOpen(true); }}>Choose Material…</Button>
-              {materialPreview && <Chip size="small" label={`${materialPreview.title} • ${materialPreview.type}`} />}
-            </Stack>
-            <TextField size="small" label="Alt (required)" value={value?.alt ?? ''} onChange={(e) => onChange({ alt: e.target.value })} />
-            <TextField size="small" label="Caption" value={value?.caption ?? ''} onChange={(e) => onChange({ caption: e.target.value })} />
-            <MaterialsPicker open={pickerOpen} allowedTypes={pickerTypes} onClose={() => setPickerOpen(false)} onSelect={(m) => { onChange({ materialId: m.id, url: undefined }); setMaterialPreview({ title: m.title, type: m.type }); setSource('material'); }} />
-          </>
-        )}
+        <ImageBlockForm
+          value={value}
+          onChange={onChange}
+          onUploadError={setError}
+        />
+        <Divider />
+        <Button variant="outlined" color="error" size="small" onClick={deleteThisBlock}>Delete block</Button>
       </Stack>
     );
   }
@@ -232,6 +250,8 @@ const BlockForm: React.FC<{ type: string; payloadId: string; value: AnyBlock; on
           <NumberField label="End (sec)" value={value?.endSec} onChange={(n) => onChange({ endSec: n })} min={0} />
         </Stack>
         {(!nonNegative || !rangeOk) && <FormHelperText error>End must be ≥ start; both non-negative.</FormHelperText>}
+        <Divider />
+        <Button variant="outlined" color="error" size="small" onClick={deleteThisBlock}>Delete block</Button>
       </Stack>
     );
   }
@@ -262,12 +282,367 @@ const BlockForm: React.FC<{ type: string; payloadId: string; value: AnyBlock; on
           </Select>
         </FormControl>
         <FormControlLabel control={<Switch checked={Boolean(value?.shuffle)} onChange={(e) => onChange({ shuffle: e.target.checked })} />} label="Shuffle" />
+        <Divider />
+        <Button variant="outlined" color="error" size="small" onClick={deleteThisBlock}>Delete block</Button>
       </Stack>
     );
   }
 
   return (
-    <Typography variant="body2" color="text.secondary">No editor for this block type yet.</Typography>
+    <Stack spacing={1.5}>
+      <Typography variant="body2" color="text.secondary">No editor for this block type yet.</Typography>
+      <Divider />
+      <Button variant="outlined" color="error" size="small" onClick={deleteThisBlock}>Delete block</Button>
+    </Stack>
+  );
+};
+
+interface PendingImageSelection {
+  id?: string;
+  url: string;
+  alt?: string;
+  caption?: string;
+}
+
+const IMAGE_LIBRARY_PAGE_SIZE = 20;
+const ACCEPTED_IMAGE_TYPES = 'image/png,image/jpeg,image/webp,image/gif';
+
+function deriveAltFromFilename(filename?: string | null): string {
+  if (!filename) return '';
+  const decoded = decodeURIComponent(filename);
+  const withoutExt = decoded.replace(/\.[^./]+$/, '');
+  return withoutExt.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function deriveAltFromUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return deriveAltFromFilename(parsed.pathname.split('/').pop() || undefined);
+  } catch {
+    return deriveAltFromFilename(url.split('/').pop() || undefined);
+  }
+}
+
+function sanitizeOptional(value?: string | null): string | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function shouldLoadMore(page: ImageAssetPage, currentLength: number): boolean {
+  const count = page.items?.length ?? 0;
+  if (count === 0) return false;
+  if (count < IMAGE_LIBRARY_PAGE_SIZE) return false;
+  if (typeof page.total === 'number') {
+    return currentLength < page.total;
+  }
+  return true;
+}
+
+const ImageBlockForm: React.FC<{ value: ImageBlockPayload | undefined; onChange: (patch: Partial<ImageBlockPayload>) => void; onUploadError: (message?: string) => void }>
+  = ({ value, onChange, onUploadError }) => {
+  const [tab, setTab] = useState<'upload' | 'library'>('upload');
+  const [pendingImage, setPendingImage] = useState<PendingImageSelection | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadError, setUploadError] = useState<string | undefined>(undefined);
+  const [uploadingFileName, setUploadingFileName] = useState<string | undefined>(undefined);
+  const [urlInput, setUrlInput] = useState('');
+  const [urlError, setUrlError] = useState<string | undefined>(undefined);
+  const [libraryOffset, setLibraryOffset] = useState(0);
+  const [libraryItems, setLibraryItems] = useState<ImageAsset[]>([]);
+  const [hasMore, setHasMore] = useState(true);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [isDragActive, setIsDragActive] = useState(false);
+
+  useEffect(() => {
+    onUploadError(uploadError);
+  }, [uploadError, onUploadError]);
+
+  useEffect(() => {
+    if (tab === 'library') {
+      setLibraryOffset(0);
+      setLibraryItems([]);
+      setHasMore(true);
+    }
+  }, [tab]);
+
+  const libraryQuery = useQuery<ImageAssetPage>({
+    queryKey: ['assets', 'images', { offset: libraryOffset, limit: IMAGE_LIBRARY_PAGE_SIZE }],
+    queryFn: () => fetchImageAssets({ offset: libraryOffset, limit: IMAGE_LIBRARY_PAGE_SIZE }),
+    enabled: tab === 'library',
+  });
+
+  useEffect(() => {
+    if (!libraryQuery.data) return;
+    const page = libraryQuery.data;
+    setLibraryItems((prev) => {
+      const incoming = page.items ?? [];
+      if (libraryOffset === 0) {
+        setHasMore(shouldLoadMore(page, incoming.length));
+        return incoming;
+      }
+      const existing = new Set(prev.map((item) => item.id ?? item.url));
+      const appended = incoming.filter((item) => !existing.has(item.id ?? item.url));
+      if (appended.length === 0) {
+        setHasMore(false);
+        return prev;
+      }
+      const next = [...prev, ...appended];
+      setHasMore(shouldLoadMore(page, next.length));
+      return next;
+    });
+  }, [libraryQuery.data, libraryOffset]);
+
+  useEffect(() => {
+    if (tab !== 'library') return;
+    const el = loadMoreRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver((entries) => {
+      const [entry] = entries;
+      if (!entry?.isIntersecting) return;
+      if (!hasMore || libraryQuery.isFetching) return;
+      setLibraryOffset((prev) => prev + IMAGE_LIBRARY_PAGE_SIZE);
+    }, { rootMargin: '200px' });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [tab, hasMore, libraryQuery.isFetching]);
+
+  const handleFileSelect = useCallback((file: File) => {
+    if (isUploading) return;
+    const validationError = validateImageFile(file);
+    if (validationError) {
+      setUploadError(validationError);
+      setPendingImage(null);
+      return;
+    }
+    setUploadError(undefined);
+    setUrlError(undefined);
+    setUploadingFileName(file.name);
+    setIsUploading(true);
+    setUploadProgress(0);
+    uploadImageAsset({
+      file,
+      onUploadProgress: (evt) => {
+        if (!evt.total) return;
+        const percent = Math.round((evt.loaded / evt.total) * 100);
+        setUploadProgress(percent);
+      },
+    })
+      .then((res) => {
+        setUploadProgress(100);
+        const derivedAlt = sanitizeOptional(res.alt) ?? sanitizeOptional(deriveAltFromFilename(file.name));
+        const derivedCaption = sanitizeOptional(res.caption);
+        setPendingImage({ url: res.url, alt: derivedAlt, caption: derivedCaption });
+      })
+      .catch((err) => {
+        const message = err instanceof Error ? err.message : 'Upload failed. Try again.';
+        setUploadError(message);
+        setPendingImage(null);
+      })
+      .finally(() => {
+        setIsUploading(false);
+        setUploadingFileName(undefined);
+      });
+  }, [isUploading]);
+
+  const handleUrlApply = useCallback(() => {
+    const trimmed = urlInput.trim();
+    if (!trimmed) {
+      setUrlError('URL is required');
+      return;
+    }
+    setUrlError(undefined);
+    setUploadError(undefined);
+    setPendingImage({ url: resolveUrl(trimmed), alt: sanitizeOptional(deriveAltFromUrl(trimmed)) });
+  }, [urlInput]);
+
+  const handleInsert = useCallback(() => {
+    if (!pendingImage || isUploading) return;
+    onChange({
+      url: pendingImage.url,
+      alt: pendingImage.alt ?? '',
+      caption: pendingImage.caption ?? '',
+      materialId: undefined,
+    });
+    setPendingImage(null);
+    setUrlInput('');
+    setUploadError(undefined);
+  }, [pendingImage, isUploading, onChange]);
+
+  const handleLibrarySelect = useCallback((asset: ImageAsset) => {
+    setUploadError(undefined);
+    setUrlError(undefined);
+    setPendingImage({
+      id: asset.id,
+      url: asset.url,
+      alt: sanitizeOptional(asset.alt) ?? sanitizeOptional(deriveAltFromFilename(asset.filename ?? undefined)),
+      caption: sanitizeOptional(asset.caption),
+    });
+  }, []);
+
+  const pendingKey = pendingImage ? pendingImage.id ?? pendingImage.url : undefined;
+  const insertDisabled = !pendingImage || isUploading;
+
+  return (
+    <Stack spacing={1.5}>
+      <Typography variant="subtitle2">Image</Typography>
+      <Stack spacing={1}>
+        {value?.url ? (
+          <Box component="img" src={resolveUrl(value.url || '')} alt={value.alt || ''} loading="lazy" sx={{ width: '100%', borderRadius: 1, border: (t) => `1px solid ${t.palette.divider}` }} />
+        ) : (
+          <Box sx={{ border: (t) => `1px dashed ${t.palette.divider}`, borderRadius: 1, p: 2, textAlign: 'center', color: 'text.secondary' }}>
+            <Typography variant="caption">No image inserted</Typography>
+          </Box>
+        )}
+        <TextField size="small" label="Alt text" value={value?.alt ?? ''} onChange={(e) => onChange({ alt: e.target.value })} />
+        <TextField size="small" label="Caption" value={value?.caption ?? ''} onChange={(e) => onChange({ caption: e.target.value })} />
+      </Stack>
+      <Divider />
+      <Tabs value={tab} onChange={(_, newValue) => setTab(newValue)} aria-label="Image source tabs" variant="fullWidth">
+        <Tab label="Upload" value="upload" />
+        <Tab label="My images" value="library" />
+      </Tabs>
+      {tab === 'upload' && (
+        <Stack spacing={1.5}>
+          <Box
+            onDragOver={(event) => {
+              event.preventDefault();
+              setIsDragActive(true);
+            }}
+            onDragLeave={(event) => {
+              event.preventDefault();
+              setIsDragActive(false);
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              setIsDragActive(false);
+              const file = event.dataTransfer?.files?.[0];
+              if (file) handleFileSelect(file);
+            }}
+            onClick={() => fileInputRef.current?.click()}
+            sx={{
+              border: (t) => `1px dashed ${isDragActive ? t.palette.primary.main : t.palette.divider}`,
+              backgroundColor: (t) => (isDragActive ? t.palette.action.hover : 'transparent'),
+              borderRadius: 1,
+              p: 2,
+              textAlign: 'center',
+              cursor: 'pointer',
+              transition: 'border-color 0.2s ease, background-color 0.2s ease',
+            }}
+          >
+            <Typography variant="body2">Drag and drop an image</Typography>
+            <Typography variant="caption" color="text.secondary">PNG, JPG, WEBP, GIF up to 10&nbsp;MB</Typography>
+            <Button
+              variant="outlined"
+              size="small"
+              sx={{ mt: 1 }}
+              onClick={(event) => {
+                event.stopPropagation();
+                fileInputRef.current?.click();
+              }}
+            >
+              Select file
+            </Button>
+          </Box>
+          <input
+            type="file"
+            ref={fileInputRef}
+            hidden
+            accept={ACCEPTED_IMAGE_TYPES}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) handleFileSelect(file);
+              if (event.target) {
+                event.target.value = '';
+              }
+            }}
+          />
+          {isUploading && (
+            <Stack spacing={0.5}>
+              <LinearProgress variant={uploadProgress > 0 ? 'determinate' : 'indeterminate'} value={uploadProgress} />
+              {uploadingFileName && (
+                <Typography variant="caption" color="text.secondary">
+                  Uploading {uploadingFileName}
+                </Typography>
+              )}
+            </Stack>
+          )}
+          {uploadError && <Alert severity="error">{uploadError}</Alert>}
+          <Stack direction="row" spacing={1} alignItems="flex-start">
+            <TextField
+              fullWidth
+              size="small"
+              label="Image URL"
+              value={urlInput}
+              onChange={(e) => setUrlInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleUrlApply();
+                }
+              }}
+              error={Boolean(urlError)}
+              helperText={urlError ?? ''}
+            />
+            <Button variant="outlined" size="small" onClick={handleUrlApply} disabled={!urlInput.trim()}>
+              Use URL
+            </Button>
+          </Stack>
+        </Stack>
+      )}
+      {tab === 'library' && (
+        <Stack spacing={1.5}>
+          {libraryQuery.isError && (
+            <Alert severity="error" action={<Button size="small" onClick={() => libraryQuery.refetch()}>Retry</Button>}>
+              Failed to load images.
+            </Alert>
+          )}
+          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))', gap: 1 }}>
+            {libraryItems.map((asset) => {
+              const key = asset.id ?? asset.url;
+              const selected = pendingKey === key;
+              return (
+                <Box
+                  key={key}
+                  onClick={() => handleLibrarySelect(asset)}
+                  sx={{
+                    border: (t) => `2px solid ${selected ? t.palette.primary.main : t.palette.divider}`,
+                    borderRadius: 1,
+                    overflow: 'hidden',
+                    cursor: 'pointer',
+                    position: 'relative',
+                  }}
+                >
+                  <Box component="img" src={asset.url} alt={asset.alt || ''} loading="lazy" sx={{ width: '100%', height: 96, objectFit: 'cover' }} />
+                </Box>
+              );
+            })}
+          </Box>
+          {libraryItems.length === 0 && !libraryQuery.isFetching && !libraryQuery.isError && (
+            <Typography variant="body2" color="text.secondary">No images yet.</Typography>
+          )}
+          {libraryQuery.isFetching && (
+            <Stack direction="row" spacing={1} alignItems="center" justifyContent="center">
+              <CircularProgress size={16} />
+              <Typography variant="caption" color="text.secondary">Loading…</Typography>
+            </Stack>
+          )}
+          <Box ref={loadMoreRef} sx={{ height: 1 }} />
+        </Stack>
+      )}
+      {pendingImage && (
+        <Stack spacing={0.5}>
+          <Typography variant="subtitle2">Selected image</Typography>
+          <Box component="img" src={pendingImage.url} alt={pendingImage.alt || ''} loading="lazy" sx={{ width: '100%', borderRadius: 1, border: (t) => `1px solid ${t.palette.divider}` }} />
+          <Typography variant="caption" color="text.secondary" sx={{ wordBreak: 'break-all' }}>{pendingImage.url}</Typography>
+        </Stack>
+      )}
+      <Button variant="contained" size="small" onClick={handleInsert} disabled={insertDisabled}>
+        Insert
+      </Button>
+    </Stack>
   );
 };
 

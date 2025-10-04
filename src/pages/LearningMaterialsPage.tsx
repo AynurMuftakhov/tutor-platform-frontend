@@ -27,6 +27,7 @@ import StandaloneMediaPlayer from '../components/lessonDetail/StandaloneMediaPla
 import GrammarViewerDialog from '../components/grammar/GrammarViewerDialog';
 import { extractVideoId } from '../utils/videoUtils';
 import { deleteMaterial, updateMaterialFolder, deleteMaterialFolder } from '../services/api';
+import { resolveUrl } from '../services/assets';
 
 const LearningMaterialsPage: React.FC = () => {
   const theme = useTheme();
@@ -301,7 +302,7 @@ const LearningMaterialsPage: React.FC = () => {
   }
 
   return (
-    <Box sx={{ display: 'flex', height: 'calc(100vh - 64px)' }}>
+    <Box sx={{ display: 'flex', height: 'calc(100vh - 64px)' ,   bgcolor: '#fafbfd',}}>
       <FolderSidebar
           tree={folderTree}
           selectedId={selectedFolderId}
@@ -395,14 +396,25 @@ const LearningMaterialsPage: React.FC = () => {
         fullWidth
       >
         {currentMaterial && currentMaterial.sourceUrl && (
-          <Box sx={{ position: 'relative', height: 500 }}>
-            <StandaloneMediaPlayer
-              videoId={extractVideoId(currentMaterial.sourceUrl) || ''}
-              startTime={0}
-              endTime={0}
-              onClose={handleClosePlayer}
-            />
-          </Box>
+          currentMaterial.type === 'AUDIO' ? (
+            <Box sx={{ p: 3 }}>
+              <audio
+                controls
+                src={resolveUrl(currentMaterial.sourceUrl)}
+                style={{ width: '100%' }}
+                aria-label={currentMaterial.title || 'Audio material'}
+              />
+            </Box>
+          ) : (
+            <Box sx={{ position: 'relative', height: 500 }}>
+              <StandaloneMediaPlayer
+                videoId={extractVideoId(currentMaterial.sourceUrl) || ''}
+                startTime={0}
+                endTime={0}
+                onClose={handleClosePlayer}
+              />
+            </Box>
+          )
         )}
       </Dialog>
 

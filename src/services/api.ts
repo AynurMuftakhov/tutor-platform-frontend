@@ -1,8 +1,21 @@
 import axios from 'axios';
+import { resolveUrl } from './assets';
 import {Student} from "../pages/MyStudentsPage";
 import { NotificationMessage} from "../context/NotificationsSocketContext";
 import { ApiError } from '../context/ApiErrorContext';
-import {GenerateExerciseRequest, GenerateExerciseResponse} from "../types";
+import {
+    GenerateExerciseRequest,
+    GenerateExerciseResponse,
+    GenerateListeningTranscriptPayload,
+    ListeningTranscriptResponse,
+    ListeningAudioJobStartResponse,
+    ListeningAudioJobStatusResponse,
+    ListeningVoice,
+    StartListeningAudioJobPayload,
+    ValidateListeningTranscriptPayload,
+    ValidateListeningTranscriptResponse,
+    UpdateListeningTranscriptPayload,
+} from "../types";
 import { LESSON_CONTENTS_BASE } from '../constants/api';
 import type { PageModel, BlockContentPayload } from '../types/lessonContent';
 
@@ -615,6 +628,91 @@ export interface MicDiagPayload {
 export const postMicDiag = async (payload: MicDiagPayload) => {
   const res = await api.post(`/users-service/api/diag/mic-log`, payload);
   return res.data;
+};
+
+export const generateListeningTranscript = async (
+  teacherId: string,
+  payload: GenerateListeningTranscriptPayload,
+): Promise<ListeningTranscriptResponse> => {
+  const response = await api.post<ListeningTranscriptResponse>(
+    `/lessons-service/api/listening/transcripts/generate`,
+    payload,
+    { params: { teacherId } },
+  );
+  return response.data;
+};
+
+export const updateListeningTranscript = async (
+  teacherId: string,
+  transcriptId: string,
+  payload: UpdateListeningTranscriptPayload,
+): Promise<ListeningTranscriptResponse> => {
+  const response = await api.put<ListeningTranscriptResponse>(
+    `/lessons-service/api/listening/transcripts/${transcriptId}`,
+    payload,
+    { params: { teacherId } },
+  );
+  return response.data;
+};
+
+export const getListeningTranscript = async (
+  teacherId: string,
+  transcriptId: string,
+): Promise<ListeningTranscriptResponse> => {
+  const response = await api.get<ListeningTranscriptResponse>(
+    `/lessons-service/api/listening/transcripts/${transcriptId}`,
+    { params: { teacherId } },
+  );
+  return response.data;
+};
+
+export const validateListeningTranscript = async (
+  payload: ValidateListeningTranscriptPayload,
+): Promise<ValidateListeningTranscriptResponse> => {
+  const response = await api.post<ValidateListeningTranscriptResponse>(
+    `/lessons-service/api/listening/transcripts/validate`,
+    payload,
+  );
+  return response.data;
+};
+
+export const listListeningVoices = async (): Promise<ListeningVoice[]> => {
+  const response = await api.get<ListeningVoice[]>(`/lessons-service/api/listening/voices`);
+  return response.data;
+};
+
+export const startListeningAudioGeneration = async (
+  teacherId: string,
+  payload: StartListeningAudioJobPayload,
+  token: string,
+  idempotencyKey: string,
+): Promise<ListeningAudioJobStartResponse> => {
+  const response = await api.post<ListeningAudioJobStartResponse>(
+    `lessons-service/api/listening/audio/generate`,
+    payload,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Idempotency-Key': idempotencyKey,
+      },
+      params: { teacherId },
+    },
+  );
+  return response.data;
+};
+
+export const getListeningAudioJobStatus = async (
+  jobId: string,
+): Promise<ListeningAudioJobStatusResponse> => {
+  const response = await api.get<ListeningAudioJobStatusResponse>(
+    `lessons-service/api/listening/audio/jobs/${jobId}`,
+  );
+  const data = response.data;
+  // Normalize audioUrl using shared resolver (env-aware)
+  if (data && typeof data.audioUrl === 'string' && data.audioUrl) {
+    data.audioUrl = resolveUrl(data.audioUrl);
+  }
+  return data;
 };
 
 export default api;

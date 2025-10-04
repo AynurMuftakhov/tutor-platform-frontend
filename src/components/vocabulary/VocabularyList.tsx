@@ -34,6 +34,10 @@ interface VocabularyListProps {
     selectionMode?: boolean;
     selectedWords?: string[];
     onToggleSelection?: (id: string) => void;
+    // new: sync hooks
+    onWordOpen?: (wordId: string) => void;
+    openWordId?: string | null;
+    onWordDialogClose?: () => void;
 }
 
 const VocabularyList: React.FC<VocabularyListProps> = ({
@@ -46,11 +50,24 @@ const VocabularyList: React.FC<VocabularyListProps> = ({
     readOnly = false,
     selectionMode = false,
     selectedWords = [],
-    onToggleSelection
+    onToggleSelection,
+    onWordOpen,
+    openWordId,
+    onWordDialogClose,
 }) => {
     const theme = useTheme();
     const [selectedWord, setSelectedWord] = useState<VocabularyWord | null>(null);
     const [dialogOpen, setDialogOpen] = useState(false);
+
+    // open programmatically when openWordId changes
+    React.useEffect(() => {
+        if (!openWordId) return;
+        const w = data.find(d => d.id === openWordId);
+        if (w) {
+            setSelectedWord(w);
+            setDialogOpen(true);
+        }
+    }, [openWordId, data]);
 
     // Empty state when no words are available
     if (data.length === 0) {
@@ -88,12 +105,14 @@ const VocabularyList: React.FC<VocabularyListProps> = ({
         } else {
             setSelectedWord(word);
             setDialogOpen(true);
+            onWordOpen?.(word.id);
         }
     };
 
     const handleCloseDialog = () => {
         setDialogOpen(false);
         setSelectedWord(null);
+        onWordDialogClose?.();
     };
 
     const handleAddToMyVocabulary = (e: React.MouseEvent, id: string) => {

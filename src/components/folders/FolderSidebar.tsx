@@ -314,7 +314,7 @@ export const FolderSidebar: React.FC<FolderSidebarProps> = ({
     /* Common container styles (Drawer.Paper or Box) */
     const containerSx = {
         width: DRAWER_WIDTH,
-        bgcolor: isPickerDialog?  theme.palette.background.paper : theme.palette.background.default,
+        bgcolor:  '#fafbfd',
         borderRight: `1px solid ${theme.palette.divider}`,
         display: 'flex',
         flexDirection: 'column',
@@ -332,7 +332,7 @@ export const FolderSidebar: React.FC<FolderSidebarProps> = ({
                     alignItems: 'center',
                     position: 'sticky',
                     top: headerTop,
-                    bgcolor: isPickerDialog?  theme.palette.background.paper : theme.palette.background.default,
+                    bgcolor: '#fafbfd',
                     py: 2,
                     px: 1,
                     zIndex: 1,

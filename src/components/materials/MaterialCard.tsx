@@ -34,6 +34,13 @@ import {
   Assignment as TasksIcon, OpenInFull, Start, StartOutlined, School,
 } from '@mui/icons-material';
 import { useListeningTasks } from '../../hooks/useListeningTasks';
+import { useAuth } from '../../context/AuthContext';
+import { useCreateAssignment } from '../../hooks/useHomeworks';
+import { CreateAssignmentDto } from '../../types/homework';
+import { Autocomplete, TextField } from '@mui/material';
+import { fetchStudents } from '../../services/api';
+import { useNavigate } from 'react-router-dom';
+import { toOffsetDateTime } from '../../utils/datetime';
 
 export type MaterialType = 'AUDIO' | 'VIDEO' | 'DOCUMENT' | 'GRAMMAR';
 
@@ -72,6 +79,32 @@ const MaterialCard: React.FC<MaterialCardProps> = ({
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
   const theme = useTheme();
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const create = useCreateAssignment(user?.id || '');
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [studentQuery, setStudentQuery] = useState('');
+  const [studentOptions, setStudentOptions] = useState<{ id: string; name: string; email?: string }[]>([]);
+  const [studentLoading, setStudentLoading] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState<{ id: string; name: string } | null>(null);
+  const [dueAt, setDueAt] = useState('');
+  const [customTitle, setCustomTitle] = useState(material.title ? `HW • ${material.title}` : 'Homework');
+
+  const searchStudents = async (q: string) => {
+    if (!user?.id) return;
+    setStudentLoading(true);
+    try {
+      const res = await fetchStudents(user.id, q, 0, 10);
+      setStudentOptions(res.content.map((s:any) => ({ id: s.id, name: s.name, email: s.email })));
+    } finally {
+      setStudentLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    const h = setTimeout(() => searchStudents(studentQuery), 300);
+    return () => clearTimeout(h);
+  }, [studentQuery]);
   const isVideo = material.type === 'VIDEO';
   const shouldFetchTasks = isVideo && !!material.id;
   const { data: tasks = [] } = useListeningTasks(shouldFetchTasks ? material.id : '');
@@ -109,6 +142,41 @@ const MaterialCard: React.FC<MaterialCardProps> = ({
   const handleManageTasks = () => {
     if (onManageTasks) onManageTasks(material);
     handleMenuClose();
+  };
+
+  const handleAssign = () => {
+    setAssignOpen(true);
+    handleMenuClose();
+  };
+
+  const submitAssign = async () => {
+    if (!selectedStudent || !user?.id) return;
+    let task: any;
+    if (material.type === 'VIDEO') {
+      task = { type: 'VIDEO', sourceKind: 'MATERIAL', title: material.title, contentRef: { materialId: material.id }, ordinal: 1 };
+    } else if (material.type === 'GRAMMAR') {
+      task = { type: 'GRAMMAR', sourceKind: 'MATERIAL', title: material.title, contentRef: { materialId: material.id }, ordinal: 1 };
+    } else if (material.sourceUrl) {
+      task = { type: 'LINK', sourceKind: 'EXTERNAL_URL', title: material.title, contentRef: { url: material.sourceUrl }, ordinal: 1 };
+    } else {
+      task = { type: 'READING', sourceKind: 'MATERIAL', title: material.title, contentRef: { materialId: material.id }, ordinal: 1 };
+    }
+
+    const payload: CreateAssignmentDto = {
+      studentId: selectedStudent.id,
+      title: customTitle || `HW • ${material.title}`,
+      dueAt: toOffsetDateTime(dueAt) || undefined,
+      idempotencyKey: (typeof crypto !== 'undefined' && 'randomUUID' in crypto) ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
+      tasks: [task],
+    };
+
+    try {
+      await create.mutateAsync(payload);
+      window.alert('Assigned');
+      navigate('/t/homework');
+    } catch (e) {
+      // handled globally
+    }
   };
 
   const handleDeleteClick = () => {
@@ -347,6 +415,12 @@ const MaterialCard: React.FC<MaterialCardProps> = ({
             <ListItemText>Tasks</ListItemText>
           </MenuItem>
         )}
+        <MenuItem onClick={handleAssign}>
+          <ListItemIcon>
+            <TasksIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Assign</ListItemText>
+        </MenuItem>
         {onEdit && (
           <MenuItem onClick={handleEdit}>
             <ListItemIcon>
@@ -380,6 +454,31 @@ const MaterialCard: React.FC<MaterialCardProps> = ({
           </MenuItem>
         )}
       </Menu>
+
+      {/* Assign Dialog */}
+      <Dialog open={assignOpen} onClose={() => setAssignOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Assign</DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Autocomplete
+              options={studentOptions}
+              loading={studentLoading}
+              getOptionLabel={(opt) => `${opt.name}${opt.email ? ` (${opt.email})` : ''}`}
+              onInputChange={(_, v) => setStudentQuery(v)}
+              onChange={(_, v) => setSelectedStudent(v as any)}
+              renderInput={(params) => (
+                <TextField {...params} label="Student" placeholder="Search by name/email" />
+              )}
+            />
+            <TextField label="Custom title" value={customTitle} onChange={(e) => setCustomTitle(e.target.value)} />
+            <TextField type="datetime-local" label="Due At (optional)" InputLabelProps={{ shrink: true }} value={dueAt} onChange={e => setDueAt(e.target.value)} />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAssignOpen(false)}>Cancel</Button>
+          <Button variant="contained" onClick={submitAssign} disabled={!selectedStudent || create.isPending}>Assign</Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Delete Confirmation Dialog */}
       <Dialog

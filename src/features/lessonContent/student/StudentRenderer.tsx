@@ -20,6 +20,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getMaterial } from '../../../services/api';
 import type { Material } from '../../../types/material';
 import GrammarPlayer from '../../../components/grammar/GrammarPlayer';
+import { resolveUrl } from '../../../services/assets';
 
 function useThrottled<T extends (...args: any[]) => void>(fn: T, ms: number): T {
     const lastArgs = React.useRef<any[] | null>(null);
@@ -67,15 +68,13 @@ const TextBlockView: React.FC<{ payload: TextBlockPayload }> = ({ payload }) => 
 };
 
 const ImageBlockView: React.FC<{ payload: ImageBlockPayload }> = ({ payload }) => {
-  const { url, alt, caption, materialId } = payload;
+  const { url, alt, caption } = payload;
   const [open, setOpen] = React.useState(false);
   if (!url) {
     return (
       <Stack spacing={1} alignItems="center" sx={{ border: (t) => `1px dashed ${t.palette.divider}`, p: 2, borderRadius: 1, color: 'text.secondary', textAlign: 'center' }}>
         <ImageIcon fontSize="small" color="disabled" />
-        <Typography variant="caption">
-          {materialId ? 'Image material selected — preview requires URL support.' : 'No image selected'}
-        </Typography>
+        <Typography variant="caption">No image selected</Typography>
       </Stack>
     );
   }
@@ -84,8 +83,9 @@ const ImageBlockView: React.FC<{ payload: ImageBlockPayload }> = ({ payload }) =
       <Stack spacing={0.5}>
         <Box
           component="img"
-          src={url}
+          src={resolveUrl(url || '')}
           alt={alt || ''}
+          loading="lazy"
           onClick={() => setOpen(true)}
           sx={{ width: '100%', height: 'auto', borderRadius: 1, cursor: 'zoom-in' }}
         />
@@ -97,7 +97,7 @@ const ImageBlockView: React.FC<{ payload: ImageBlockPayload }> = ({ payload }) =
       <Dialog open={open} onClose={() => setOpen(false)} maxWidth="lg">
         <DialogContent sx={{ p: 0 }}>
           <Box sx={{ position: 'relative' }}>
-            <Box component="img" src={url} alt={alt || ''} sx={{ maxWidth: '90vw', maxHeight: '85vh', display: 'block' }} />
+            <Box component="img" src={resolveUrl(url || '')} alt={alt || ''} loading="lazy" sx={{ maxWidth: '90vw', maxHeight: '85vh', display: 'block' }} />
           </Box>
         </DialogContent>
       </Dialog>

@@ -142,8 +142,9 @@ function computeBlockValidation(layout: PageModel, content: Record<string, Block
               }
               case 'image': {
                 const p: any = payload;
-                if (!((p.url && p.url.trim()) || (p.materialId && String(p.materialId).trim()))) msg = 'Image source required';
-                if (!p.alt || !p.alt.trim()) msg = msg ? msg + '; alt required' : 'Image alt required';
+                const hasUrl = typeof p.url === 'string' && p.url.trim().length > 0;
+                const hasLegacyMaterial = p.materialId && String(p.materialId).trim().length > 0;
+                if (!hasUrl && !hasLegacyMaterial) msg = 'Image URL required';
                 break;
               }
               case 'audio':

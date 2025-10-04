@@ -171,7 +171,7 @@ const LessonContentEditorPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   if (!id) return null;
   return (
-    <Box p={3} sx={{ minHeight: 0, pb: 6 }}>
+    <Box p={3} sx={{ minHeight: 0, pb: 6, bgcolor: '#fafbfd',}}>
             <EditorProvider>
                 <InnerEditor id={id} />
           </EditorProvider>
