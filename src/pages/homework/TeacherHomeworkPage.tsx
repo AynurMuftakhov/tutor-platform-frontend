@@ -9,9 +9,10 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { useQuery } from '@tanstack/react-query';
-import {AssignmentDto, AssignmentListItemDto} from "../../types/homework";
+import {AssignmentDto} from "../../types/homework";
 import FiltersBar, { FiltersState } from '../../components/homework/FiltersBar';
-
+import AddIcon from '@mui/icons-material/Add';
+import { Fab } from '@mui/material';
 
 const TeacherHomeworkPage: React.FC = () => {
   const { user } = useAuth();
@@ -219,9 +220,13 @@ const TeacherHomeworkPage: React.FC = () => {
             </IconButton>
           </Tooltip>
 
-          <Button variant="contained" onClick={() => setComposerOpen(true)}>
-            Add Homework
-          </Button>
+            <Button
+                variant="contained"
+                onClick={() => setComposerOpen(true)}
+                sx={{ display: { xs: 'none', sm: 'inline-flex' } }}
+            >
+                Add Homework
+            </Button>
         </Stack>
       </Stack>
 
@@ -229,7 +234,7 @@ const TeacherHomeworkPage: React.FC = () => {
 
       {isError && <Typography color="error">Failed to load.</Typography>}
 
-      <Box sx={{ flex: 1, overflowY: 'auto', pr: 0.5, scrollbarWidth: 'none', msOverflowStyle: 'none', '&::-webkit-scrollbar': { display: 'none' } }}>
+      <Box sx={{ flex: 1, overflowY: 'auto', pr: 0.5,  pb: { xs: 8, sm: 0 },   scrollbarWidth: 'none', msOverflowStyle: 'none', '&::-webkit-scrollbar': { display: 'none' } }}>
         <Grid container spacing={2}>
             {visible && visible.length > 0 ? (
                 visible.map(a => {
@@ -242,7 +247,7 @@ const TeacherHomeworkPage: React.FC = () => {
                                 border={1}
                                 borderColor="divider"
                                 borderRadius={1}
-                                p={2}
+                                p={{xs: 1.5, sm: 2}}
                                 display="flex"
                                 alignItems="center"
                                 justifyContent="space-between"
@@ -354,6 +359,20 @@ const TeacherHomeworkPage: React.FC = () => {
           </Stack>
         }
       />
+         <Fab
+             color="primary"
+             aria-label="Add homework"
+             onClick={() => setComposerOpen(true)}
+             sx={{
+                 position: 'fixed',
+                 right: 16,
+                 bottom: 16,
+                 display: { xs: 'flex', sm: 'none' },  // mobile only
+                 zIndex: 1300
+             }}
+         >
+             <AddIcon />
+         </Fab>
     </Container>
   </Box>
   );

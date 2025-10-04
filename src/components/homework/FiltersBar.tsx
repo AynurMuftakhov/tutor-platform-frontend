@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
+    Box,
     Button,
     Chip,
     Dialog,
@@ -79,6 +80,25 @@ const FiltersBar: React.FC<FiltersBarProps> = ({ value, onChange, sticky }) => {
     const isXs = useMediaQuery(theme.breakpoints.down('sm'));
     const state = value;
 
+    const pillPx = isXs ? 0.9 : 1.25;   // horizontal padding
+    const pillPy = isXs ? 0.25 : 0.5;   // vertical padding
+    const pillMinH = isXs ? 32 : 36;    // consistent pill height
+    const pillFont = isXs ? 13 : 14;    // font size
+
+    const pillCommonSx = {
+        textTransform: 'none',
+        border: 0,
+        px: pillPx,
+        py: pillPy,
+        minHeight: pillMinH,
+        borderRadius: 999,
+        fontWeight: 500,
+        fontSize: pillFont,
+        lineHeight: 1.6,
+        gap: 0.5,
+        '& .MuiSvgIcon-root': { fontSize: isXs ? 18 : 20 },
+    } as const;
+
     // Controlled state is passed via props
     const [customOpen, setCustomOpen] = useState(false);
     const [customFrom, setCustomFrom] = useState<Dayjs | null>(state.from ? dayjs(state.from) : dayjs());
@@ -139,17 +159,166 @@ const FiltersBar: React.FC<FiltersBarProps> = ({ value, onChange, sticky }) => {
 
     const resetAll = () => onChange({ ...DEFAULTS });
 
+    const hScroll = {
+        overflowX: 'auto',
+        px: 0.5,
+        pb: 0.25,
+        mx: -0.5,
+        scrollbarWidth: 'none',
+        '&::-webkit-scrollbar': { display: 'none' },
+        scrollSnapType: 'x mandatory',
+        '& .MuiToggleButton-root': { scrollSnapAlign: 'start' },
+    } as const;
+
+    // Build groups once so we can reuse across mobile/desktop
+    const statusGroup = (
+        <ToggleButtonGroup
+            value={state.status}
+            exclusive
+            onChange={handleStatus}
+            aria-label="Status"
+            size="small"
+            sx={{
+                borderRadius: 999,
+                '& .MuiToggleButton-root': {
+                    ...pillCommonSx,
+                    color: 'text.secondary',
+                },
+                '& .MuiToggleButtonGroup-grouped': {
+                    border: 0,
+                    mx: 0.25,
+                    borderRadius: 999,
+                },
+                '& .MuiToggleButton-root.Mui-selected': {
+                    minHeight: pillMinH,
+                    color: 'primary.main',
+                    backgroundColor: (t) => alpha(t.palette.primary.main, 0.12),
+                    border: '1px solid',
+                    borderColor: (t) => alpha(t.palette.primary.main, 0.32),
+                    fontWeight: 600,
+                    '&:hover': {
+                        backgroundColor: (t) => alpha(t.palette.primary.main, 0.18),
+                    },
+                },
+            }}
+        >
+            <ToggleButton value="active" aria-label="Active">
+                <CheckCircleOutlineIcon fontSize="small" style={{ marginRight: 6 }} />
+                Active
+            </ToggleButton>
+            <ToggleButton value="completed" aria-label="Completed">
+                <DoneAllIcon fontSize="small" style={{ marginRight: 6 }} />
+                Completed
+            </ToggleButton>
+            <ToggleButton value="all" aria-label="All">
+                <AllInclusiveIcon fontSize="small" style={{ marginRight: 6 }} />
+                All
+            </ToggleButton>
+        </ToggleButtonGroup>
+    );
+
+    const dateGroup = (
+        <ToggleButtonGroup
+            value={state.range}
+            exclusive
+            onChange={handleRange}
+            aria-label="Date range"
+            size="small"
+            sx={{
+                borderRadius: 999,
+                '& .MuiToggleButton-root': {
+                    ...pillCommonSx,
+                    color: 'text.secondary',
+                },
+                '& .MuiToggleButtonGroup-grouped': {
+                    border: 0,
+                    mx: 0.25,
+                    borderRadius: 999,
+                },
+                '& .MuiToggleButton-root.Mui-selected': {
+                    minHeight: pillMinH,
+                    color: 'primary.main',
+                    backgroundColor: (t) => alpha(t.palette.primary.main, 0.12),
+                    border: '1px solid',
+                    borderColor: (t) => alpha(t.palette.primary.main, 0.32),
+                    fontWeight: 600,
+                    '&:hover': {
+                        backgroundColor: (t) => alpha(t.palette.primary.main, 0.18),
+                    },
+                },
+            }}
+        >
+            <ToggleButton value="last7" aria-label="Last 7 days">
+                <ScheduleIcon fontSize="small" style={{ marginRight: 6 }} />
+                7d
+            </ToggleButton>
+            <ToggleButton value="last14" aria-label="Last 14 days">14d</ToggleButton>
+            <ToggleButton value="last30" aria-label="Last 30 days">30d</ToggleButton>
+            <ToggleButton value="thisMonth" aria-label="This month">
+                <CalendarMonthIcon fontSize="small" style={{ marginRight: 6 }} />
+                <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>This </Box>
+                month
+            </ToggleButton>
+            <ToggleButton value="custom" aria-label="Custom range">
+                <EventIcon fontSize="small" style={{ marginRight: 6 }} />
+                Custom
+            </ToggleButton>
+        </ToggleButtonGroup>
+    );
+
+    const sortGroup = (
+        <ToggleButtonGroup
+            value={state.sort}
+            exclusive
+            onChange={handleSort}
+            aria-label="Sort"
+            size="small"
+            sx={{
+                borderRadius: 999,
+                '& .MuiToggleButton-root': {
+                    ...pillCommonSx,
+                    color: 'text.secondary',
+                },
+                '& .MuiToggleButtonGroup-grouped': {
+                    border: 0,
+                    mx: 0.25,
+                    borderRadius: 999,
+                },
+                '& .MuiToggleButton-root.Mui-selected': {
+                    minHeight: pillMinH,
+                    color: 'primary.main',
+                    backgroundColor: (t) => alpha(t.palette.primary.main, 0.12),
+                    border: '1px solid',
+                    borderColor: (t) => alpha(t.palette.primary.main, 0.32),
+                    fontWeight: 600,
+                    '&:hover': {
+                        backgroundColor: (t) => alpha(t.palette.primary.main, 0.18),
+                    },
+                },
+            }}
+        >
+            <ToggleButton value="assignedDesc" aria-label="Newest assigned">
+                <TrendingDownIcon fontSize="small" style={{ marginRight: 6 }} />
+                Newest
+            </ToggleButton>
+            <ToggleButton value="assignedAsc" aria-label="Oldest assigned">
+                <TrendingUpIcon fontSize="small" style={{ marginRight: 6 }} />
+                Oldest
+            </ToggleButton>
+        </ToggleButtonGroup>
+    );
+
     return (
         <>
             <Paper
                 elevation={0}
                 sx={{
                     px: 1,
-                    py: 0.75,
+                    py: { xs: 0.5, sm: 0.75 },
                     borderRadius: 2,
+                    gap: { xs: 0.5, sm: 1 },
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 1,
                     flexWrap: 'wrap',
                     border: '1px solid',
                     borderColor: 'divider',
@@ -164,161 +333,30 @@ const FiltersBar: React.FC<FiltersBarProps> = ({ value, onChange, sticky }) => {
                 }}
                 aria-label="Homework filters"
             >
-                {/* Status */}
-                <ToggleButtonGroup
-                    value={state.status}
-                    exclusive
-                    onChange={handleStatus}
-                    aria-label="Status"
-                    size="small"
-                    sx={{
-                        borderRadius: 999,
-                        // base pill look
-                        '& .MuiToggleButton-root': {
-                            textTransform: 'none',
-                            color: 'text.secondary',
-                            border: 0,
-                            // optional tighter hit area padding you already have via px
-                        },
-                        '& .MuiToggleButtonGroup-grouped': {
-                            border: 0,
-                            mx: 0.25,
-                            px: 1.25,
-                            borderRadius: 999,
-                        },
-                        // selected state → light blue
-                        '& .MuiToggleButton-root.Mui-selected': {
-                            color: 'primary.main',
-                            backgroundColor: (t) => alpha(t.palette.primary.main, 0.12),
-                            border: '1px solid',
-                            borderColor: (t) => alpha(t.palette.primary.main, 0.32),
-                            fontWeight: 600,
-                            '&:hover': {
-                                backgroundColor: (t) => alpha(t.palette.primary.main, 0.18),
-                            },
-                        },
-                    }}
-                >
-                    <ToggleButton value="active" aria-label="Active">
-                        <CheckCircleOutlineIcon fontSize="small" style={{ marginRight: 6 }} />
-                        Active
-                    </ToggleButton>
-                    <ToggleButton value="completed" aria-label="Completed">
-                        <DoneAllIcon fontSize="small" style={{ marginRight: 6 }} />
-                        Completed
-                    </ToggleButton>
-                    <ToggleButton value="all" aria-label="All">
-                        <AllInclusiveIcon fontSize="small" style={{ marginRight: 6 }} />
-                        All
-                    </ToggleButton>
-                </ToggleButtonGroup>
-
-                {/* Date range */}
-                <ToggleButtonGroup
-                    value={state.range}
-                    exclusive
-                    onChange={handleRange}
-                    aria-label="Date range"
-                    size="small"
-                    sx={{
-                        borderRadius: 999,
-                        // base pill look
-                        '& .MuiToggleButton-root': {
-                            textTransform: 'none',
-                            color: 'text.secondary',
-                            border: 0,
-                            // optional tighter hit area padding you already have via px
-                        },
-                        '& .MuiToggleButtonGroup-grouped': {
-                            border: 0,
-                            mx: 0.25,
-                            px: 1.25,
-                            borderRadius: 999,
-                        },
-                        // selected state → light blue
-                        '& .MuiToggleButton-root.Mui-selected': {
-                            color: 'primary.main',
-                            backgroundColor: (t) => alpha(t.palette.primary.main, 0.12),
-                            border: '1px solid',
-                            borderColor: (t) => alpha(t.palette.primary.main, 0.32),
-                            fontWeight: 600,
-                            '&:hover': {
-                                backgroundColor: (t) => alpha(t.palette.primary.main, 0.18),
-                            },
-                        },
-                    }}
-                >
-                    <ToggleButton value="last7" aria-label="Last 7 days">
-                        <ScheduleIcon fontSize="small" style={{ marginRight: 6 }} />
-                        7d
-                    </ToggleButton>
-                    <ToggleButton value="last14" aria-label="Last 14 days">14d</ToggleButton>
-                    <ToggleButton value="last30" aria-label="Last 30 days">30d</ToggleButton>
-                    <ToggleButton value="thisMonth" aria-label="This month">
-                        <CalendarMonthIcon fontSize="small" style={{ marginRight: 6 }} />
-                        This month
-                    </ToggleButton>
-                    <ToggleButton value="custom" aria-label="Custom range">
-                        <EventIcon fontSize="small" style={{ marginRight: 6 }} />
-                        Custom
-                    </ToggleButton>
-                </ToggleButtonGroup>
-
-                {/* Sort */}
-                <ToggleButtonGroup
-                    value={state.sort}
-                    exclusive
-                    onChange={handleSort}
-                    aria-label="Sort"
-                    size="small"
-                    sx={{
-                        borderRadius: 999,
-                        // base pill look
-                        '& .MuiToggleButton-root': {
-                            textTransform: 'none',
-                            color: 'text.secondary',
-                            border: 0,
-                            // optional tighter hit area padding you already have via px
-                        },
-                        '& .MuiToggleButtonGroup-grouped': {
-                            border: 0,
-                            mx: 0.25,
-                            px: 1.25,
-                            borderRadius: 999,
-                        },
-                        // selected state → light blue
-                        '& .MuiToggleButton-root.Mui-selected': {
-                            color: 'primary.main',
-                            backgroundColor: (t) => alpha(t.palette.primary.main, 0.12),
-                            border: '1px solid',
-                            borderColor: (t) => alpha(t.palette.primary.main, 0.32),
-                            fontWeight: 600,
-                            '&:hover': {
-                                backgroundColor: (t) => alpha(t.palette.primary.main, 0.18),
-                            },
-                        },
-                    }}
-                >
-                    <ToggleButton value="assignedDesc" aria-label="Newest assigned">
-                        <TrendingDownIcon fontSize="small" style={{ marginRight: 6 }} />
-                        Newest
-                    </ToggleButton>
-                    <ToggleButton value="assignedAsc" aria-label="Oldest assigned">
-                        <TrendingUpIcon fontSize="small" style={{ marginRight: 6 }} />
-                        Oldest
-                    </ToggleButton>
-                </ToggleButtonGroup>
-
-                {/* Reset */}
-                {!isDefault && (
-                    <Button
-                        size="small"
-                        startIcon={<RestartAltIcon />}
-                        onClick={resetAll}
-                        sx={{ ml: 'auto' }}
-                    >
-                        Reset
-                    </Button>
+                {isXs ? (
+                    <Stack spacing={0.25} sx={{ width: '100%' }}>
+                        <Stack direction="row" spacing={0.5} sx={hScroll}>{statusGroup}</Stack>
+                        <Stack direction="row" spacing={0.5} sx={hScroll}>{dateGroup}</Stack>
+                        <Stack direction="row" spacing={0.5} alignItems="center" sx={hScroll}>
+                            {sortGroup}
+                            {!isDefault && (
+                                <Button size="small" startIcon={<RestartAltIcon />} onClick={resetAll} sx={{ ml: 'auto', flexShrink: 0 }}>
+                                    Reset
+                                </Button>
+                            )}
+                        </Stack>
+                    </Stack>
+                ) : (
+                    <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" sx={{ width: '100%' }}>
+                        {statusGroup}
+                        {dateGroup}
+                        {sortGroup}
+                        {!isDefault && (
+                            <Button size="small" startIcon={<RestartAltIcon />} onClick={resetAll} sx={{ ml: 'auto' }}>
+                                Reset
+                            </Button>
+                        )}
+                    </Stack>
                 )}
             </Paper>
 
