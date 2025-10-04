@@ -13,7 +13,7 @@ import dayjs from "dayjs";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
 import { Lesson } from "../../types/Lesson";
-import { Student } from "../../pages/MyStudentsPage";
+import { Student } from "../../features/students/types";
 import { ENGLISH_LEVELS } from "../../types/ENGLISH_LEVELS";
 
 interface Props {

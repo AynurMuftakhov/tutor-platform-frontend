@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { resolveUrl } from './assets';
-import {Student} from "../pages/MyStudentsPage";
+import { Student } from "../features/students/types";
 import { NotificationMessage} from "../context/NotificationsSocketContext";
 import { ApiError } from '../context/ApiErrorContext';
 import {

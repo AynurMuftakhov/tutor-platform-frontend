@@ -10,7 +10,8 @@ import {
     alpha,
     Tooltip,
     ToggleButtonGroup,
-    ToggleButton
+    ToggleButton,
+    useMediaQuery
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import {
@@ -19,13 +20,13 @@ import {
     fetchUserById, updateLesson, fetchMyTutorLessons, getTeacherByStudentId,
 } from "../services/api";
 import { useAuth } from "../context/AuthContext";
-import { Student } from "./MyStudentsPage";
+import { Student } from "../features/students/types";
 import { useNavigate } from "react-router-dom";
-import { 
-    FilterList, 
-    ViewDay, 
-    ViewWeek, 
-    CalendarMonth, 
+import {
+    FilterList,
+    ViewDay,
+    ViewWeek,
+    ViewAgenda,
     ArrowBackIos,
     ArrowForwardIos,
 } from "@mui/icons-material";
@@ -40,8 +41,10 @@ import "../styles/calendar.css";
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
-import interactionPlugin, {DateClickArg} from '@fullcalendar/interaction';
+import interactionPlugin from '@fullcalendar/interaction';
 import { EventInput, DateSelectArg, EventClickArg } from '@fullcalendar/core';
+import listPlugin from "@fullcalendar/list";
+import { useLocalStorageState } from "../hooks/useLocalStorageState";
 
 const LessonsPage = () => {
     const [lessons, setLessons] = useState<any[]>([]);
@@ -57,13 +60,12 @@ const LessonsPage = () => {
     const [busyEvents, setBusyEvents] = useState<EventInput[]>([]);
 
     // Set default calendar view based on screen size (xs: day, sm+: week)
-    const getDefaultCalendarView = () => {
-        if (window && window.matchMedia && window.matchMedia('(max-width:600px)').matches) {
-            return 'timeGridDay';
-        }
-        return 'timeGridWeek';
-    };
-    const [calendarView, setCalendarView] = useState<'timeGridDay' | 'timeGridWeek' | 'dayGridMonth'>(getDefaultCalendarView());
+    const isCompact = useMediaQuery('(max-width: 1024px)', {
+        defaultMatches: typeof window !== 'undefined' ? window.matchMedia('(max-width: 1024px)').matches : false,
+        noSsr: true,
+    });
+    const defaultCalendarView = isCompact ? 'listWeek' : 'timeGridWeek';
+    const [calendarView, setCalendarView] = useLocalStorageState<'timeGridDay' | 'timeGridWeek' | 'listWeek'>('lesson-calendar-view', defaultCalendarView);
     // Auto-scroll to the current time and center it in the view when calendarView changes
     useEffect(() => {
         const timeout = setTimeout(() => {
@@ -79,6 +81,17 @@ const LessonsPage = () => {
         }, 800); // Wait for FullCalendar layout to stabilize
 
         return () => clearTimeout(timeout);
+    }, [calendarView]);
+
+    useEffect(() => {
+        if (!calendarRef.current) {
+            return;
+        }
+
+        const api = calendarRef.current.getApi();
+        if (api.view.type !== calendarView) {
+            api.changeView(calendarView);
+        }
     }, [calendarView]);
     const [selectedDate, setSelectedDate] = useState<dayjs.Dayjs>(dayjs());
     const theme = useTheme();
@@ -249,22 +262,10 @@ const LessonsPage = () => {
     };
 
     // Handle event click in calendar
-    const handleDayClick = (info: DateClickArg) => {
-        // When a day is clicked in month view, navigate to day view for that date
-        if (calendarRef.current && calendarView === 'dayGridMonth') {
-            const calendarApi = calendarRef.current.getApi();
-            calendarApi.unselect(); // clear any selection to prevent auto-opening
-            suppressNextAutoSelect.current = true;
-            calendarApi.changeView('timeGridDay', info.dateStr);
-            setCalendarView('timeGridDay');
-            setSelectedDate(dayjs(info.date));
-        }
-    };
-
     // Handle calendar view change
     const handleViewChange = (
         event: React.MouseEvent<HTMLElement>,
-        newView: 'timeGridDay' | 'timeGridWeek' | 'dayGridMonth' | null
+        newView: 'timeGridDay' | 'timeGridWeek' | 'listWeek' | null
     ) => {
         if (newView) {
             setCalendarView(newView);
@@ -349,9 +350,7 @@ const LessonsPage = () => {
             sx={{
                 p: { xs: 2, sm: 3 },
                 bgcolor: '#fafbfd',
-                minHeight: '100dvh',
-                width: '100%',
-                overflowX: 'hidden'
+                width: '100%'
             }}
         >
             {/* Header */}
@@ -397,17 +396,17 @@ const LessonsPage = () => {
                         aria-label="calendar view"
                         size="small"
                     >
-                        <ToggleButton value="timeGridDay" aria-label="day view">
-                            <ViewDay fontSize="small" />
-                            <Typography sx={{ ml: 0.5, display: { xs: 'none', sm: 'block' } }}>Day</Typography>
-                        </ToggleButton>
                         <ToggleButton value="timeGridWeek" aria-label="week view">
                             <ViewWeek fontSize="small" />
                             <Typography sx={{ ml: 0.5, display: { xs: 'none', sm: 'block' } }}>Week</Typography>
                         </ToggleButton>
-                        <ToggleButton value="dayGridMonth" aria-label="month view">
-                            <CalendarMonth fontSize="small" />
-                            <Typography sx={{ ml: 0.5, display: { xs: 'none', sm: 'block' } }}>Month</Typography>
+                        <ToggleButton value="timeGridDay" aria-label="day view">
+                            <ViewDay fontSize="small" />
+                            <Typography sx={{ ml: 0.5, display: { xs: 'none', sm: 'block' } }}>Day</Typography>
+                        </ToggleButton>
+                        <ToggleButton value="listWeek" aria-label="agenda view">
+                            <ViewAgenda fontSize="small" />
+                            <Typography sx={{ ml: 0.5, display: { xs: 'none', sm: 'block' } }}>Agenda</Typography>
                         </ToggleButton>
                     </ToggleButtonGroup>
 
@@ -482,30 +481,23 @@ const LessonsPage = () => {
             </Box>
 
             {/* Calendar */}
-            {/* Calendar container with horizontal scroll on mobile */}
             <Box
                 sx={{
-                    minWidth: { xs: '100%', sm: 'unset' },
-                    overflowX: { xs: 'auto', sm: 'visible' },
-                    WebkitOverflowScrolling: 'touch',
                     width: '100%',
-                    // Paper wrapper style
                     borderRadius: 2,
                     border: `1px solid ${theme.palette.divider}`,
                     bgcolor: theme.palette.background.paper,
                     p: 0,
-                    // Height for calendar
-                    height: { xs: 'calc(100dvh - 280px)', md: 'calc(100vh - 240px)' },
-                    minHeight: 400,
                     position: 'relative',
                     zIndex: 0,
+                    overflow: 'visible',
                 }}
             >
-                <Box sx={{ width: '100%', height: '100%', position: 'relative', zIndex: 1 }}>
+                <Box sx={{ width: '100%', position: 'relative', zIndex: 1 }}>
                     <FullCalendar
                         ref={calendarRef}
-                        plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-                        initialView={getDefaultCalendarView()}
+                        plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, listPlugin]}
+                        initialView={calendarView}
                         headerToolbar={false} // We're creating our own header
                         firstDay={1}
                         events={lessonsToEvents()}
@@ -513,8 +505,8 @@ const LessonsPage = () => {
                         select={handleDateSelect}
                         selectOverlap={false}
                         eventClick={handleEventClick}
-                        dateClick={handleDayClick}
-                        height="100%"
+                        height="auto"
+                        contentHeight="auto"
                         nowIndicator={true}
                         dayMaxEvents={true}
                         allDaySlot={false}

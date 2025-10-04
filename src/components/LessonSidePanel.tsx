@@ -27,8 +27,9 @@ import CloseIcon from "@mui/icons-material/Close";
 import { createLesson } from "../services/api";
 import DateTimeInput from "./DateTimeInput";
 import dayjs from "dayjs";
-import { Student } from "../pages/MyStudentsPage";
+import { Student } from "../features/students/types";
 import { useAuth } from "../context/AuthContext";
+import StickyActionBar from "./StickyActionBar/StickyActionBar";
 
 // Slide transition for mobile dialog
 const Transition = React.forwardRef(function Transition(
@@ -184,7 +185,7 @@ const LessonSidePanel: React.FC<LessonSidePanelProps> = ({
     }, [open, initialDate]);
 
     const formContent = (
-        <Stack spacing={3} sx={{ p: { xs: 2, sm: 3 } }}>
+        <Stack spacing={3} sx={{ p: { xs: 2, sm: 3 }, pb: 'var(--space-64, 64px)' }}>
             <Typography variant="h6" fontWeight={600} component={motion.div} 
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -399,35 +400,24 @@ const LessonSidePanel: React.FC<LessonSidePanelProps> = ({
                 </Paper>
             </Collapse>
             
-            <Box sx={{ 
-                display: 'flex', 
-                justifyContent: 'flex-end', 
-                gap: 2, 
-                mt: 3,
-                position: 'sticky',
-                bottom: 0,
-                pb: 2,
-                pt: 2,
-                backgroundColor: theme.palette.background.paper,
-                borderTop: `1px solid ${theme.palette.divider}`,
-                zIndex: 1,
-            }}
-            component={motion.div}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.5 }}
+            <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: 0.5 }}
             >
-                <Button onClick={onClose} variant="outlined">
-                    Cancel
-                </Button>
-                <Button 
-                    variant="contained" 
-                    onClick={handleSubmit} 
-                    disabled={submitting}
-                >
-                    {submitting ? "Creating..." : "Create Lesson"}
-                </Button>
-            </Box>
+                <StickyActionBar sx={{ gap: 2, mt: 3, justifyContent: 'flex-end' }}>
+                    <Button onClick={onClose} variant="outlined">
+                        Cancel
+                    </Button>
+                    <Button
+                        variant="contained"
+                        onClick={handleSubmit}
+                        disabled={submitting}
+                    >
+                        {submitting ? "Creating..." : "Create Lesson"}
+                    </Button>
+                </StickyActionBar>
+            </motion.div>
         </Stack>
     );
 
