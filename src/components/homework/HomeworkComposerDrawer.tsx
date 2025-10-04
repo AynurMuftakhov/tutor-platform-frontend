@@ -89,6 +89,7 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
   const [selectedWordIds, setSelectedWordIds] = React.useState<string[]>([]);
   const [wordSearch, setWordSearch] = React.useState('');
   const [masteryStreak, setMasteryStreak] = React.useState<number>(2);
+  const [masteryStreakInput, setMasteryStreakInput] = React.useState<string>('2');
   const [shuffle, setShuffle] = React.useState<boolean>(true);
   const [timeLimitMin, setTimeLimitMin] = React.useState<string>('');
 
@@ -151,21 +152,8 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
   const languageOptions = React.useMemo(() => ['en-US', 'en-GB'], []);
   const styleOptions = React.useMemo(() => ['neutral', 'storytelling', 'documentary', 'conversational', 'inspirational'], []);
   const taskTypeOptions: HomeworkTaskType[] = [/*'VIDEO', 'READING', 'GRAMMAR' 'LINK',*/ 'VOCAB', 'LISTENING', ];
-  const durationMarks = React.useMemo(() => (
-    [
-      { value: 45, label: '0:45' },
-      { value: 60, label: '1:00' },
-      { value: 90, label: '1:30' },
-      { value: 120, label: '2:00' },
-    ]
-  ), []);
   const sourceKindOptions: SourceKind[] = [/*'MATERIAL', 'LESSON_CONTENT', 'EXTERNAL_URL',*/ 'VOCAB_LIST', 'GENERATED_AUDIO'];
 
-  const formatDurationLabel = (value: number) => {
-    const mins = Math.floor(value / 60);
-    const secs = Math.max(0, value % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
 
   // fetch student options debounced by query
   React.useEffect(() => {
@@ -215,6 +203,7 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
       setSelectedWordIds([]);
       setWordSearch('');
       setMasteryStreak(2);
+      setMasteryStreakInput('2');
       setShuffle(true);
       setTimeLimitMin('');
       setListeningDurationSecTarget(90);
@@ -721,7 +710,7 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
           {/* Assignment card */}
           <Paper variant="outlined" sx={{ p: 2.5, mb: 2 }}>
             <Typography variant="h6" sx={{ mb: 2 }}>Assignment</Typography>
-            <Stack gap={2}>
+            <Stack>
               <Autocomplete
                 options={studentOptions}
                 getOptionLabel={(o) => o?.name || ''}
@@ -753,7 +742,7 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
               />
               <TextField label="Title" value={title} onChange={e => setTitle(e.target.value)} fullWidth required error={!title.trim()} helperText={!title.trim() ? 'Required' : ' '}/>
               <TextField label="Instructions" value={instructions} onChange={e => setInstructions(e.target.value)} fullWidth multiline minRows={2} />
-              <TextField type="datetime-local" label="Due At" value={dueAt} onChange={e => setDueAt(e.target.value)} InputLabelProps={{ shrink: true }} helperText="Optional" />
+              <TextField type="datetime-local" label="Due At (Optional)" value={dueAt } sx={{mt: 2}} onChange={e => setDueAt(e.target.value)} InputLabelProps={{ shrink: true }} />
             </Stack>
           </Paper>
 
@@ -761,27 +750,14 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
           <Paper variant="outlined" sx={{ p: 2.5, mb: 2 }}>
             <Typography variant="h6" sx={{ mb: 2 }}>Task</Typography>
             <Stack gap={2}>
-              {/*<TextField label="Task title" value={taskTitle} onChange={e => setTaskTitle(e.target.value)} fullWidth />*/}
               <TextField
                 select
-                label="Task type"
+                label="Type"
                 value={taskType}
                 onChange={e => setTaskType(e.target.value as HomeworkTaskType)}
               >
                 {taskTypeOptions.map(t => (<MenuItem key={t} value={t}>{t}</MenuItem>))}
               </TextField>
-              {!isListeningTask && !isVocabList && (
-                <TextField
-                  select
-                  label="Source kind"
-                  value={sourceKind}
-                  onChange={e => setSourceKind(e.target.value as SourceKind)}
-                >
-                  {sourceKindOptions
-                    .filter(s => s !== 'GENERATED_AUDIO' && s !== 'VOCAB_LIST')
-                    .map(s => (<MenuItem key={s} value={s}>{s}</MenuItem>))}
-                </TextField>
-              )}
 
               {sourceKind === 'EXTERNAL_URL' && (
                 <Stack direction="row" gap={1} alignItems="center">
@@ -837,10 +813,31 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
                     <TextField
                       type="number"
                       label="Mastery streak"
-                      value={masteryStreak}
-                      onChange={e => setMasteryStreak(Math.max(1, Math.min(10, Number(e.target.value) || 0)))}
+                      value={masteryStreakInput}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setMasteryStreakInput(v);
+                        if (v === '') return; // allow clearing while editing
+                        const n = Math.floor(Number(v));
+                        if (!Number.isNaN(n)) {
+                          const clamped = Math.max(1, Math.min(10, n));
+                          setMasteryStreak(clamped);
+                        }
+                      }}
+                      onBlur={() => {
+                        // on blur, if empty revert to last known valid value
+                        if (masteryStreakInput === '') {
+                          setMasteryStreakInput(String(masteryStreak));
+                          return;
+                        }
+                        const n = Math.floor(Number(masteryStreakInput));
+                        const clamped = Number.isNaN(n) ? masteryStreak : Math.max(1, Math.min(10, n));
+                        setMasteryStreak(clamped);
+                        setMasteryStreakInput(String(clamped));
+                      }}
                       InputLabelProps={{ shrink: true }}
                       inputProps={{ min: 1, max: 10 }}
+                      sx={{ mt: 1 }}
                     />
                   )}
 

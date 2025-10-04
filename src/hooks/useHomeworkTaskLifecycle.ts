@@ -3,8 +3,6 @@ import { useAuth } from '../context/AuthContext';
 import { useCompleteTask, useStartTask, useUpdateTaskProgress } from './useHomeworks';
 import type { UpdateProgressPayload } from '../types/homework';
 
-const milestones = new Set([10, 30, 60, 90]);
-
 export function useHomeworkTaskLifecycle(taskId: string, opts?: { minIntervalMs?: number; milestonePercents?: number[] }) {
   const { user } = useAuth();
   const studentId = user?.id || '';

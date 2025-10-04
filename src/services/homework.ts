@@ -1,8 +1,21 @@
-import { AssignmentDto, CreateAssignmentDto, PageResult, UpdateProgressPayload } from '../types/homework';
+import { AssignmentDto, AssignmentListItemDto, CreateAssignmentDto, PageResult, UpdateProgressPayload } from '../types/homework';
 import api from './api';
 
 // Endpoints base: prefer env override, fallback to service prefix
 const HOMEWORKS_BASE = (import.meta as any).env?.VITE_HOMEWORKS_BASE || '/homework-service/api/homeworks';
+
+export type HomeworkListParams = {
+  status?: 'active' | 'notFinished' | 'completed' | 'all';
+  from?: string; // ISO8601 date (YYYY-MM-DD)
+  to?: string;   // ISO8601 date (YYYY-MM-DD)
+  includeOverdue?: boolean; // default true
+  hideCompleted?: boolean;  // default true when status=active
+  sort?: 'assigned_desc' | 'assigned_asc' | 'due_asc' | 'due_desc';
+  view?: 'summary' | 'full';
+  page?: number;
+  size?: number;
+  studentId?: string; // for tutor endpoint optional
+};
 
 type ProgressDto = {
   progressPct?: number;
@@ -30,11 +43,23 @@ const toProgressDto = (payload?: UpdateProgressPayload): ProgressDto => {
   return dto;
 };
 
-export const getStudentHomeworks = (studentId: string, pageable?: { page?: number; size?: number }) =>
-  api.get<PageResult<AssignmentDto>>(`${HOMEWORKS_BASE}/${studentId}`, { params: pageable }).then(r => r.data);
+export const getStudentHomeworks = (studentId: string, params?: HomeworkListParams) =>
+  api
+    .get<PageResult<AssignmentListItemDto>>(`${HOMEWORKS_BASE}/student/${studentId}`, { params })
+    .then(r => r.data);
 
-export const getTutorHomeworks = (tutorId: string, studentId?: string, pageable?: { page?: number; size?: number }) =>
-  api.get<PageResult<AssignmentDto>>(`${HOMEWORKS_BASE}/tutor/${tutorId}`, { params: { ...(studentId ? { studentId } : {}), ...(pageable || {}) } }).then(r => r.data);
+export const getStudentHomeworkCounts = (studentId: string, params: { from?: string; to?: string; includeOverdue?: boolean } = {}) =>
+  api
+    .get<{ notFinished: number; completed: number; overdue: number; active: number; all: number }>(
+      `${HOMEWORKS_BASE}/student/${studentId}/counts`,
+      { params }
+    )
+    .then(r => r.data);
+
+export const getTutorHomeworks = (tutorId: string, params?: HomeworkListParams) =>
+  api
+    .get<PageResult<AssignmentListItemDto>>(`${HOMEWORKS_BASE}/tutor/${tutorId}`, { params })
+    .then(r => r.data);
 
 export const createHomework = (teacherId: string, payload: CreateAssignmentDto) =>
   api.post<AssignmentDto>(`${HOMEWORKS_BASE}`, payload, { params: { teacherId } }).then(r => r.data);
@@ -50,3 +75,6 @@ export const updateTaskProgress = (taskId: string, studentId: string, payload: U
 
 export const completeTask = (taskId: string, studentId: string, payload?: UpdateProgressPayload) =>
   api.post<AssignmentDto>(`${HOMEWORKS_BASE}/tasks/${taskId}/complete`, payload ? toProgressDto(payload) : {}, { params: { studentId } }).then(r => r.data);
+
+export const getAssignmentById = (assignmentId: string, studentId?: string) =>
+  api.get<AssignmentDto>(`${HOMEWORKS_BASE}/${assignmentId}`, { params: studentId ? { studentId } : {} }).then(r => r.data);

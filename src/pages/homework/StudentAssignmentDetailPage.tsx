@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { Box, Button, Card, CardContent, Chip, Container, Divider, Grid, Stack, Typography } from '@mui/material';
-import { useStudentAssignments, useTeacherAssignments, useStartTask, useCompleteTask } from '../../hooks/useHomeworks';
+import { useAssignmentById, useStartTask, useCompleteTask } from '../../hooks/useHomeworks';
 import { AssignmentDto, TaskDto } from '../../types/homework';
 import { useAuth } from '../../context/AuthContext';
 import HomeworkTaskFrame from '../../components/homework/HomeworkTaskFrame';
@@ -12,13 +12,7 @@ const StudentAssignmentDetailPage: React.FC = () => {
   const { user } = useAuth();
   const role = (user?.role || '').toLowerCase();
   const isTeacher = role === 'tutor' || role === 'teacher';
-  const sQ = useStudentAssignments(!isTeacher ? (user?.id || '') : '', undefined);
-  const tQ = useTeacherAssignments(isTeacher ? (user?.id || '') : '', undefined);
-  const isLoading = isTeacher ? tQ.isLoading : sQ.isLoading;
-  const isError = isTeacher ? tQ.isError : sQ.isError;
-  const data = isTeacher ? tQ.data : sQ.data;
-
-  const assignment = useMemo(() => data?.content.find(a => a.id === assignmentId), [data, assignmentId]);
+  const { data: assignment, isLoading, isError } = useAssignmentById(assignmentId, { studentId: !isTeacher ? (user?.id || undefined) : undefined });
 
   const currentTaskId = useMemo(() => {
     const fromUrl = params.get('taskId');

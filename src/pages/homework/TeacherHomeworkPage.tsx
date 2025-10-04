@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Avatar, Box, Button, Chip, Container, Grid, IconButton, MenuItem, Select, Stack, TextField, Tooltip, Typography, Autocomplete, CircularProgress, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Snackbar } from '@mui/material';
+import { Avatar, Box, Button, Chip, Container, Grid, IconButton, MenuItem, Select, Stack, TextField, Tooltip, Typography, Autocomplete, CircularProgress, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Snackbar, Pagination, LinearProgress } from '@mui/material';
 import HomeworkComposerDrawer from '../../components/homework/HomeworkComposerDrawer';
 import { useTeacherAssignments, useDeleteAssignment } from '../../hooks/useHomeworks';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -9,20 +9,81 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { useQuery } from '@tanstack/react-query';
-import {AssignmentDto} from "../../types/homework";
+import {AssignmentDto, AssignmentListItemDto} from "../../types/homework";
+import FiltersBar, { FiltersState } from '../../components/homework/FiltersBar';
 
-type StatusFilter = 'ALL' | 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED';
 
 const TeacherHomeworkPage: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const studentId = params.get('studentId') || '';
-  const statusParam = (params.get('status') as StatusFilter) || 'ALL';
   const [studentFilter, setStudentFilter] = useState(studentId);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>(statusParam);
 
-  const { data, isLoading, isError, refetch } = useTeacherAssignments(user?.id || '', studentId || undefined, undefined);
+    const [filters, setFilters] = useState<FiltersState>({
+        status: 'active',
+        range: 'last7',
+        hideCompleted: true,
+        sort: 'assignedDesc',
+    });
+
+    const computeRange = (f: FiltersState) => {
+        const now = new Date();
+        const toYMD = (d: Date) => d.toISOString().slice(0,10);
+        const presetToRange = (preset: string) => {
+            const end = toYMD(now);
+            if (preset === 'thisMonth') {
+                const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+                return { from: toYMD(d), to: end };
+            }
+            const days = preset === 'last14' ? 13 : preset === 'last30' ? 29 : 6;
+            const startMs = Date.now() - days * 24 * 60 * 60 * 1000;
+            return { from: toYMD(new Date(startMs)), to: end };
+        };
+        if (f.range === 'custom' && f.from && f.to) return { from: f.from, to: f.to };
+        if (f.range !== 'custom') return presetToRange(f.range);
+        return presetToRange('last7');
+    };
+
+  const { from, to } = computeRange(filters);
+  const sortMap: Record<string, 'assigned_desc' | 'assigned_asc' | 'due_asc' | 'due_desc'> = {
+    assignedDesc: 'assigned_desc',
+    assignedAsc: 'assigned_asc',
+    dueAsc: 'due_asc',
+    dueDesc: 'due_desc',
+  };
+
+  const [page, setPage] = useState<number>(Number(params.get('page') || '1'));
+  const [size, setSize] = useState<number>(Number(params.get('size') || '20'));
+
+
+  // reset to first page when filters or student changes
+  React.useEffect(() => {
+    setPage(1);
+  }, [studentFilter, filters?.status, filters?.range, filters?.from, filters?.to, filters?.hideCompleted, filters?.sort]);
+
+  const { data, isError, refetch } = useTeacherAssignments(user?.id || '', {
+    studentId: studentFilter || undefined,
+    status: filters?.status || 'all',
+    from,
+    to,
+    includeOverdue: true,
+    hideCompleted: !!filters?.hideCompleted,
+    sort: sortMap[filters?.sort || 'assignedDesc'],
+    view: 'full',
+    page: page - 1,
+    size,
+  });
+
+  // Keep previous data to avoid list flashing during refetch
+  const [prevData, setPrevData] = useState<typeof data>(undefined);
+  React.useEffect(() => {
+    if (data) setPrevData(data);
+  }, [data]);
+
+  const visible = useMemo(() => {
+    return (data?.content ?? prevData?.content) || [];
+  }, [data, prevData]);
 
   // composer + snackbar state
   const [composerOpen, setComposerOpen] = useState(false);
@@ -69,35 +130,6 @@ const TeacherHomeworkPage: React.FC = () => {
     return () => { cancelled = true; };
   }, [studentId]);
 
-  // Auto-apply filters when either student or status changes
-  React.useEffect(() => {
-    const p = new URLSearchParams(params);
-    const curStudent = p.get('studentId') || '';
-    const curStatus = (p.get('status') as StatusFilter) || 'ALL';
-
-    const nextStudent = studentFilter || '';
-    const nextStatus = statusFilter || 'ALL';
-
-    // Only update if something actually changed to avoid loops
-    if (curStudent !== nextStudent || curStatus !== nextStatus) {
-      if (nextStudent) p.set('studentId', nextStudent); else p.delete('studentId');
-      if (nextStatus && nextStatus !== 'ALL') p.set('status', nextStatus); else p.delete('status');
-      setParams(p, { replace: true });
-    }
-  }, [studentFilter, statusFilter]);
-
-  const filtered = useMemo(() => {
-    const list = data?.content || [];
-    if (statusFilter === 'ALL') return list;
-    return list.filter(a => {
-      const total = a.tasks.length;
-      const done = a.tasks.filter(t => t.status === 'COMPLETED').length;
-      if (statusFilter === 'COMPLETED') return done === total && total > 0;
-      if (statusFilter === 'NOT_STARTED') return a.tasks.every(t => t.status === 'NOT_STARTED');
-      // IN_PROGRESS: some started or partial but not all complete
-      return done < total && a.tasks.some(t => t.status !== 'NOT_STARTED');
-    });
-  }, [data, statusFilter]);
 
   const copyDeepLink = (assignmentId: string, firstIncompleteTaskId?: string) => {
     const url = new URL(window.location.origin + `/homework/${assignmentId}${firstIncompleteTaskId ? `?taskId=${firstIncompleteTaskId}` : ''}`);
@@ -136,10 +168,18 @@ const TeacherHomeworkPage: React.FC = () => {
               position: 'relative'
           }}
       >
-     <Container sx={{ py: 4 }}>
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }} justifyContent="space-between" sx={{ mb: 2 }}>
-        <Typography variant="h4" sx={{ fontWeight: 600, color: '#2573ff' }}>Students Homework</Typography>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+     <Container sx={{ py: 4, height: '100%', display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <Stack
+        direction={{ xs: 'column', md: 'row' }}
+        spacing={1.5}
+        alignItems={{ xs: 'flex-start', md: 'center' }}
+        justifyContent="space-between"
+      >
+        <Typography variant="h4" sx={{ fontWeight: 700, letterSpacing: '-0.02em', color: '#2573ff' }}>
+          Students Homework
+        </Typography>
+
+        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
           <Autocomplete
             size="small"
             options={studentOptions}
@@ -167,96 +207,112 @@ const TeacherHomeworkPage: React.FC = () => {
                     </>
                   ),
                 }}
-                sx={{ minWidth: 240 }}
+                sx={{ minWidth: 260 }}
               />
             )}
             isOptionEqualToValue={(o, v) => o.id === v.id}
           />
-          <Select size="small" value={statusFilter} onChange={(e)=> setStatusFilter(e.target.value as StatusFilter)}>
-            <MenuItem value="ALL">All</MenuItem>
-            <MenuItem value="NOT_STARTED">Not started</MenuItem>
-            <MenuItem value="IN_PROGRESS">In progress</MenuItem>
-            <MenuItem value="COMPLETED">Completed</MenuItem>
-          </Select>
-            <Tooltip title="Refresh">
-                <IconButton onClick={onRefresh} aria-label="Refresh"><RefreshIcon /></IconButton>
-            </Tooltip>
-          <Button variant="contained" onClick={() => setComposerOpen(true)}>Add Homework</Button>
+
+          <Tooltip title="Refresh">
+            <IconButton onClick={onRefresh} aria-label="Refresh">
+              <RefreshIcon />
+            </IconButton>
+          </Tooltip>
+
+          <Button variant="contained" onClick={() => setComposerOpen(true)}>
+            Add Homework
+          </Button>
         </Stack>
       </Stack>
 
-      {isLoading && <Typography>Loading...</Typography>}
+      <FiltersBar value={filters} onChange={setFilters} sticky />
+
       {isError && <Typography color="error">Failed to load.</Typography>}
 
-      <Grid container spacing={2}>
-          {filtered && filtered.length > 0 ? (
-              filtered.map(a => {
-                  const total = a.tasks.length;
-                  const completed = a.tasks.filter(t => t.status === 'COMPLETED').length;
-                  const notStarted = a.tasks.filter(t => t.status === 'NOT_STARTED').length;
-                  const inProgress = total - notStarted - completed;
-                  const firstIncomplete = a.tasks.find(t => t.status !== 'COMPLETED');
-                  return (
-                      <Grid size={{xs:12}} key={a.id}>
-                          <Box
-                              border={1}
-                              borderColor="divider"
-                              borderRadius={1}
-                              p={2}
-                              display="flex"
-                              alignItems="center"
-                              justifyContent="space-between"
-                              gap={2}
-                              sx={{ cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' } }}
-                              role="button"
-                              tabIndex={0}
-                              bgcolor={'background.paper'}
-                              onClick={() => navigate(`/homework/${a.id}${firstIncomplete ? `?taskId=${firstIncomplete.id}` : ''}`)}
-                              onKeyDown={(e) => {
-                                  if (e.key === 'Enter' || e.key === ' ') {
-                                      e.preventDefault();
-                                      navigate(`/homework/${a.id}${firstIncomplete ? `?taskId=${firstIncomplete.id}` : ''}`);
-                                  }
-                              }}
-                          >
-                              <Box sx={{ minWidth: 0 }}>
-                                  <Typography variant="subtitle1" noWrap>{a.title}</Typography>
-                                  <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
-                                      <StudentMeta userId={a.studentId} />
-                                      <Typography variant="caption" color="text.secondary">• Created {new Date(a.createdAt).toLocaleString()}</Typography>
-                                      {a.dueAt && <Chip size="small" label={`Due ${new Date(a.dueAt).toLocaleDateString()}`}/>}
-                                  </Stack>
-                                  <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-                                      <Chip size="small" color="success" label={`Done ${completed}/${total}`} />
-                                      {inProgress>0 && <Chip size="small" color="warning" label={`In progress ${inProgress}`} />}
-                                      {notStarted>0 && <Chip size="small" label={`Not started ${notStarted}`} />}
-                                  </Stack>
-                              </Box>
-                              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ xs: 'stretch', sm: 'center' }}>
-                                  <Tooltip title="Copy deep link to first incomplete section">
-                                      <IconButton onClick={(e)=> { e.stopPropagation(); copyDeepLink(a.id, firstIncomplete?.id); }}><ContentCopyIcon fontSize="small" /></IconButton>
-                                  </Tooltip>
-                                  <Tooltip title="Delete assignment">
-                    <span>
-                      <IconButton color="error" onClick={(e)=> { e.stopPropagation(); askDelete(a.id, a.title); }} disabled={del.isPending}>
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </span>
-                                  </Tooltip>
-                              </Stack>
-                          </Box>
-                      </Grid>
-                  );
-              })
-          ) : (
-              <Grid size ={{xs: 12}}>
-                  <Box textAlign="center" py={6}>
-                      <Typography variant="h6">No homework yet</Typography>
-                      <Typography variant="body2" color="text.secondary">Please add homework manually or assign from Learning Materials or Lesson Contents </Typography>
-                  </Box>
-              </Grid>
-          )}
-      </Grid>
+      <Box sx={{ flex: 1, overflowY: 'auto', pr: 0.5, scrollbarWidth: 'none', msOverflowStyle: 'none', '&::-webkit-scrollbar': { display: 'none' } }}>
+        <Grid container spacing={2}>
+            {visible && visible.length > 0 ? (
+                visible.map(a => {
+                    const total = a.totalTasks;
+                    const completed = a.completedTasks;
+                    const inProgress = a.inProgressTasks
+                    return (
+                        <Grid size={{xs:12}} key={a.id}>
+                            <Box
+                                border={1}
+                                borderColor="divider"
+                                borderRadius={1}
+                                p={2}
+                                display="flex"
+                                alignItems="center"
+                                justifyContent="space-between"
+                                gap={2}
+                                sx={{ cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' } }}
+                                role="button"
+                                tabIndex={0}
+                                bgcolor={'background.paper'}
+                                onClick={() => navigate(`/homework/${a.id}`)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                        e.preventDefault();
+                                        navigate(`/homework/${a.id}`);
+                                    }
+                                }}
+                            >
+                                <Box sx={{ minWidth: 0 }}>
+                                    <Typography variant="subtitle1" noWrap>{a.title}</Typography>
+                                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
+                                        {a.studentId && <StudentMeta userId={a.studentId} />}
+                                        <Typography variant="caption" color="text.secondary">• Created {new Date(a.createdAt).toLocaleString()}</Typography>
+                                        {a.dueAt && <Chip size="small" label={`Due ${new Date(a.dueAt).toLocaleDateString()}`}/>}
+                                        {a.overdue && <Chip size="small" color="error" label="Overdue" />}
+                                    </Stack>
+                                    <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                                        {completed == total && (
+                                        <Chip size="small" color="success" label={`Done ${completed}/${total}`} />)}
+                                        {inProgress>0 && <Chip size="small" color="warning" label={`In progress ${inProgress}/${total}`} />}
+                                        {inProgress == 0 && completed != total&& <Chip size="small" color="info" label={`Not started `} />}
+                                    </Stack>
+                                </Box>
+                                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ xs: 'stretch', sm: 'center' }}>
+                                    <Tooltip title="Copy link to assignment">
+                                        <IconButton onClick={(e)=> { e.stopPropagation(); copyDeepLink(a.id); }}><ContentCopyIcon fontSize="small" /></IconButton>
+                                    </Tooltip>
+                                    <Tooltip title="Delete assignment">
+                      <span>
+                        <IconButton color="error" onClick={(e)=> { e.stopPropagation(); askDelete(a.id, a.title); }} disabled={del.isPending}>
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </span>
+                                    </Tooltip>
+                                </Stack>
+                            </Box>
+                        </Grid>
+                    );
+                })
+            ) : (
+                <Grid size ={{xs: 12}}>
+                    <Box textAlign="center" py={6}>
+                        <Typography variant="h6">No homework yet</Typography>
+                        <Typography variant="body2" color="text.secondary">Please add homework manually or assign from Learning Materials or Lesson Contents </Typography>
+                    </Box>
+                </Grid>
+            )}
+        </Grid>
+      </Box>
+
+      {data?.totalPages && data.totalPages > 1 && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 1 }}>
+          <Pagination
+            count={data.totalPages}
+            page={page}
+            onChange={(_, p) => setPage(p)}
+            size="small"
+            color="primary"
+          />
+        </Box>
+      )}
+
       <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
         <DialogTitle>Delete assignment</DialogTitle>
         <DialogContent>

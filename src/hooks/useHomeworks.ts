@@ -1,19 +1,28 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AssignmentDto, CreateAssignmentDto, PageResult, UpdateProgressPayload } from '../types/homework';
-import { completeTask, createHomework, deleteHomework, getStudentHomeworks, getTutorHomeworks, startTask, updateTaskProgress } from '../services/homework';
+import { AssignmentDto, AssignmentListItemDto, CreateAssignmentDto, PageResult, UpdateProgressPayload } from '../types/homework';
+import { completeTask, createHomework, deleteHomework, getStudentHomeworks, getTutorHomeworks, startTask, updateTaskProgress, getAssignmentById, getStudentHomeworkCounts, HomeworkListParams } from '../services/homework';
 
-export const useStudentAssignments = (studentId: string, pageable?: { page?: number; size?: number }) => {
-  return useQuery<PageResult<AssignmentDto>>({
-    queryKey: ['homeworks', 'student', { studentId, pageable }],
-    queryFn: () => getStudentHomeworks(studentId, pageable),
+export const useStudentAssignments = (studentId: string, params?: HomeworkListParams) => {
+  return useQuery<PageResult<AssignmentListItemDto>>({
+    queryKey: ['homeworks', 'student', { studentId, params }],
+    queryFn: () => getStudentHomeworks(studentId, params),
     enabled: !!studentId,
   });
 };
 
-export const useTeacherAssignments = (tutorId: string, studentId?: string, pageable?: { page?: number; size?: number }) => {
-  return useQuery<PageResult<AssignmentDto>>({
-    queryKey: ['homeworks', 'tutor', { tutorId, studentId, pageable }],
-    queryFn: () => getTutorHomeworks(tutorId, studentId, pageable),
+export const useStudentHomeworkCounts = (studentId: string, params?: { from?: string; to?: string; includeOverdue?: boolean }) => {
+  return useQuery<{ notFinished: number; completed: number; overdue: number; active: number; all: number }>({
+    queryKey: ['homeworks', 'student', 'counts', { studentId, params }],
+    queryFn: () => getStudentHomeworkCounts(studentId, params || {}),
+    enabled: !!studentId,
+    staleTime: 60_000,
+  });
+};
+
+export const useTeacherAssignments = (tutorId: string, params?: HomeworkListParams) => {
+  return useQuery<PageResult<AssignmentListItemDto>>({
+    queryKey: ['homeworks', 'tutor', { tutorId, params }],
+    queryFn: () => getTutorHomeworks(tutorId, params),
     enabled: !!tutorId,
   });
 };
@@ -61,5 +70,14 @@ export const useDeleteAssignment = () => {
   return useMutation({
     mutationFn: (assignmentId: string) => deleteHomework(assignmentId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['homeworks'] }),
+  });
+};
+
+export const useAssignmentById = (assignmentId: string | undefined, opts?: { studentId?: string; initialData?: AssignmentDto; enabled?: boolean }) => {
+  return useQuery<AssignmentDto>({
+    queryKey: ['homeworks', 'assignment', { assignmentId, studentId: opts?.studentId }],
+    queryFn: () => getAssignmentById(assignmentId as string, opts?.studentId),
+    enabled: !!assignmentId && (opts?.enabled ?? true),
+    initialData: opts?.initialData,
   });
 };

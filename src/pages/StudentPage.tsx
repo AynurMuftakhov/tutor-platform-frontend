@@ -1,25 +1,25 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
-  Avatar,
-  Box,
-  Button,
-  Chip,
-  Container,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogContentText,
-  DialogTitle,
-  Grid,
-  IconButton,
-  Paper,
-  Snackbar,
-  Alert,
-  Tab,
-  Tabs,
-  Tooltip,
-  Typography,
+    Avatar,
+    Box,
+    Button,
+    Chip,
+    Container,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogContentText,
+    DialogTitle,
+    Grid,
+    IconButton,
+    Paper,
+    Snackbar,
+    Alert,
+    Tab,
+    Tabs,
+    Tooltip,
+    Typography, Stack,
 } from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -41,19 +41,22 @@ import AssignModal from "../components/vocabulary/AssignModal";
 import { useStudentAssignments } from "../hooks/useHomeworks";
 import type { AssignmentDto, TaskDto } from "../types/homework";
 import HomeworkTaskFrame from "../components/homework/HomeworkTaskFrame";
-import { Link as RouterLink } from 'react-router-dom';
-import { useTheme } from "@mui/material/styles";
+import FiltersBar, { FiltersState } from "../components/homework/FiltersBar";
+import { getAssignmentById } from "../services/homework";
 
-const AssignmentCardSmall: React.FC<{ a: AssignmentDto; onOpen: (assignment: AssignmentDto) => void }> = ({ a, onOpen }) => {
-  const total = a.tasks.length;
-  const done = a.tasks.filter(t => t.status === 'COMPLETED').length;
-  const pct = total ? Math.round((done / total) * 100) : 0;
+import type { AssignmentListItemDto } from "../types/homework";
+import HomeworkComposerDrawer from "../components/homework/HomeworkComposerDrawer";
+
+const AssignmentCardSmall: React.FC<{ a: AssignmentListItemDto; onOpen: (id: string) => void }> = ({ a, onOpen }) => {
+  const total = a.totalTasks;
+  const done = a.completedTasks;
+  const pct = a.progressPct ?? (total ? Math.round((done / total) * 100) : 0);
   const due = a.dueAt ? new Date(a.dueAt) : null;
-  const handleActivate = () => onOpen(a);
+  const handleActivate = () => onOpen(a.id);
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      onOpen(a);
+      onOpen(a.id);
     }
   };
   return (
@@ -84,8 +87,52 @@ const AssignmentCardSmall: React.FC<{ a: AssignmentDto; onOpen: (assignment: Ass
   );
 };
 
-const StudentHomeworkTab: React.FC<{ studentId: string; isTeacher: boolean; onAssignmentOpen: (assignment: AssignmentDto, preselectTaskId?: string | null) => void; autoOpenAssignmentId?: string | null; autoOpenTaskId?: string | null; onConsumedAutoOpen?: () => void; }> = ({ studentId, isTeacher, onAssignmentOpen, autoOpenAssignmentId, autoOpenTaskId, onConsumedAutoOpen }) => {
-  const { data, isLoading, isError } = useStudentAssignments(studentId, undefined);
+const StudentHomeworkTab: React.FC<{ studentId: string; isTeacher: boolean; onAssignmentOpen: (assignmentId: string, preselectTaskId?: string | null) => void; autoOpenAssignmentId?: string | null; autoOpenTaskId?: string | null; onConsumedAutoOpen?: () => void; embedded: boolean; }> = ({ studentId, isTeacher, onAssignmentOpen, autoOpenAssignmentId, autoOpenTaskId, onConsumedAutoOpen, embedded}) => {
+
+    const [composerOpen, setComposerOpen] = useState(false);
+    const [filters, setFilters] = useState<FiltersState>({
+        status: 'active',
+        range: 'last7',
+        hideCompleted: true,
+        sort: 'assignedDesc',
+    });
+
+    const computeRange = (f: FiltersState) => {
+        const now = new Date();
+        const toYMD = (d: Date) => d.toISOString().slice(0,10);
+        const presetToRange = (preset: string) => {
+            const end = toYMD(now);
+            if (preset === 'thisMonth') {
+                const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+                return { from: toYMD(d), to: end };
+            }
+            const days = preset === 'last14' ? 13 : preset === 'last30' ? 29 : 6;
+            const startMs = Date.now() - days * 24 * 60 * 60 * 1000;
+            return { from: toYMD(new Date(startMs)), to: end };
+        };
+        if (f.range === 'custom' && f.from && f.to) return { from: f.from, to: f.to };
+        if (f.range !== 'custom') return presetToRange(f.range);
+        return presetToRange('last7');
+    };
+
+  const { from, to } = computeRange(filters);
+  const sortMap: Record<string, 'assigned_desc' | 'assigned_asc' | 'due_asc' | 'due_desc'> = {
+    assignedDesc: 'assigned_desc',
+    assignedAsc: 'assigned_asc',
+    dueAsc: 'due_asc',
+    dueDesc: 'due_desc',
+  };
+
+  const { data, isLoading, isError, refetch } = useStudentAssignments(studentId, {
+    status: (filters?.status as any) || 'active',
+    from,
+    to,
+    includeOverdue: true,
+    hideCompleted: filters?.hideCompleted ?? (filters?.status === 'active'),
+    sort: sortMap[filters?.sort || 'assignedDesc'],
+    view: 'full',
+    size: 100,
+  });
   const list = data?.content || [];
 
   // auto open command from parent (student sync)
@@ -93,21 +140,38 @@ const StudentHomeworkTab: React.FC<{ studentId: string; isTeacher: boolean; onAs
     if (!autoOpenAssignmentId) return;
     const a = list.find(x => x.id === autoOpenAssignmentId);
     if (a) {
-      onAssignmentOpen(a, autoOpenTaskId);
+      onAssignmentOpen(a.id, autoOpenTaskId);
       onConsumedAutoOpen?.();
     }
-  }, [autoOpenAssignmentId, autoOpenTaskId, list]);
+  }, [autoOpenAssignmentId, autoOpenTaskId, list, onAssignmentOpen, onConsumedAutoOpen]);
 
   if (isLoading) return <Typography>Loading...</Typography>;
   if (isError) return <Typography color="error">Failed to load homework.</Typography>;
 
   const header = (
-    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, gap: 1, flexWrap: 'wrap' }}>
-      <Typography variant="body2" color="text.secondary">Homework assigned to this student.</Typography>
-      {isTeacher && (
-        <Button component={RouterLink} to={`/t/homework/new?studentId=${studentId}`} variant="contained" size="small">Assign new homework</Button>
-      )}
-    </Box>
+    <Stack>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, gap: 1, flexWrap: 'wrap' }}>
+        {isTeacher && !embedded && (
+          <Button onClick={() => setComposerOpen(true)} variant="contained" size="small">Assign new homework</Button>
+        )}
+      </Box>
+      <Box sx={{ flex: 1, minWidth: 260 }}>
+        <FiltersBar value={filters} onChange={setFilters} />
+      </Box>
+      <HomeworkComposerDrawer
+        open={composerOpen}
+        onClose={() => setComposerOpen(false)}
+        prefillStudentId={studentId}
+        onSuccess={() => {
+          setComposerOpen(false);
+          refetch();
+        }}
+        onCreateAndOpen={(assignment) => {
+          setComposerOpen(false);
+          onAssignmentOpen(assignment.id);
+        }}
+      />
+    </Stack>
   );
 
   if (list.length === 0) {
@@ -124,10 +188,10 @@ const StudentHomeworkTab: React.FC<{ studentId: string; isTeacher: boolean; onAs
   return (
     <>
       {header}
-      <Grid container spacing={2}>
+      <Grid container spacing={2} sx={{ mt: 2 }}>
         {list.map(a => (
-          <Grid size={{xs: 12, md:6}} key={a.id}>
-            <AssignmentCardSmall a={a} onOpen={(assn)=>onAssignmentOpen(assn, undefined)} />
+          <Grid size={{xs: 12, md:6, }} key={a.id}>
+            <AssignmentCardSmall a={a} onOpen={(id) => onAssignmentOpen(id)} />
           </Grid>
         ))}
       </Grid>
@@ -231,17 +295,22 @@ const StudentPage: React.FC<StudentPageProps> = ({
   const [assignOpen, setAssignOpen] = useState(false);
 
   const handleAssignmentOpen = useCallback(
-    (assignment: AssignmentDto, preselectTaskId?: string | null) => {
+    async (assignmentId: string, preselectTaskId?: string | null) => {
       if (embedded) {
-        setOpenedAssignment(assignment);
-        const first = preselectTaskId || ([...assignment.tasks].sort((a,b)=>a.ordinal-b.ordinal)[0]?.id || assignment.tasks[0]?.id || null);
-        setCurrentTaskId(first);
-        onEmbeddedAssignmentOpen?.(assignment, first);
+        try {
+          const full = await getAssignmentById(assignmentId);
+          setOpenedAssignment(full);
+          const first = preselectTaskId || ([...full.tasks].sort((a,b)=>a.ordinal-b.ordinal)[0]?.id || full.tasks[0]?.id || null);
+          setCurrentTaskId(first);
+          onEmbeddedAssignmentOpen?.(full, first);
+        } catch (e) {
+          console.error('Failed to load assignment', e);
+        }
       } else {
-        navigate(`/homework/${assignment.id}`);
+        navigate(`/homework/${assignmentId}`);
       }
     },
-    [embedded, navigate, onEmbeddedAssignmentOpen],
+    [embedded, navigate, onEmbeddedAssignmentOpen]
   );
 
   useEffect(() => {
@@ -396,7 +465,7 @@ const StudentPage: React.FC<StudentPageProps> = ({
         label: "Homework",
         hidden: false,
         content: (
-          <SectionCard title={embedded && openedAssignment ? "Homework" : "Assigned homework"}>
+          <Box>
             {embedded && openedAssignment ? (
               <>
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
@@ -423,19 +492,18 @@ const StudentPage: React.FC<StudentPageProps> = ({
                 </Grid>
               </>
             ) : (
-              <StudentHomeworkTab studentId={student.id} isTeacher={isTeacher} onAssignmentOpen={handleAssignmentOpen} autoOpenAssignmentId={autoOpenAssignmentId} autoOpenTaskId={autoOpenTaskId} onConsumedAutoOpen={onConsumeOpenAssignmentCommand} />
+              <StudentHomeworkTab studentId={student.id} isTeacher={isTeacher} onAssignmentOpen={handleAssignmentOpen} autoOpenAssignmentId={autoOpenAssignmentId} autoOpenTaskId={autoOpenTaskId} onConsumedAutoOpen={onConsumeOpenAssignmentCommand} embedded = {embedded} />
             )}
-          </SectionCard>
+          </Box>
         ),
       },
       {
         label: "Dictionary",
         hidden: false,
         content: (
-          <SectionCard title="Dictionary">
+          <Box>
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 2, flexWrap: 'wrap' }}>
-              <Typography variant="body2" color="text.secondary">Manage student vocabulary.</Typography>
-              {isTeacher && (
+              {isTeacher && !embedded && (
                 <Button
                   variant="contained"
                   startIcon={<PersonAddIcon />}
@@ -472,10 +540,10 @@ const StudentPage: React.FC<StudentPageProps> = ({
               studentId={student.id}
               onClose={() => setAssignOpen(false)}
             />
-          </SectionCard>
+          </Box>
         ),
       },
-      {
+/*      {
         label: "Activity",
         hidden: false,
         content: (
@@ -483,7 +551,7 @@ const StudentPage: React.FC<StudentPageProps> = ({
             <Typography variant="body2" color="text.secondary">Recent activity and notes will be shown here.</Typography>
           </SectionCard>
         ),
-      },
+      },*/
     ];
   }, [student, hideOverviewTab, upcoming, upcomingError, isTeacher, handleAssignmentOpen, dictSearch, filteredAssigned, assignOpen, openedAssignment, currentTaskId]);
 
@@ -534,8 +602,8 @@ const StudentPage: React.FC<StudentPageProps> = ({
     : { mt: 4, mb: 6 };
 
   const contentSx = embedded
-    ? { mt: 2, flex: 1, overflowY: "auto", pr: { xs: 0, sm: 1 } }
-    : { mt: 2 };
+    ? { mt: 0, flex: 1, overflowY: "auto", pr: { xs: 0, sm: 1 } }
+    : {mt: 2 };
 
   return (
     <Container maxWidth={embedded ? false : "lg"} sx={containerSx}>

@@ -1,17 +1,20 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import {
     Box, Button, Card,
-    CardActionArea, CardContent, Chip, CircularProgress, Container, Grid, Typography,
+    CardActionArea, CardContent, Chip, CircularProgress, Container, Grid, Typography, Pagination, LinearProgress,
+    Tooltip, IconButton, Stack,
 } from '@mui/material';
+import { useNavigate } from 'react-router-dom';
 import { useStudentAssignments } from '../../hooks/useHomeworks';
-import { AssignmentDto } from '../../types/homework';
+import { AssignmentListItemDto } from '../../types/homework';
 import { Link as RouterLink } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import FiltersBar, { FiltersState } from '../../components/homework/FiltersBar';
 
-const AssignmentCard: React.FC<{ a: AssignmentDto }> = ({ a }) => {
-  const total = a.tasks.length;
-  const done = a.tasks.filter(t => t.status === 'COMPLETED').length;
-  const pct = total ? Math.round((done / total) * 100) : 0;
+const AssignmentCard: React.FC<{ a: AssignmentListItemDto }> = ({ a }) => {
+  const total = a.totalTasks;
+  const done = a.completedTasks;
+  const pct = a.progressPct ?? (total ? Math.round((done / total) * 100) : 0);
   const due = a.dueAt ? new Date(a.dueAt) : null;
 
   return (
@@ -57,9 +60,72 @@ const AssignmentCard: React.FC<{ a: AssignmentDto }> = ({ a }) => {
 
 const StudentHomeworkPage: React.FC = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const role = (user?.role || '').toLowerCase();
   const isTeacher = role === 'tutor' || role === 'teacher';
-  const { data, isLoading, isError } =  useStudentAssignments(!isTeacher ? (user?.id || '') : '', undefined);
+
+  const [filters, setFilters] = useState<FiltersState>({
+    status: 'active',
+    range: 'last7',
+    hideCompleted: true,
+    sort: 'assignedDesc',
+  });
+
+  const computeRange = (f: FiltersState) => {
+    const now = new Date();
+    const toYMD = (d: Date) => d.toISOString().slice(0,10);
+    const presetToRange = (preset: string) => {
+      const end = toYMD(now);
+      if (preset === 'thisMonth') {
+        const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+        return { from: toYMD(d), to: end };
+      }
+      const days = preset === 'last14' ? 13 : preset === 'last30' ? 29 : 6;
+      const startMs = Date.now() - days * 24 * 60 * 60 * 1000;
+      return { from: toYMD(new Date(startMs)), to: end };
+    };
+    if (f.range === 'custom' && f.from && f.to) return { from: f.from, to: f.to };
+    if (f.range !== 'custom') return presetToRange(f.range);
+    return presetToRange('last7');
+  };
+
+  const { from, to } = computeRange(filters);
+  const sortMap: Record<string, 'assigned_desc' | 'assigned_asc' | 'due_asc' | 'due_desc'> = {
+    assignedDesc: 'assigned_desc',
+    assignedAsc: 'assigned_asc',
+    dueAsc: 'due_asc',
+    dueDesc: 'due_desc',
+  };
+
+  const studentId = !isTeacher ? (user?.id || '') : '';
+
+  const [page, setPage] = useState<number>(1);
+  const [size, setSize] = useState<number>(20);
+
+  // reset to first page when filters change
+  React.useEffect(() => {
+    setPage(1);
+  }, [filters.status, filters.range, filters.from, filters.to, filters.hideCompleted, filters.sort]);
+
+  const { data, isError, isFetching } = useStudentAssignments(studentId, {
+    status: filters.status,
+    from,
+    to,
+    includeOverdue: true,
+    hideCompleted: filters.hideCompleted,
+    sort: sortMap[filters.sort],
+    view: 'full',
+    page: page - 1,
+    size,
+  });
+
+  // Keep previous data to avoid list flashing during refetch
+  const [prevData, setPrevData] = useState<typeof data>(undefined);
+  React.useEffect(() => {
+    if (data) setPrevData(data);
+  }, [data]);
+
+  const visible = useMemo(() => (data?.content ?? prevData?.content) || [], [data, prevData]);
 
   if (isTeacher) {
     return (
@@ -70,7 +136,6 @@ const StudentHomeworkPage: React.FC = () => {
     );
   }
 
-  if (isLoading) return <Container sx={{ py: 4 }}><Typography>Loading...</Typography></Container>;
   if (isError) return <Container sx={{ py: 4 }}><Typography color="error">Failed to load homework.</Typography></Container>;
 
   return (
@@ -85,24 +150,80 @@ const StudentHomeworkPage: React.FC = () => {
               position: 'relative'
           }}
       >
-    <Container sx={{ py: 4 }}>
+    <Container sx={{ py: 4, height: '100%', display: 'flex', flexDirection: 'column' }}>
       <Typography variant="h4" sx={{ mb: 2, fontWeight: 600, color: '#2573ff' }}>Here is your homework</Typography>
-      <Grid container spacing={2}>
-        {data && data.content.length > 0 ? (
-          data.content.map((a: AssignmentDto) => (
-            <Grid size ={{xs: 12, sm: 6, md: 4}} key={a.id}>
-              <AssignmentCard a={a} />
-            </Grid>
-          ))
-        ) : (
-            <Grid size ={{xs: 12}}>
-            <Box textAlign="center" py={6}>
-              <Typography variant="h6">No homework yet</Typography>
-              <Typography variant="body2" color="text.secondary">Your teacher will assign tasks after a lesson.</Typography>
-            </Box>
+      <Box sx={{ mb: 2 }}>
+        <FiltersBar value={filters} onChange={setFilters} sticky />
+      </Box>
+      <Box sx={{ flex: 1, overflowY: 'auto', pr: 0.5, scrollbarWidth: 'none', msOverflowStyle: 'none', '&::-webkit-scrollbar': { display: 'none' } }}>
+          <Grid container spacing={2}>
+              {visible && visible.length > 0 ? (
+                  visible.map(a => {
+                      const total = a.totalTasks;
+                      const completed = a.completedTasks;
+                      const inProgress =  a.inProgressTasks;
+                      return (
+                          <Grid size={{xs:12}} key={a.id}>
+                              <Box
+                                  border={1}
+                                  borderColor="divider"
+                                  borderRadius={1}
+                                  p={2}
+                                  display="flex"
+                                  alignItems="center"
+                                  justifyContent="space-between"
+                                  gap={2}
+                                  sx={{ cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' } }}
+                                  role="button"
+                                  tabIndex={0}
+                                  bgcolor={'background.paper'}
+                                  onClick={() => navigate(`/homework/${a.id}`)}
+                                  onKeyDown={(e) => {
+                                      if (e.key === 'Enter' || e.key === ' ') {
+                                          e.preventDefault();
+                                          navigate(`/homework/${a.id}`);
+                                      }
+                                  }}
+                              >
+                                  <Box sx={{ minWidth: 0 }}>
+                                      <Typography variant="subtitle1" noWrap>{a.title}</Typography>
+                                      <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
+                                          <Typography variant="caption" color="text.secondary">• Created {new Date(a.createdAt).toLocaleString()}</Typography>
+                                          {a.dueAt && <Chip size="small" label={`Due ${new Date(a.dueAt).toLocaleDateString()}`}/>}
+                                          {a.overdue && <Chip size="small" color="error" label="Overdue" />}
+                                      </Stack>
+                                      <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                                          {completed == total && (
+                                              <Chip size="small" color="success" label={`Done ${completed}/${total}`} />)}
+                                          {inProgress>0 && <Chip size="small" color="warning" label={`In progress ${inProgress}/${total}`} />}
+                                          {inProgress == 0 && completed != total&& <Chip size="small" color="info" label={`Not started `} />}
+                                      </Stack>
+                                  </Box>
+                              </Box>
+                          </Grid>
+                      );
+                  })
+              ) : (
+                  <Grid size ={{xs: 12}}>
+                      <Box textAlign="center" py={6}>
+                          <Typography variant="h6">No homework yet</Typography>
+                          <Typography variant="body2" color="text.secondary">Please add homework manually or assign from Learning Materials or Lesson Contents </Typography>
+                      </Box>
+                  </Grid>
+              )}
           </Grid>
-        )}
-      </Grid>
+      </Box>
+      {data?.totalPages && data.totalPages > 1 && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 1 }}>
+          <Pagination
+            count={data.totalPages}
+            page={page}
+            onChange={(_, p) => setPage(p)}
+            size="small"
+            color="primary"
+          />
+        </Box>
+      )}
     </Container>
       </Box>
   );

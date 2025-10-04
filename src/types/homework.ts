@@ -35,6 +35,22 @@ export interface AssignmentDto {
   tasks: TaskDto[];
 }
 
+// List item DTO for list endpoints (no tasks array)
+export interface AssignmentListItemDto {
+  id: string;
+  title: string;
+  createdAt: string; // ISO datetime
+  dueAt?: string | null; // ISO datetime
+  totalTasks: number;
+  completedTasks: number;
+  inProgressTasks: number;
+  progressPct: number; // 0..100
+  completed: boolean;
+  overdue: boolean;
+  studentId?: string; // present on tutor list
+  instructions?: string; // may be present when view=full
+}
+
 // Create payloads (frontend helpers)
 export interface CreateAssignmentDto {
   studentId: string;
