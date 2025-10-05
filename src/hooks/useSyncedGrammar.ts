@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { Room } from 'livekit-client';
 import { Material } from '../components/materials/MaterialCard';
 
@@ -16,7 +16,7 @@ interface SyncedGrammarState {
   answers: Record<string, Record<number, string>>;
 }
 
-interface GrammarSyncPacket {
+export interface GrammarSyncPacket {
   type: 'GRAMMAR_SYNC';
   lessonId: string;
   materialId: string;
@@ -27,11 +27,18 @@ interface GrammarSyncPacket {
   value?: string;        // for update action
 }
 
+interface GrammarSyncTransport {
+  lessonId?: string;
+  publish: (packet: GrammarSyncPacket) => void;
+  subscribe: (handler: (packet: GrammarSyncPacket) => void) => () => void;
+}
+
 export const useSyncedGrammar = (
-  room: Room | undefined, 
+  room: Room | undefined,
   isTutor = false,
   workspaceOpen?: boolean,
-  openWorkspace?: () => void
+  openWorkspace?: () => void,
+  transport?: GrammarSyncTransport
 ): UseSyncedGrammarResult => {
   const [state, setState] = useState<SyncedGrammarState>({
     open: false,
@@ -44,10 +51,46 @@ export const useSyncedGrammar = (
   /* --------------------------------------------------------------- */
   /* Helper: publish data                                            */
   /* --------------------------------------------------------------- */
-  const publishData = (packet: GrammarSyncPacket) => {
-    if (!room) return;
-    const data = new TextEncoder().encode(JSON.stringify(packet));
-    room.localParticipant.publishData(data, { reliable: true });
+  const derivedTransport = useMemo<GrammarSyncTransport | undefined>(() => {
+    if (!room) return undefined;
+    const encoder = new TextEncoder();
+    const decoder = new TextDecoder();
+    return {
+      lessonId: room.name ?? '',
+      publish: (packet) => {
+        try {
+          room.localParticipant.publishData(
+            encoder.encode(JSON.stringify(packet)),
+            { reliable: true }
+          );
+        } catch (err) {
+          console.warn('Failed to publish GRAMMAR_SYNC packet', err);
+        }
+      },
+      subscribe: (handler) => {
+        const listener = (data: Uint8Array) => {
+          try {
+            const msg = JSON.parse(decoder.decode(data));
+            if (msg?.type !== 'GRAMMAR_SYNC') return;
+            handler(msg as GrammarSyncPacket);
+          } catch (err) {
+            console.warn('Failed to parse GRAMMAR_SYNC packet', err);
+          }
+        };
+        room.on('dataReceived', listener);
+        return () => {
+          room.off('dataReceived', listener);
+        };
+      },
+    };
+  }, [room]);
+
+  const channel = transport ?? derivedTransport;
+
+  const publishData = (packet: Omit<GrammarSyncPacket, 'lessonId'> & { lessonId?: string }) => {
+    if (!channel) return;
+    const lessonId = packet.lessonId ?? channel.lessonId ?? room?.name ?? '';
+    channel.publish({ ...packet, lessonId });
   };
 
   /* --------------------------------------------------------------- */
@@ -117,53 +160,44 @@ export const useSyncedGrammar = (
   /* Subscribe to incoming data                                      */
   /* --------------------------------------------------------------- */
   useEffect(() => {
-    if (!room) return;
+    if (!channel) return;
 
-    const handleData = (data: Uint8Array) => {
-      try {
-        const msg = JSON.parse(new TextDecoder().decode(data));
-        if (msg.type !== 'GRAMMAR_SYNC') return;
-
-        switch (msg.action) {
-          case 'open':
-            setState({
-              open: true,
-              material: msg.material ?? ({ id: msg.materialId } as Material),
-              answers: {},
-            });
-            // ensure workspace is visible on students
-            if (!workspaceOpen && openWorkspace) openWorkspace();
-            break;
-          case 'update':
-            suppressLocalEvent.current = true;
-            if (msg.itemId && msg.gapIndex !== undefined && msg.value !== undefined) {
-              setState((prev) => ({
-                ...prev,
-                answers: {
-                  ...prev.answers,
-                  [msg.itemId!]: {
-                    ...(prev.answers[msg.itemId!] || {}),
-                    [msg.gapIndex!]: msg.value!
-                  }
+    const unsubscribe = channel.subscribe((msg) => {
+      switch (msg.action) {
+        case 'open':
+          setState({
+            open: true,
+            material: msg.material ?? ({ id: msg.materialId } as Material),
+            answers: {},
+          });
+          if (!workspaceOpen && openWorkspace) openWorkspace();
+          break;
+        case 'update':
+          suppressLocalEvent.current = true;
+          if (msg.itemId && msg.gapIndex !== undefined && msg.value !== undefined) {
+            setState((prev) => ({
+              ...prev,
+              answers: {
+                ...prev.answers,
+                [msg.itemId!]: {
+                  ...(prev.answers[msg.itemId!] || {}),
+                  [msg.gapIndex!]: msg.value!
                 }
-              }));
-            }
-            break;
-          case 'close':
-            suppressLocalEvent.current = true;
-            setState({ open: false, material: null, answers: {} });
-            break;
-        }
-      } catch (e) {
-        console.error('Failed to parse GRAMMAR_SYNC packet', e);
+              }
+            }));
+          }
+          break;
+        case 'close':
+          suppressLocalEvent.current = true;
+          setState({ open: false, material: null, answers: {} });
+          break;
       }
-    };
+    });
 
-    room.on('dataReceived', handleData);
     return () => {
-      room.off('dataReceived', handleData);
+      unsubscribe();
     };
-  }, [room, workspaceOpen, openWorkspace]);
+  }, [channel, workspaceOpen, openWorkspace]);
 
   return {
     state,

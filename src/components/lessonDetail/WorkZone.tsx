@@ -14,7 +14,6 @@ import { useAuth } from '../../context/AuthContext';
 import { UseSyncedVideoResult } from '../../hooks/useSyncedVideo';
 import { UseSyncedGrammarResult } from '../../hooks/useSyncedGrammar';
 import GridViewIcon from '@mui/icons-material/GridView';
-import PresenterBar from './PresenterBar';
 import SyncedContentView from '../../features/lessonContent/student/SyncedContentView';
 import type { useSyncedContent } from '../../hooks/useSyncedContent';
 import { useQuery } from '@tanstack/react-query';
@@ -30,7 +29,7 @@ interface WorkZoneProps {
   useSyncedContent?: UseSyncedContentResult;
   onClose: () => void;
   lessonId: string;
-  room: Room;
+  room?: Room | null;
 }
 
 /**
@@ -198,6 +197,7 @@ const WorkZone: React.FC<WorkZoneProps> = ({useSyncedVideo, useSyncedGrammar, us
               {state.open && state.material && (
                 <SyncedVideoPlayer
                   useSyncedVideo={useSyncedVideo}
+                  showChat={!!room}
                 />
               )}
               {grammarState?.open && grammarState?.material && useSyncedGrammar && (
@@ -215,7 +215,7 @@ const WorkZone: React.FC<WorkZoneProps> = ({useSyncedVideo, useSyncedGrammar, us
                   contentId={useSyncedContent.state.contentId}
                   focusBlockId={useSyncedContent.state.focusBlockId}
                   locked={!!useSyncedContent.state.locked}
-                  contentSync={{ room, isTutor, contentId: useSyncedContent.state.contentId }}
+                  contentSync={room ? { room, isTutor, contentId: useSyncedContent.state.contentId } : undefined}
                 />
               </Box>
             </Box>
