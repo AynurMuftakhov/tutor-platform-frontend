@@ -5,6 +5,7 @@ import type { Material } from '../components/materials/MaterialCard';
 interface GrammarState {
   open: boolean;
   material: Material | null;
+  answers: Record<string, Record<number, string>>;
 }
 
 interface GrammarSyncPacket {
@@ -43,7 +44,7 @@ export function useSyncedGrammarDaily(
   workspaceOpen?: boolean,
   openWorkspace?: () => void,
 ): UseSyncedGrammarDailyResult {
-  const [state, setState] = useState<GrammarState>({ open: false, material: null });
+  const [state, setState] = useState<GrammarState>({ open: false, material: null, answers: {} });
   const suppressLocalEvent = useRef(false);
 
   // Helper: send GRAMMAR_SYNC packets
@@ -63,7 +64,7 @@ export function useSyncedGrammarDaily(
   const open = useCallback(
     (material: Material) => {
       if (!material) return;
-      setState({ open: true, material });
+      setState({ open: true, material, answers: {} });
       if (isTutor) {
         publishData({ type: 'GRAMMAR_SYNC', materialId: material.id, material, action: 'open' });
       }
@@ -79,21 +80,36 @@ export function useSyncedGrammarDaily(
     } else {
       suppressLocalEvent.current = false;
     }
-    setState({ open: false, material: null });
+    setState({ open: false, material: null, answers: {} });
   }, [state.material, publishData]);
 
   // Tutor updates an answer (gap fill); sends update packet
   const updateAnswer = useCallback(
     (itemId: string, gapIndex: number, value: string) => {
       if (!state.material) return;
-      publishData({
-        type: 'GRAMMAR_SYNC',
-        materialId: state.material.id,
-        action: 'update',
-        itemId,
-        gapIndex,
-        value,
-      });
+      setState((prev) => ({
+        ...prev,
+        answers: {
+          ...prev.answers,
+          [itemId]: {
+            ...(prev.answers[itemId] || {}),
+            [gapIndex]: value,
+          },
+        },
+      }));
+
+      if (!suppressLocalEvent.current) {
+        publishData({
+          type: 'GRAMMAR_SYNC',
+          materialId: state.material.id,
+          action: 'update',
+          itemId,
+          gapIndex,
+          value,
+        });
+      } else {
+        suppressLocalEvent.current = false;
+      }
     },
     [state.material, publishData],
   );
@@ -129,24 +145,49 @@ export function useSyncedGrammarDaily(
       switch (packet.action) {
         case 'open':
           suppressLocalEvent.current = true;
-          setState({ open: true, material: packet.material ?? ({ id: packet.materialId } as Material) });
+          setState({ open: true, material: packet.material ?? ({ id: packet.materialId } as Material), answers: {} });
           if (!workspaceOpen && openWorkspace) openWorkspace();
           break;
         case 'close':
           suppressLocalEvent.current = true;
-          setState({ open: false, material: null });
+          setState({ open: false, material: null, answers: {} });
           break;
         case 'update':
-          // For updates, we could update local state if needed; for now, do nothing
+          if (packet.itemId && packet.gapIndex !== undefined && packet.value !== undefined) {
+            suppressLocalEvent.current = true;
+            setState((prev) => ({
+              ...prev,
+              answers: {
+                ...prev.answers,
+                [packet.itemId!]: {
+                  ...(prev.answers[packet.itemId!] || {}),
+                  [packet.gapIndex!]: packet.value!,
+                },
+              },
+            }));
+          }
           break;
         case 'reveal':
-          // Could trigger reveal UI on student; no-op here
+          window.dispatchEvent(
+            new CustomEvent('GRAMMAR_BLOCK_REVEAL', {
+              detail: { contentId: packet.materialId, materialId: packet.materialId },
+            }),
+          );
           break;
         case 'reset':
-          // Could reset local answers; no-op here
+          setState((prev) => ({ ...prev, answers: {} }));
+          window.dispatchEvent(
+            new CustomEvent('GRAMMAR_BLOCK_RESET', {
+              detail: { contentId: packet.materialId, materialId: packet.materialId },
+            }),
+          );
           break;
         case 'start':
-          // Could start a timer; no-op here
+          window.dispatchEvent(
+            new CustomEvent('GRAMMAR_BLOCK_START', {
+              detail: { contentId: packet.materialId, materialId: packet.materialId, timerSec: packet.timerSec },
+            }),
+          );
           break;
       }
     };
