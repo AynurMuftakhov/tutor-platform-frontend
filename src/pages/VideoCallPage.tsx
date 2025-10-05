@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
     Box,
@@ -37,6 +37,9 @@ import RtcErrorBanner from '../components/rtc/RtcErrorBanner';
 import LibraryBooksIcon from "@mui/icons-material/LibraryBooks";
 import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
 import StudentProfileDrawer from "../components/videoCall/StudentProfileDrawer";
+import type { MaterialSyncPacket } from '../hooks/useSyncedVideo';
+import type { GrammarSyncPacket } from '../hooks/useSyncedGrammar';
+import type { WorkspaceSyncPacket } from '../hooks/useWorkspaceSync';
 
 interface VideoCallPageProps {
     identity?: string;
@@ -212,6 +215,87 @@ const DailyCallLayout: React.FC<{
     const isTutor = user?.role === 'tutor';
     const resolvedStudentId = studentId ?? (user?.role === 'student' ? user.id : undefined);
     const effectiveLessonId = lessonId ?? (roomName?.startsWith('lesson-') ? roomName.slice(7) : roomName ?? '');
+    const lessonIdentifier = effectiveLessonId || '';
+
+    const dailyMaterialTransport = useMemo(() => {
+        if (!dailyCall) return undefined;
+        return {
+            lessonId: lessonIdentifier,
+            publish: (packet: MaterialSyncPacket) => {
+                try {
+                    dailyCall.sendAppMessage({
+                        ...packet,
+                        lessonId: packet.lessonId ?? lessonIdentifier,
+                    });
+                } catch (err) {
+                    console.warn('Failed to send MATERIAL_SYNC via Daily', err);
+                }
+            },
+            subscribe: (handler: (packet: MaterialSyncPacket) => void) => {
+                const listener = (event: DailyEventObjectAppMessage) => {
+                    const data = event?.data as MaterialSyncPacket | undefined;
+                    if (data?.type !== 'MATERIAL_SYNC') return;
+                    handler(data);
+                };
+                dailyCall.on('app-message', listener);
+                return () => {
+                    dailyCall.off('app-message', listener);
+                };
+            },
+        };
+    }, [dailyCall, lessonIdentifier]);
+
+    const dailyGrammarTransport = useMemo(() => {
+        if (!dailyCall) return undefined;
+        return {
+            lessonId: lessonIdentifier,
+            publish: (packet: GrammarSyncPacket) => {
+                try {
+                    dailyCall.sendAppMessage({
+                        ...packet,
+                        lessonId: packet.lessonId ?? lessonIdentifier,
+                    });
+                } catch (err) {
+                    console.warn('Failed to send GRAMMAR_SYNC via Daily', err);
+                }
+            },
+            subscribe: (handler: (packet: GrammarSyncPacket) => void) => {
+                const listener = (event: DailyEventObjectAppMessage) => {
+                    const data = event?.data as GrammarSyncPacket | undefined;
+                    if (data?.type !== 'GRAMMAR_SYNC') return;
+                    handler(data);
+                };
+                dailyCall.on('app-message', listener);
+                return () => {
+                    dailyCall.off('app-message', listener);
+                };
+            },
+        };
+    }, [dailyCall, lessonIdentifier]);
+
+    const dailyWorkspaceTransport = useMemo(() => {
+        if (!dailyCall) return undefined;
+        return {
+            publish: (packet: WorkspaceSyncPacket) => {
+                try {
+                    dailyCall.sendAppMessage(packet);
+                } catch (err) {
+                    console.warn('Failed to send WORKSPACE_SYNC via Daily', err);
+                }
+            },
+            subscribe: (handler: (packet: WorkspaceSyncPacket) => void) => {
+                const listener = (event: DailyEventObjectAppMessage) => {
+                    const data = event?.data as WorkspaceSyncPacket | undefined;
+                    if (data?.type !== 'WORKSPACE_SYNC') return;
+                    handler(data);
+                };
+                dailyCall.on('app-message', listener);
+                return () => {
+                    dailyCall.off('app-message', listener);
+                };
+            },
+        };
+    }, [dailyCall]);
     // Embedded StudentPage tabs when used inside StudentProfileDrawer (Overview hidden):
     const TAB_HOMEWORK = 0;
     const TAB_DICTIONARY = 1;
@@ -219,12 +303,14 @@ const DailyCallLayout: React.FC<{
     // Split view for workspace (tutor side)
     const [workspaceOpen, openWorkspace, closeWorkspace, splitRatio, setSplitRatio] = useWorkspaceToggle();
 
-    const syncedVideo = useSyncedVideo(undefined, isTutor, workspaceOpen, openWorkspace);
-    const syncedGrammar = useSyncedGrammar(undefined, isTutor, workspaceOpen, openWorkspace);
+    const syncedVideo = useSyncedVideo(undefined, isTutor, workspaceOpen, openWorkspace, dailyMaterialTransport);
+    const syncedGrammar = useSyncedGrammar(undefined, isTutor, workspaceOpen, openWorkspace, dailyGrammarTransport);
     const syncedContent = useSyncedContent(undefined, isTutor);
 
     const theme = useTheme();
     const isSmallScreen = useMediaQuery(theme.breakpoints.down('md'));
+
+    useWorkspaceSync(undefined, isTutor, workspaceOpen, openWorkspace, closeWorkspace, dailyWorkspaceTransport);
 
     useEffect(() => {
         if (!isTutor) {

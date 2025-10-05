@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { Room } from 'livekit-client';
 import { Material } from '../components/materials/MaterialCard';
 import ReactPlayer from "react-player";
@@ -22,7 +22,7 @@ interface SyncedVideoState {
   currentTime: number;
 }
 
-interface MaterialSyncPacket {
+export interface MaterialSyncPacket {
   type: 'MATERIAL_SYNC';
   lessonId: string;
   materialId: string;
@@ -31,11 +31,18 @@ interface MaterialSyncPacket {
   time: number;
 }
 
+interface MaterialSyncTransport {
+  lessonId?: string;
+  publish: (packet: MaterialSyncPacket) => void;
+  subscribe: (handler: (packet: MaterialSyncPacket) => void) => () => void;
+}
+
 export const useSyncedVideo = (
-  room: Room | undefined, 
+  room: Room | undefined,
   isTutor = false,
   workspaceOpen?: boolean,
-  openWorkspace?: () => void
+  openWorkspace?: () => void,
+  transport?: MaterialSyncTransport
 ): UseSyncedVideoResult => {
   const [state, setState] = useState<SyncedVideoState>({
     open: false,
@@ -50,10 +57,46 @@ export const useSyncedVideo = (
   /* --------------------------------------------------------------- */
   /* Helper: publish data                                            */
   /* --------------------------------------------------------------- */
-  const publishData = (packet: MaterialSyncPacket) => {
-    if (!room) return;
-    const data = new TextEncoder().encode(JSON.stringify(packet));
-    room.localParticipant.publishData(data, { reliable: true });
+  const derivedTransport = useMemo<MaterialSyncTransport | undefined>(() => {
+    if (!room) return undefined;
+    const encoder = new TextEncoder();
+    const decoder = new TextDecoder();
+    return {
+      lessonId: room.name ?? '',
+      publish: (packet) => {
+        try {
+          room.localParticipant.publishData(
+            encoder.encode(JSON.stringify(packet)),
+            { reliable: true }
+          );
+        } catch (err) {
+          console.warn('Failed to publish MATERIAL_SYNC packet', err);
+        }
+      },
+      subscribe: (handler) => {
+        const listener = (data: Uint8Array) => {
+          try {
+            const msg = JSON.parse(decoder.decode(data));
+            if (msg?.type !== 'MATERIAL_SYNC') return;
+            handler(msg as MaterialSyncPacket);
+          } catch (err) {
+            console.warn('Failed to parse MATERIAL_SYNC packet', err);
+          }
+        };
+        room.on('dataReceived', listener);
+        return () => {
+          room.off('dataReceived', listener);
+        };
+      },
+    };
+  }, [room]);
+
+  const channel = transport ?? derivedTransport;
+
+  const publishData = (packet: Omit<MaterialSyncPacket, 'lessonId'> & { lessonId?: string }) => {
+    if (!channel) return;
+    const lessonId = packet.lessonId ?? channel.lessonId ?? room?.name ?? '';
+    channel.publish({ ...packet, lessonId });
   };
 
   /* --------------------------------------------------------------- */
@@ -67,7 +110,6 @@ export const useSyncedVideo = (
     if (isTutor) {
       publishData({
         type: 'MATERIAL_SYNC',
-        lessonId: room?.name ?? '',
         materialId: material.id,
         material,          // send the whole material so students get sourceUrl
         action: 'open',
@@ -82,7 +124,6 @@ export const useSyncedVideo = (
     if (!suppressLocalEvent.current) {
       publishData({
         type: 'MATERIAL_SYNC',
-        lessonId: room?.name ?? '',
         materialId: state.material.id,
         action: 'play',
         time: playerRef.current?.getCurrentTime() || 0,
@@ -98,7 +139,6 @@ export const useSyncedVideo = (
     if (!suppressLocalEvent.current) {
       publishData({
         type: 'MATERIAL_SYNC',
-        lessonId: room?.name ?? '',
         materialId: state.material.id,
         action: 'pause',
         time: playerRef.current?.getCurrentTime() || 0,
@@ -116,7 +156,6 @@ export const useSyncedVideo = (
     if (!suppressLocalEvent.current) {
       publishData({
         type: 'MATERIAL_SYNC',
-        lessonId: room?.name ?? '',
         materialId: state.material.id,
         action: 'seek',
         time,
@@ -131,7 +170,6 @@ export const useSyncedVideo = (
     if (!suppressLocalEvent.current) {
       publishData({
         type: 'MATERIAL_SYNC',
-        lessonId: room?.name ?? '',
         materialId: state.material.id,
         action: 'close',
         time: 0,
@@ -146,53 +184,44 @@ export const useSyncedVideo = (
   /* Subscribe to incoming data                                      */
   /* --------------------------------------------------------------- */
   useEffect(() => {
-    if (!room) return;
+    if (!channel) return;
 
-    const handleData = (data: Uint8Array) => {
-      try {
-        const msg: MaterialSyncPacket = JSON.parse(new TextDecoder().decode(data));
-        if (msg.type !== 'MATERIAL_SYNC') return;
-
-        switch (msg.action) {
-          case 'open':
-            setState({
-              open: true,
-              material: msg.material ?? ({ id: msg.materialId } as Material),
-              isPlaying: false,
-              currentTime: 0,
-            });
-            // ensure workspace is visible on students
-            if (!workspaceOpen && openWorkspace) openWorkspace();
-            break;
-          case 'play':
-            suppressLocalEvent.current = true;
-            playerRef.current?.seekTo(msg.time, 'seconds');
-            setState((p) => ({ ...p, isPlaying: true, currentTime: msg.time }));
-            break;
-          case 'pause':
-            suppressLocalEvent.current = true;
-            setState((p) => ({ ...p, isPlaying: false, currentTime: msg.time }));
-            break;
-          case 'seek':
-            suppressLocalEvent.current = true;
-            playerRef.current?.seekTo(msg.time, 'seconds');
-            setState((p) => ({ ...p, currentTime: msg.time }));
-            break;
-          case 'close':
-            suppressLocalEvent.current = true;
-            setState({ open: false, material: null, isPlaying: false, currentTime: 0 });
-            break;
-        }
-      } catch (e) {
-        console.error('Failed to parse MATERIAL_SYNC packet', e);
+    const unsubscribe = channel.subscribe((msg) => {
+      switch (msg.action) {
+        case 'open':
+          setState({
+            open: true,
+            material: msg.material ?? ({ id: msg.materialId } as Material),
+            isPlaying: false,
+            currentTime: 0,
+          });
+          if (!workspaceOpen && openWorkspace) openWorkspace();
+          break;
+        case 'play':
+          suppressLocalEvent.current = true;
+          playerRef.current?.seekTo(msg.time, 'seconds');
+          setState((p) => ({ ...p, isPlaying: true, currentTime: msg.time }));
+          break;
+        case 'pause':
+          suppressLocalEvent.current = true;
+          setState((p) => ({ ...p, isPlaying: false, currentTime: msg.time }));
+          break;
+        case 'seek':
+          suppressLocalEvent.current = true;
+          playerRef.current?.seekTo(msg.time, 'seconds');
+          setState((p) => ({ ...p, currentTime: msg.time }));
+          break;
+        case 'close':
+          suppressLocalEvent.current = true;
+          setState({ open: false, material: null, isPlaying: false, currentTime: 0 });
+          break;
       }
-    };
+    });
 
-    room.on('dataReceived', handleData);
     return () => {
-      room.off('dataReceived', handleData);
+      unsubscribe();
     };
-  }, [room, workspaceOpen, openWorkspace]);
+  }, [channel, workspaceOpen, openWorkspace]);
 
   // Pause locally without broadcasting
   const pauseLocally = () => {
