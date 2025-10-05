@@ -7,11 +7,7 @@ import {
     CircularProgress,
     IconButton,
     Tooltip,
-    Alert,
-    FormControlLabel,
-    Switch,
-    Chip,
-    Divider
+    Alert
 } from '@mui/material';
 import {LiveKitRoom, VideoConference, useRoomContext} from '@livekit/components-react';
 import MicIcon from '@mui/icons-material/Mic';
@@ -41,8 +37,6 @@ import RtcErrorBanner from '../components/rtc/RtcErrorBanner';
 import LibraryBooksIcon from "@mui/icons-material/LibraryBooks";
 import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
 import StudentProfileDrawer from "../components/videoCall/StudentProfileDrawer";
-import CloseIcon from "@mui/icons-material/Close";
-import StudentPage from "../pages/StudentPage";
 
 interface VideoCallPageProps {
     identity?: string;
@@ -166,6 +160,7 @@ const VideoCallPage: React.FC<VideoCallPageProps> = (props) => {
             <DailyCallLayout
                 roomName={roomName ?? undefined}
                 studentId={studentId ?? undefined}
+                lessonId={lessonId ?? undefined}
                 onLeave={handleLeave}
             />
         );
@@ -190,8 +185,9 @@ const VideoCallPage: React.FC<VideoCallPageProps> = (props) => {
 const DailyCallLayout: React.FC<{
     roomName?: string;
     studentId?: string;
+    lessonId?: string;
     onLeave: () => void;
-}> = ({ roomName, studentId, onLeave }) => {
+}> = ({ roomName, studentId, lessonId, onLeave }) => {
     const { user } = useAuth();
     const {
         failureMessage,
@@ -215,15 +211,26 @@ const DailyCallLayout: React.FC<{
 
     const isTutor = user?.role === 'tutor';
     const resolvedStudentId = studentId ?? (user?.role === 'student' ? user.id : undefined);
+    const effectiveLessonId = lessonId ?? (roomName?.startsWith('lesson-') ? roomName.slice(7) : roomName ?? '');
     // Embedded StudentPage tabs when used inside StudentProfileDrawer (Overview hidden):
     const TAB_HOMEWORK = 0;
     const TAB_DICTIONARY = 1;
 
-    // Split view for Student panel (tutor side) – reuse workspace pattern
+    // Split view for workspace (tutor side)
     const [workspaceOpen, openWorkspace, closeWorkspace, splitRatio, setSplitRatio] = useWorkspaceToggle();
+
+    const syncedVideo = useSyncedVideo(undefined, isTutor, workspaceOpen, openWorkspace);
+    const syncedGrammar = useSyncedGrammar(undefined, isTutor, workspaceOpen, openWorkspace);
+    const syncedContent = useSyncedContent(undefined, isTutor);
 
     const theme = useTheme();
     const isSmallScreen = useMediaQuery(theme.breakpoints.down('md'));
+
+    useEffect(() => {
+        if (!isTutor) {
+            closeWorkspace();
+        }
+    }, [isTutor, closeWorkspace]);
 
     const generateDirectLinkDaily = useCallback(() => {
         const baseUrl = window.location.origin;
@@ -258,8 +265,9 @@ const DailyCallLayout: React.FC<{
     const handleStudentShareToggle = (value: boolean) => {
         setShareStudentProfile(value);
         if (value) {
-            // ensure split view is open so teacher sees the panel too
-            openWorkspace();
+            if (!studentProfileOpen) {
+                setStudentProfileOpen(true);
+            }
             sendStudentPanelState(true);
         } else {
             sendStudentPanelState(false);
@@ -364,18 +372,9 @@ const DailyCallLayout: React.FC<{
         }
     }, [shareStudentProfile, dailyCall, sendStudentPanelState, isTutor]);
 
-    // Student side: mirror shared panel state into split view
-    useEffect(() => {
-        if (isTutor) return;
-        if (sharedProfileOpen) {
-            openWorkspace();
-        } else {
-            closeWorkspace();
-        }
-    }, [isTutor, sharedProfileOpen, openWorkspace, closeWorkspace]);
-
     return (
-        <Box sx={{ width: '100%', height: '100vh', overflow: 'hidden', position: 'relative' }}>
+        <WorkspaceProvider>
+            <Box sx={{ width: '100%', height: '100vh', overflow: 'hidden', position: 'relative' }}>
             {!!failureMessage && (
                 <RtcErrorBanner
                     message={failureMessage}
@@ -416,13 +415,33 @@ const DailyCallLayout: React.FC<{
                     )}
                 </Box>
             )}
+            {!workspaceOpen && isTutor && (
+                <Tooltip title="Open materials">
+                    <IconButton
+                        onClick={openWorkspace}
+                        sx={{
+                            position: 'absolute',
+                            top: 110,
+                            left: 8,
+                            right: 'auto',
+                            zIndex: 1000,
+                            bgcolor: 'primary.main',
+                            color: 'white',
+                            '&:hover': { bgcolor: 'primary.dark' },
+                        }}
+                        aria-label="Open workspace"
+                    >
+                        <LibraryBooksIcon />
+                    </IconButton>
+                </Tooltip>
+            )}
             {isTutor && studentId && (
                 <Tooltip title={shareStudentProfile ? 'Sharing student profile' : 'Open student profile'}>
                     <IconButton
-                        onClick={() => { openWorkspace(); }}
+                        onClick={() => setStudentProfileOpen(true)}
                         sx={{
                             position: 'absolute',
-                            top: 100,
+                            top: 172,
                             left: 8,
                             right: 'auto',
                             zIndex: 1000,
@@ -438,55 +457,72 @@ const DailyCallLayout: React.FC<{
                     </IconButton>
                 </Tooltip>
             )}
-
-            <Box sx={{ display: 'grid', gridTemplateColumns: !workspaceOpen || isSmallScreen ? '100%' : `${splitRatio}% 6px 1fr`, gridTemplateRows: '100%', height: '100%' }}>
-                            <Box sx={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
-                                <RtcHost onLeft={onLeave} />
-                            </Box>
-                            {workspaceOpen && !isSmallScreen && (
-                                <DraggableDivider onDrag={setSplitRatio} />
-                            )}
-                            {workspaceOpen && (
-                                <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', borderLeft: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
-                                        <Box>
-                                            <Typography variant="overline" sx={{ letterSpacing: 1, color: 'primary.main' }}>Student insights</Typography>
-                                            <Typography variant="h6" sx={{ fontWeight: 700 }}>Student profile</Typography>
-                                        </Box>
-                                        <Box sx={{ display:'flex', alignItems:'center', gap:1 }}>
-                                            {isTutor ? (
-                                                <>
-                                                    <FormControlLabel control={<Switch size="small" checked={shareStudentProfile} onChange={(e)=>handleStudentShareToggle(e.target.checked)} />} label="Show to student" sx={{ m:0, '& .MuiFormControlLabel-label': { fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.6 } }} />
-                                                    {shareStudentProfile && (<Chip size="small" color="success" label="Sharing" sx={{ fontWeight: 600 }} />)}
-                                                </>
-                                            ) : (
-                                                sharedProfileBy ? <Chip size="small" color="primary" variant="outlined" label={`Shared by ${sharedProfileBy}`} sx={{ fontWeight: 600 }} /> : null
-                                            )}
-                                            <IconButton onClick={()=>{ handleStudentDrawerClose(); closeWorkspace(); }} size="small"><CloseIcon /></IconButton>
-                                        </Box>
-                                    </Box>
-                                    <Box sx={{ flex:1, overflow:'auto', p: 1.5 }}>
-                                        {(isTutor ? !!studentId : !!resolvedStudentId) ? (
-                                            <StudentPage
-                                                studentIdOverride={(isTutor ? studentId : resolvedStudentId) as string}
-                                                embedded
-                                                hideOverviewTab
-                                                activeTabOverride={studentProfileTab}
-                                                onTabChange={handleStudentProfileTabChange}
-                                                onWordOpen={isTutor ? sendWordOpenToStudent : undefined}
-                                                onEmbeddedAssignmentOpen={isTutor ? sendAssignmentOpenToStudent : undefined}
-                                            />
-                                        ) : (
-                                            <Box sx={{ height:'100%', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                                                <Typography color="text.secondary">No student selected.</Typography>
-                                            </Box>
-                                        )}
-                                    </Box>
-                                </Box>
-                            )}
-                        </Box>
-
+            <Box
+                sx={{
+                    display: 'grid',
+                    gridTemplateColumns: !workspaceOpen || isSmallScreen ? '100%' : `${splitRatio}% 6px 1fr`,
+                    gridTemplateRows: '100%',
+                    height: '100%',
+                }}
+            >
+                <Box sx={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
+                    <RtcHost onLeft={onLeave} />
+                </Box>
+                {workspaceOpen && !isSmallScreen && <DraggableDivider onDrag={setSplitRatio} />}
+                {workspaceOpen && (
+                    <Box
+                        sx={{
+                            height: '100%',
+                            overflow: 'hidden',
+                        }}
+                    >
+                        <WorkZone
+                            useSyncedVideo={syncedVideo}
+                            useSyncedGrammar={syncedGrammar}
+                            useSyncedContent={syncedContent}
+                            onClose={closeWorkspace}
+                            lessonId={effectiveLessonId}
+                            room={null}
+                        />
+                    </Box>
+                )}
+            </Box>
+            {isTutor && studentId && (
+                <StudentProfileDrawer
+                    open={studentProfileOpen}
+                    onClose={handleStudentDrawerClose}
+                    studentId={studentId}
+                    showShareToggle
+                    shareEnabled={shareStudentProfile}
+                    onShareChange={handleStudentShareToggle}
+                    activeTab={studentProfileTab}
+                    onTabChange={handleStudentProfileTabChange}
+                    onEmbeddedAssignmentOpen={sendAssignmentOpenToStudent}
+                    onWordOpen={sendWordOpenToStudent}
+                />
+            )}
+            {!isTutor && resolvedStudentId && (
+                <StudentProfileDrawer
+                    open={sharedProfileOpen}
+                    onClose={() => {
+                        setSharedProfileOpen(false);
+                        setSharedProfileBy(undefined);
+                    }}
+                    studentId={resolvedStudentId}
+                    activeTab={sharedProfileTab}
+                    sharedBy={sharedProfileBy}
+                    openWordIdCommand={openWordIdCmd}
+                    onConsumeOpenWordCommand={() => setOpenWordIdCmd(null)}
+                    openAssignmentIdCommand={openAssignmentIdCmd}
+                    openTaskIdCommand={openTaskIdCmd}
+                    onConsumeOpenAssignmentCommand={() => {
+                        setOpenAssignmentIdCmd(null);
+                        setOpenTaskIdCmd(null);
+                    }}
+                />
+            )}
         </Box>
+        </WorkspaceProvider>
     );
 };
 
