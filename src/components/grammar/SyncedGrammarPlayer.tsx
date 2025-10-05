@@ -8,9 +8,10 @@ import { useGrammarItems, useScoreGrammar } from '../../hooks/useGrammarItems';
 import { GrammarScoreResponse } from '../../services/api';
 import { UseSyncedGrammarResult } from '../../hooks/useSyncedGrammar';
 import { StyledChat } from '../lessonDetail/StyledChat';
+import {UseSyncedGrammarDailyResult} from "../../hooks/useSyncedGrammarDaily";
 
 interface SyncedGrammarPlayerProps {
-  useSyncedGrammar: UseSyncedGrammarResult;
+  useSyncedGrammar: UseSyncedGrammarDailyResult;
 }
 
 const SyncedGrammarPlayer: React.FC<SyncedGrammarPlayerProps> = ({ useSyncedGrammar }) => {

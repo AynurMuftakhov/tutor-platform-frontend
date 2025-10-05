@@ -11,22 +11,20 @@ import SyncedGrammarPlayer from '../grammar/SyncedGrammarPlayer';
 import LessonMaterialsTab from './LessonMaterialsTab';
 import { useWorkspace, WorkspaceTool } from '../../context/WorkspaceContext';
 import { useAuth } from '../../context/AuthContext';
-import { UseSyncedVideoResult } from '../../hooks/useSyncedVideo';
-import { UseSyncedGrammarResult } from '../../hooks/useSyncedGrammar';
 import GridViewIcon from '@mui/icons-material/GridView';
-import PresenterBar from './PresenterBar';
 import SyncedContentView from '../../features/lessonContent/student/SyncedContentView';
-import type { useSyncedContent } from '../../hooks/useSyncedContent';
 import { useQuery } from '@tanstack/react-query';
 import { getLessonContents } from '../../services/api';
-
-type UseSyncedContentResult = ReturnType<typeof useSyncedContent>;
-
 import type { Room } from 'livekit-client';
+import {SyncedVideoDailyResult} from "../../hooks/useSyncedVideoDaily";
+import {UseSyncedGrammarDailyResult} from "../../hooks/useSyncedGrammarDaily";
+import {useSyncedContentDaily} from "../../hooks/useSyncedContentDaily";
+
+type UseSyncedContentResult = ReturnType<typeof useSyncedContentDaily>;
 
 interface WorkZoneProps {
-  useSyncedVideo: UseSyncedVideoResult;
-  useSyncedGrammar?: UseSyncedGrammarResult;
+  useSyncedVideo: SyncedVideoDailyResult;
+  useSyncedGrammar?: UseSyncedGrammarDailyResult;
   useSyncedContent?: UseSyncedContentResult;
   onClose: () => void;
   lessonId: string;
@@ -221,22 +219,6 @@ const WorkZone: React.FC<WorkZoneProps> = ({useSyncedVideo, useSyncedGrammar, us
             </Box>
           )}
 
-          {currentTool === 'whiteboard' && (
-            <Box
-              sx={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                height: '100%',
-                p: 3,
-              }}
-            >
-              <Typography variant="body1" color="text.secondary" align="center">
-                Whiteboard feature coming soon.
-              </Typography>
-            </Box>
-          )}
         </Box>
       </Box>
     </Box>
