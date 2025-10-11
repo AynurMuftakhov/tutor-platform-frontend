@@ -40,7 +40,8 @@ export default function DailyHost({ url, token, onLeft }: Props) {
 
   // Single callFrame instance for this host
   const callFrameRef = useRef<DailyCall | null>(null);
-  const joinedForUrlRef = useRef<string | undefined>(undefined);
+  const joiningRef = useRef<Promise<void> | null>(null);
+  const joinedForKeyRef = useRef<string | undefined>(undefined);
 
   // Create frame once when container becomes available. No re-creations.
   useEffect(() => {
@@ -58,7 +59,7 @@ export default function DailyHost({ url, token, onLeft }: Props) {
     };
     const onLeftHandler = async () => {
       log('left-meeting event');
-      try { await onLeftRef.current?.(); } catch {}
+      try { await onLeftRef.current?.(); } catch { /* no-op */ }
     };
 
     cf.on('error', onError);
@@ -66,11 +67,11 @@ export default function DailyHost({ url, token, onLeft }: Props) {
 
     return () => {
       // detach listeners and destroy if the container disappears before unmount
-      try { cf.off('error', onError); } catch {}
-      try { cf.off('left-meeting', onLeftHandler); } catch {}
-      try { cf.destroy(); } catch {}
+      try { cf.off('error', onError); } catch {/* no-op */}
+      try { cf.off('left-meeting', onLeftHandler); } catch{/* no-op */}
+      try { cf.destroy(); } catch {/* no-op */}
       callFrameRef.current = null;
-      joinedForUrlRef.current = undefined;
+      joinedForKeyRef.current = undefined;
       registerDailyCall(null);
       log('callFrame early-destroy (container lost)');
     };
@@ -80,18 +81,35 @@ export default function DailyHost({ url, token, onLeft }: Props) {
   useEffect(() => {
     const cf = callFrameRef.current;
     const parentReady = !!parentElRef.current;
-    log('join effect check', { hasCF: !!cf, parentReady, joinedForUrl: joinedForUrlRef.current, nextUrl: url, tokenPresent: !!token });
+    const key = `${url}|${token ?? ''}`;
+    log('join effect check', { hasCF: !!cf, parentReady, joinedForKey: joinedForKeyRef.current, key, tokenPresent: !!token });
 
     if (!cf || !parentReady) return;
-    if (joinedForUrlRef.current === url) { log('join skipped: already joined for url'); return; }
+    if (!token) { log('join postponed: token not yet available'); return; }
+    if (joinedForKeyRef.current === key) {
+      log('join skipped: already joined for this url+token');
+      return;
+    }
+    if (joiningRef.current) {
+      log('join in-flight; skipping');
+      return;
+    }
 
-    joinedForUrlRef.current = url;
-    cf.join({ url, token })
-      .then(() => log('join resolved'))
-      .catch((e: any) => {
+    const doJoin = async () => {
+      try {
+        await cf.join({ url, token });
+        joinedForKeyRef.current = key;
+        const me = cf.participants().local;
+        log('join resolved; owner=', me?.owner, 'canAdmin=', me?.permissions?.canAdmin);
+      } catch (e: any) {
         console.error('[RTC-DAILY]', { hostId: hostIdRef.current }, 'join error', e);
         setFailureRef.current?.(e?.errorMsg || 'Call error');
-      });
+      } finally {
+        joiningRef.current = null;
+      }
+    };
+
+    joiningRef.current = doJoin();
   }, [url, token]);
 
   // Unmount-only cleanup: leave and destroy the frame
@@ -103,10 +121,10 @@ export default function DailyHost({ url, token, onLeft }: Props) {
       try {
         cf.leave().finally(() => cf.destroy());
       } catch {
-        try { cf.destroy(); } catch {}
+        try { cf.destroy(); } catch {/* no-op */}
       }
       callFrameRef.current = null;
-      joinedForUrlRef.current = undefined;
+      joinedForKeyRef.current = undefined;
       registerDailyCall(null);
     };
   }, [registerDailyCall]);

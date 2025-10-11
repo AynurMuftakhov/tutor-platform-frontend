@@ -12,7 +12,7 @@ const RtcHost: React.FC<{ onLeft?: () => void | Promise<void> }> = ({ onLeft }) 
   const { provider, effectiveProvider, providerReady, join } = useRtc();
 
   const currentProvider = effectiveProvider ?? provider;
-  const canRenderDaily = providerReady && currentProvider === 'daily' && !!join?.url;
+  const canRenderDaily = providerReady && currentProvider === 'daily' && !!join?.url  && join?.token != undefined;
 
   if (!canRenderDaily) return null;
 
