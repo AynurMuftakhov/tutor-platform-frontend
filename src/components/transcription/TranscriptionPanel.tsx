@@ -12,7 +12,7 @@ import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
 import { DailyProvider, useTranscription } from '@daily-co/daily-react';
 import { useFocusWords } from '../../context/FocusWordsContext';
 import { useSnackbar } from 'notistack';
-import { buildWordsRegex, renderHighlighted, collectHitsFromRaw, extractSegmentKey, mergeOrAppendSegment } from './highlight';
+import { collectHitsFromRaw, extractSegmentKey, mergeOrAppendSegment, renderHighlightedByStem } from './highlight';
 import type { TranscriptSegment } from './types';
 import { useAuth } from '../../context/AuthContext';
 import HomeworkWordPicker from './HomeworkWordPicker';
@@ -160,9 +160,31 @@ function TranscriptionPanelInner({
     setRawLogs((prev) => [`${ts}  ${msg}`, ...prev].slice(0, 200));
   };
 
-  // Build regex for highlighting using FocusWords
+  // Focus words come from context; used for stem-aware highlighting
   const { words: focusWords, meta: focusMeta, setWords: setFocusWords, clear: clearFocusWords } = useFocusWords();
-  const rx = useMemo(() => buildWordsRegex(focusWords), [focusWords]);
+  const lastBroadcastRef = useRef<string>('');
+
+  useEffect(() => {
+    lastBroadcastRef.current = '';
+  }, [call]);
+
+  useEffect(() => {
+    if (!isTutor) return;
+    if (!call || typeof call.sendAppMessage !== 'function') return;
+    const payload = {
+      t: 'FOCUS_WORDS',
+      words: focusWords,
+      meta: focusMeta,
+    };
+    const serialized = JSON.stringify(payload);
+    if (lastBroadcastRef.current === serialized) return;
+    lastBroadcastRef.current = serialized;
+    try {
+      call.sendAppMessage(payload);
+    } catch (err) {
+      console.warn('Failed to broadcast focus words', err);
+    }
+  }, [call, focusWords, focusMeta, isTutor]);
 
     // Seed focus words from props.homeworkWords if context is empty
     useEffect(() => {
@@ -664,7 +686,7 @@ function TranscriptionPanelInner({
                               }),
                           }}
                       >
-                          {renderHighlighted(p.text, rx)}
+                          {renderHighlightedByStem(p.text, focusWords)}
                       </Typography>
                   ))}
               </Box>

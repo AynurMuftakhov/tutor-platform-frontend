@@ -1,29 +1,55 @@
 import React from 'react';
 import { TranscriptSegment, TranscriptWordHit } from './types';
+import stem from 'wink-porter2-stemmer';
 
 export function escapeRegExp(s: string) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-export function buildWordsRegex(words: string[]) {
+const WORD_RX = /\b[\p{L}\p{M}’']+\b/gu;
+
+function toStemSet(words: string[]): Set<string> {
+    const out = new Set<string>();
+    for (const w of words) {
+        if (!w) continue;
+        const base = String(w).toLowerCase().trim().replace(/’s$|'s$/,'');
+        if (!base) continue;
+        out.add(stem(base));
+    }
+    return out;
+}
+
+export function buildWordsRegex(words: string[]): RegExp | null {
   const uniq = Array.from(new Set(words.map(w => w.toLowerCase().trim()).filter(Boolean)));
-  if (!uniq.length) return null as unknown as RegExp | null;
+  if (!uniq.length) return null;
   const body = uniq.map(escapeRegExp).join("|");
   return new RegExp(`\\b(${body})\\b`, "gi");
 }
 
-export function renderHighlighted(text: string, rx: RegExp | null) {
-  if (!rx) return text as unknown as React.ReactNode;
-  const parts: Array<string | React.JSX.Element> = [];
-  let last = 0;
-  text.replace(rx, (m, _g1, idx) => {
-    if (typeof idx === 'number' && idx > last) parts.push(text.slice(last, idx));
-    parts.push(<mark key={`${idx}-${m}`}>{m}</mark>);
-    if (typeof idx === 'number') last = idx + m.length;
-    return m;
-  });
-  if (last < text.length) parts.push(text.slice(last));
-  return <>{parts}</>;
+
+export function renderHighlightedByStem(text: string, focusWords: string[]) {
+    const targetStems = toStemSet(focusWords);
+    if (targetStems.size === 0) return text as unknown as React.ReactNode;
+
+    const nodes: React.ReactNode[] = [];
+    let last = 0;
+    WORD_RX.lastIndex = 0;
+    let m: RegExpExecArray | null;
+
+    while ((m = WORD_RX.exec(text))) {
+        const start = m.index;
+        const end = start + m[0].length;
+        const token = m[0];
+        const tokenStem = stem(token.toLowerCase().replace(/’s$|'s$/,''));
+
+        if (targetStems.has(tokenStem)) {
+            if (start > last) nodes.push(text.slice(last, start));
+            nodes.push(<mark key={`${start}-${end}`}>{token}</mark>);
+            last = end;
+        }
+    }
+    if (last < text.length) nodes.push(text.slice(last));
+    return <>{nodes}</>;
 }
 
 export function extractSegmentKey(ev: any): string {
@@ -35,26 +61,53 @@ export function extractSegmentKey(ev: any): string {
   return `${s}-${e}`;
 }
 
-export function collectHitsFromRaw(raw: any, words: string[], fallbackText: string): TranscriptWordHit[] {
-  const hits: TranscriptWordHit[] = [];
-  const set = new Set(words.map(w => w.toLowerCase()));
+export function collectHitsFromRaw(
+    raw: any,
+    words: string[],
+    fallbackText: string
+): TranscriptWordHit[] {
+    const hits: TranscriptWordHit[] = [];
+    if (!Array.isArray(words) || words.length === 0) return hits;
 
-  const matches = raw?.matches ?? raw?.search ?? [];
-  for (const m of matches) {
-    const w = String((m as any)?.text ?? (m as any)?.word ?? "").toLowerCase();
-    if (set.has(w)) hits.push({ word: w, startMs: (m as any)?.start, endMs: (m as any)?.end, confidence: (m as any)?.confidence });
-  }
+    const targetStems = toStemSet(words);
+    const foundStems = new Set<string>();
 
-  if (!hits.length && fallbackText) {
-    const rx = buildWordsRegex(words);
-    if (rx) {
-      fallbackText.replace(rx, (m) => {
-        hits.push({ word: m.toLowerCase() });
-        return m;
-      });
+    const matches = raw?.matches ?? raw?.search ?? [];
+    if (Array.isArray(matches)) {
+        for (const m of matches) {
+            const token = String((m as any)?.text ?? (m as any)?.word ?? '').toLowerCase();
+            if (!token) continue;
+            const tokenStem = stem(token.replace(/’s$|'s$/,''));
+            if (targetStems.has(tokenStem)) {
+                hits.push({
+                    word: token,
+                    startMs: (m as any)?.start,
+                    endMs: (m as any)?.end,
+                    confidence: (m as any)?.confidence,
+                });
+                foundStems.add(tokenStem);
+            }
+        }
     }
-  }
-  return hits;
+
+    const missingStems = new Set<string>();
+    for (const s of targetStems) {
+        if (!foundStems.has(s)) missingStems.add(s);
+    }
+
+    if (missingStems.size > 0 && fallbackText) {
+        let m: RegExpExecArray | null;
+        WORD_RX.lastIndex = 0;
+        while ((m = WORD_RX.exec(fallbackText))) {
+            const token = m[0].toLowerCase();
+            const tokenStem = stem(token.replace(/’s$|'s$/,''));
+            if (missingStems.has(tokenStem)) {
+                hits.push({ word: token });
+            }
+        }
+    }
+
+    return hits;
 }
 
 export function mergeOrAppendSegment(arr: TranscriptSegment[], next: TranscriptSegment) {

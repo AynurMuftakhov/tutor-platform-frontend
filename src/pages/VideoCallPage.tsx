@@ -28,7 +28,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import StudentPage from "../pages/StudentPage";
 import SubtitlesOutlinedIcon from "@mui/icons-material/SubtitlesOutlined";
 import TranscriptionPanel from "../components/transcription/TranscriptionPanel";
-import { FocusWordsProvider } from "../context/FocusWordsContext";
+import { FocusWordsProvider, useFocusWords } from "../context/FocusWordsContext";
 
 interface VideoCallPageProps {
     identity?: string;
@@ -110,6 +110,7 @@ const DailyCallLayout: React.FC<{
     const [openWordIdCmd, setOpenWordIdCmd] = useState<string | null>(null);
     const [openAssignmentIdCmd, setOpenAssignmentIdCmd] = useState<string | null>(null);
     const [openTaskIdCmd, setOpenTaskIdCmd] = useState<string | null>(null);
+    const { setWordsFromRemote } = useFocusWords();
 
     // Workspace view selector: student profile or live transcription
     const [workspaceView, setWorkspaceView] = useState<'student' | 'transcription'>('student');
@@ -165,7 +166,7 @@ const DailyCallLayout: React.FC<{
         };
     }, [dailyCall, resolvedStudentId]);
 
-    const homeworkWords = useMemo(() => ['because', 'really', 'tomorrow', 'homework'], []);
+    const homeworkWords = useMemo(() => [], []);
 
     const generateDirectLinkDaily = useCallback(() => {
         const baseUrl = window.location.origin;
@@ -321,6 +322,10 @@ const DailyCallLayout: React.FC<{
                         return prev;
                     });
                 }
+            } else if (msg?.t === 'FOCUS_WORDS' && !isTutor) {
+                const words = Array.isArray(msg?.words) ? msg.words : [];
+                const meta = msg && typeof msg.meta === 'object' ? msg.meta : undefined;
+                setWordsFromRemote(words, meta);
             }
         };
 
@@ -328,7 +333,7 @@ const DailyCallLayout: React.FC<{
         return () => {
             dailyCall.off('app-message', onAppMessage);
         };
-    }, [dailyCall, isTutor]);
+    }, [dailyCall, isTutor, openWorkspace, closeWorkspace, setWordsFromRemote]);
 
     useEffect(() => {
         if (!isTutor) return;

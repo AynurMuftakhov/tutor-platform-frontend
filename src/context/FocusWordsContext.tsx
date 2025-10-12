@@ -19,6 +19,7 @@ export type FocusWordsController = {
   getWords: () => string[];
   getMeta: () => FocusWordsMeta;
   setWords: (words: string[], meta: FocusWordsMeta, mode?: ApplyMode) => { applied: number; trimmed: number };
+  setWordsFromRemote: (words: string[], meta?: FocusWordsMeta) => { applied: number; trimmed: number };
   clear: () => void;
   subscribe: (listener: (state: FocusWordsState) => void) => () => void;
 };
@@ -73,36 +74,51 @@ export function FocusWordsProvider({ children }: FocusWordsProviderProps) {
     forceRerender((x) => x + 1);
   }, []);
 
-  const controller = useMemo<FocusWordsController>(() => ({
-    getWords: () => stateRef.current.words,
-    getMeta: () => stateRef.current.meta,
-    setWords: (words, meta, mode = 'merge') => {
-      if (!isTutor) return { applied: 0, trimmed: 0 };
+  const controller = useMemo<FocusWordsController>(() => {
+    const applyWords = (words: string[], meta: FocusWordsMeta, mode: ApplyMode) => {
       const incoming = Array.isArray(words) ? words : [];
-      const current = stateRef.current.words;
-      const combined = mode === 'replace' ? incoming : [...current, ...incoming];
+      const base = mode === 'replace' ? [] : stateRef.current.words;
+      const combined = mode === 'replace' ? incoming : [...base, ...incoming];
       const { words: cleaned, trimmed } = dedupeAndCap(combined);
       const applied = cleaned.length;
-      const nextMeta: FocusWordsMeta = { ...meta };
+      const nextMeta: FocusWordsMeta = {
+        source: meta?.source ?? 'manual',
+        assignmentId: meta?.assignmentId,
+        taskId: meta?.taskId,
+        label: meta?.label,
+      };
       stateRef.current = { words: cleaned, meta: nextMeta };
       emit();
       if (trimmed > 0) console.warn('[focus_words.trimmed_due_to_cap]', { trimmed, cap: MAX_WORDS });
-      console.debug('[focus_words.pick_applied]', { count: applied, source: meta.source, mode });
+      console.debug('[focus_words.pick_applied]', { count: applied, source: nextMeta.source, mode });
       return { applied, trimmed };
-    },
-    clear: () => {
-      if (!isTutor) return;
-      stateRef.current = { words: [], meta: { source: 'manual' } };
-      emit();
-      console.debug('[focus_words.clear]');
-    },
-    subscribe: (listener) => {
-      listenersRef.current.add(listener);
-      // Immediately call with current state
-      try { listener(stateRef.current); } catch (e) { /* ignore */ void e; }
-      return () => { listenersRef.current.delete(listener); };
-    },
-  }), [emit, isTutor]);
+    };
+
+    return {
+      getWords: () => stateRef.current.words,
+      getMeta: () => stateRef.current.meta,
+      setWords: (words, meta, mode = 'merge') => {
+        if (!isTutor) return { applied: 0, trimmed: 0 };
+        return applyWords(words, meta, mode);
+      },
+      setWordsFromRemote: (words, meta) => {
+        const resolvedMeta: FocusWordsMeta = meta ? { ...meta, source: meta.source ?? 'manual' } : { source: 'manual' };
+        return applyWords(words, resolvedMeta, 'replace');
+      },
+      clear: () => {
+        if (!isTutor) return;
+        stateRef.current = { words: [], meta: { source: 'manual' } };
+        emit();
+        console.debug('[focus_words.clear]');
+      },
+      subscribe: (listener) => {
+        listenersRef.current.add(listener);
+        // Immediately call with current state
+        try { listener(stateRef.current); } catch (e) { /* ignore */ void e; }
+        return () => { listenersRef.current.delete(listener); };
+      },
+    };
+  }, [emit, isTutor]);
 
   return (
     <FocusWordsCtx.Provider value={controller}>
@@ -120,6 +136,7 @@ export function useFocusWords() {
     words: state.words,
     meta: state.meta,
     setWords: ctx.setWords,
+    setWordsFromRemote: ctx.setWordsFromRemote,
     clear: ctx.clear,
     controller: ctx,
   };
