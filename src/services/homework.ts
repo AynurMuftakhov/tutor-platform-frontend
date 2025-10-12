@@ -1,4 +1,4 @@
-import { AssignmentDto, AssignmentListItemDto, CreateAssignmentDto, PageResult, UpdateProgressPayload } from '../types/homework';
+import { AssignmentDto, AssignmentListItemDto, CreateAssignmentDto, HomeworkTaskType, PageResult, UpdateProgressPayload } from '../types/homework';
 import api from './api';
 
 // Endpoints base: prefer env override, fallback to service prefix
@@ -15,6 +15,7 @@ export type HomeworkListParams = {
   page?: number;
   size?: number;
   studentId?: string; // for tutor endpoint optional
+  type?: HomeworkTaskType;
 };
 
 type ProgressDto = {
