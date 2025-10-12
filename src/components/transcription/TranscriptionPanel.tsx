@@ -1,8 +1,7 @@
 /* eslint-disable no-empty */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Drawer, Box, Typography, Button, Stack, Divider, Chip, IconButton, TextField } from '@mui/material';
-import { Dialog, DialogTitle, DialogContent, DialogActions, List, ListItemButton, ListItemText, CircularProgress } from '@mui/material';
-import { Menu, MenuItem, ListItemIcon } from '@mui/material';
+import { Menu, MenuItem, ListItemIcon, ListItemText } from '@mui/material';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import StopIcon from '@mui/icons-material/Stop';
@@ -16,67 +15,7 @@ import { useSnackbar } from 'notistack';
 import { buildWordsRegex, renderHighlighted, collectHitsFromRaw, extractSegmentKey, mergeOrAppendSegment } from './highlight';
 import type { TranscriptSegment } from './types';
 import { useAuth } from '../../context/AuthContext';
-import { useStudentAssignments, useAssignmentById } from '../../hooks/useHomeworks';
-import { useDictionary } from '../../hooks/useVocabulary';
-import type { AssignmentListItemDto, TaskDto } from '../../types/homework';
-import type { VocabularyWord } from '../../types';
-
-const RECENT_HOMEWORK_LOOKBACK_DAYS = 30;
-
-function isoDateLabel(iso?: string | null) {
-  if (!iso) return null;
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
-
-function dedupeWordsPreserveOrder(words: string[]): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const raw of words) {
-    if (typeof raw !== 'string') continue;
-    const trimmed = raw.trim();
-    if (!trimmed) continue;
-    const key = trimmed.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(trimmed);
-  }
-  return out;
-}
-
-function collectWordCandidates(source: unknown): string[] {
-  if (!source || typeof source !== 'object') return [];
-  const result: string[] = [];
-  Object.entries(source as Record<string, unknown>).forEach(([key, value]) => {
-    if (!/word/i.test(key)) return;
-    if (!Array.isArray(value)) return;
-    value.forEach((entry) => {
-      if (typeof entry === 'string') {
-        result.push(entry);
-      } else if (entry && typeof entry === 'object') {
-        const text = (entry as any).text ?? (entry as any).word ?? (entry as any).value;
-        if (typeof text === 'string') result.push(text);
-      }
-    });
-  });
-  return result;
-}
-
-function collectWordsFromTask(task: TaskDto, lookup: Map<string, VocabularyWord>) {
-  const words: string[] = [];
-  const contentRef = (task.contentRef || {}) as Record<string, unknown>;
-  const meta = (task.meta || {}) as Record<string, unknown>;
-  const rawIds = Array.isArray((contentRef as any).wordIds) ? (contentRef as any).wordIds : [];
-  rawIds.forEach((id: unknown) => {
-    if (typeof id !== 'string') return;
-    const entry = lookup.get(id);
-    if (entry?.text) words.push(entry.text);
-  });
-  words.push(...collectWordCandidates(contentRef));
-  words.push(...collectWordCandidates(meta));
-  return dedupeWordsPreserveOrder(words);
-}
+import HomeworkWordPicker from './HomeworkWordPicker';
 
 type Props = {
   open?: boolean;
@@ -126,68 +65,7 @@ function TranscriptionPanelInner({
   // Manual entry for focus words
   const [manualInput, setManualInput] = useState('');
   const [homeworkPickerOpen, setHomeworkPickerOpen] = useState(false);
-  const [selectedAssignmentId, setSelectedAssignmentId] = useState<string | null>(null);
   const seededRef = useRef(false);
-  const recentRange = useMemo(() => {
-    const now = new Date();
-    const to = now.toISOString().slice(0, 10);
-    const past = new Date(now.getTime() - RECENT_HOMEWORK_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
-    return { from: past.toISOString().slice(0, 10), to };
-  }, []);
-
-  const { data: vocabWords, isLoading: vocabLoading } = useDictionary();
-  const vocabLookup = useMemo(() => {
-    const map = new Map<string, VocabularyWord>();
-    (vocabWords ?? []).forEach((word) => {
-      if (word?.id) map.set(word.id, word);
-    });
-    return map;
-  }, [vocabWords]);
-
-  const {
-    data: assignmentsPage,
-    isLoading: assignmentsLoading,
-    isError: assignmentsError,
-    error: assignmentsErrorObj,
-  } = useStudentAssignments(studentId ?? '', {
-    status: 'all',
-    includeOverdue: true,
-    sort: 'assigned_desc',
-    size: 20,
-    from: recentRange.from,
-    to: recentRange.to,
-    view: 'summary',
-  });
-
-  const assignments = useMemo<AssignmentListItemDto[]>(() => assignmentsPage?.content ?? [], [assignmentsPage]);
-
-  const assignmentQueryEnabled = homeworkPickerOpen && !!selectedAssignmentId;
-  const {
-    data: selectedAssignment,
-    isLoading: assignmentLoading,
-    isFetching: assignmentFetching,
-    isError: assignmentError,
-    error: assignmentErrorObj,
-  } = useAssignmentById(
-    assignmentQueryEnabled ? selectedAssignmentId ?? undefined : undefined,
-    { studentId, enabled: assignmentQueryEnabled },
-  );
-
-  const selectedAssignmentVocabTasks = useMemo(() => {
-    if (!selectedAssignment) return [];
-    const tasks = Array.isArray(selectedAssignment.tasks) ? selectedAssignment.tasks : [];
-    return tasks
-      .filter((task) => task.type === 'VOCAB')
-      .map((task) => ({
-        task,
-        words: collectWordsFromTask(task, vocabLookup),
-      }));
-  }, [selectedAssignment, vocabLookup]);
-
-  const combinedHomeworkWords = useMemo(
-    () => dedupeWordsPreserveOrder(selectedAssignmentVocabTasks.flatMap((item) => item.words)),
-    [selectedAssignmentVocabTasks],
-  );
 
   const togglePause = () => {
     if (!paused) {
@@ -297,18 +175,6 @@ function TranscriptionPanelInner({
       }
     }, [focusWords.length, homeworkWords, setFocusWords]);
 
-  useEffect(() => {
-    if (!homeworkPickerOpen) return;
-    if (selectedAssignmentId) return;
-    if (focusMeta.source === 'homework' && focusMeta.assignmentId) {
-      setSelectedAssignmentId(focusMeta.assignmentId);
-      return;
-    }
-    if (assignments.length > 0) {
-      setSelectedAssignmentId(assignments[0].id);
-    }
-  }, [homeworkPickerOpen, assignments, selectedAssignmentId, focusMeta.source, focusMeta.assignmentId]);
-
     useEffect(() => {
         if (!call) return;
         refreshParticipants();
@@ -352,20 +218,28 @@ function TranscriptionPanelInner({
     setHomeworkPickerOpen(false);
   };
 
-  const handleApplyHomeworkWords = () => {
-    if (!selectedAssignment || combinedHomeworkWords.length === 0) return;
+  const handleApplyHomeworkWords = ({
+    words,
+    assignmentId,
+    assignmentTitle,
+  }: {
+    words: string[];
+    assignmentId: string;
+    assignmentTitle?: string;
+  }) => {
+    if (!Array.isArray(words) || words.length === 0) return;
     const { applied, trimmed } = setFocusWords(
-      combinedHomeworkWords,
+      words,
       {
         source: 'homework',
-        assignmentId: selectedAssignment.id,
-        label: selectedAssignment.title,
+        assignmentId,
+        label: assignmentTitle,
       },
       'replace',
     );
     seededRef.current = true;
     enqueueSnackbar(
-      `Loaded ${applied} word${applied === 1 ? '' : 's'} from ${selectedAssignment.title || 'homework'}`,
+      `Loaded ${applied} word${applied === 1 ? '' : 's'} from ${assignmentTitle || 'homework'}`,
       { variant: 'success' },
     );
     if (trimmed > 0) {
@@ -373,13 +247,6 @@ function TranscriptionPanelInner({
     }
     setHomeworkPickerOpen(false);
   };
-
-  const assignmentLoadingState = assignmentLoading || assignmentFetching;
-  const assignmentsErrorMessage =
-    assignmentsErrorObj instanceof Error ? assignmentsErrorObj.message : undefined;
-  const assignmentErrorMessage =
-    assignmentErrorObj instanceof Error ? assignmentErrorObj.message : undefined;
-  const previewLoading = assignmentLoadingState || (vocabLoading && homeworkPickerOpen);
 
   // Append new messages into our persistent segments & counters
   useEffect(() => {
@@ -656,148 +523,16 @@ function TranscriptionPanelInner({
         return out;
     }
 
-  const homeworkPickerDialog = (
-    <Dialog open={homeworkPickerOpen} onClose={handleCloseHomeworkPicker} fullWidth maxWidth="md">
-      <DialogTitle>Pick focus words from homework</DialogTitle>
-      <DialogContent dividers sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        {!studentId ? (
-          <Typography variant="body2" color="text.secondary">
-            Select a student to load their recent homework vocabulary.
-          </Typography>
-        ) : assignmentsLoading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-            <CircularProgress size={24} />
-          </Box>
-        ) : assignmentsError ? (
-          <Typography color="error" variant="body2">
-            {assignmentsErrorMessage ?? 'Failed to load homework. Try again in a moment.'}
-          </Typography>
-        ) : assignments.length === 0 ? (
-          <Typography variant="body2" color="text.secondary">
-            No homework found in the last {RECENT_HOMEWORK_LOOKBACK_DAYS} days.
-          </Typography>
-        ) : (
-          <>
-            <Typography variant="subtitle2" color="text.secondary">
-              Recent assignments
-            </Typography>
-            <List
-              dense
-              sx={{
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 1,
-                maxHeight: 220,
-                overflowY: 'auto',
-              }}
-            >
-              {assignments.map((assignment) => {
-                const assignedLabel = isoDateLabel(assignment.createdAt);
-                const dueLabel = isoDateLabel(assignment.dueAt);
-                const secondaryParts = [
-                  assignedLabel ? `Assigned ${assignedLabel}` : null,
-                  dueLabel ? `Due ${dueLabel}` : null,
-                ].filter(Boolean);
-                return (
-                  <ListItemButton
-                    key={assignment.id}
-                    selected={assignment.id === selectedAssignmentId}
-                    onClick={() => setSelectedAssignmentId(assignment.id)}
-                    sx={{ alignItems: 'flex-start' }}
-                  >
-                    <ListItemText
-                      primary={assignment.title || 'Untitled homework'}
-                      secondary={
-                        secondaryParts.length ? (
-                          <Typography component="span" variant="caption" color="text.secondary">
-                            {secondaryParts.join(' • ')}
-                          </Typography>
-                        ) : undefined
-                      }
-                    />
-                  </ListItemButton>
-                );
-              })}
-            </List>
-            <Divider />
-            <Box>
-              {previewLoading ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
-                  <CircularProgress size={20} />
-                </Box>
-              ) : !selectedAssignment ? (
-                <Typography variant="body2" color="text.secondary">
-                  Select a homework to preview vocabulary tasks.
-                </Typography>
-              ) : assignmentError ? (
-                <Typography color="error" variant="body2">
-                  {assignmentErrorMessage ?? 'Failed to load homework details.'}
-                </Typography>
-              ) : selectedAssignmentVocabTasks.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">
-                  This homework has no vocabulary tasks yet.
-                </Typography>
-              ) : (
-                <Stack spacing={1.2}>
-                  {selectedAssignmentVocabTasks.map(({ task, words }) => (
-                    <Box
-                      key={task.id}
-                      sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 1.5 }}
-                    >
-                      <Stack
-                        direction="row"
-                        spacing={1}
-                        alignItems="center"
-                        justifyContent="space-between"
-                        sx={{ mb: 0.5 }}
-                      >
-                        <Typography variant="subtitle2" noWrap>
-                          {task.title || 'Untitled task'}
-                        </Typography>
-                        <Chip label={task.type} size="small" variant="outlined" color="primary" />
-                      </Stack>
-                      {words.length > 0 ? (
-                        <Stack direction="row" spacing={0.5} flexWrap="wrap">
-                          {words.map((word) => (
-                            <Chip key={`${task.id}-${word}`} label={word} size="small" variant="outlined" />
-                          ))}
-                        </Stack>
-                      ) : (
-                        <Typography variant="caption" color="text.secondary">
-                          No vocabulary words linked to this task yet.
-                        </Typography>
-                      )}
-                    </Box>
-                  ))}
-                </Stack>
-              )}
-            </Box>
-            {selectedAssignment && !assignmentError && combinedHomeworkWords.length > 0 && (
-              <Box>
-                <Typography variant="caption" color="text.secondary">
-                  Combined preview ({combinedHomeworkWords.length})
-                </Typography>
-                <Stack direction="row" spacing={0.5} flexWrap="wrap" sx={{ mt: 0.5 }}>
-                  {combinedHomeworkWords.map((word) => (
-                    <Chip key={`combined-${word}`} label={word} size="small" />
-                  ))}
-                </Stack>
-              </Box>
-            )}
-          </>
-        )}
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={handleCloseHomeworkPicker}>Cancel</Button>
-        <Button
-          onClick={handleApplyHomeworkWords}
-          variant="contained"
-          disabled={!selectedAssignment || combinedHomeworkWords.length === 0}
-        >
-          Use {combinedHomeworkWords.length || ''} words
-        </Button>
-      </DialogActions>
-    </Dialog>
+  const focusAssignmentId = focusMeta.source === 'homework' ? focusMeta.assignmentId : undefined;
+
+  const homeworkPickerElement = (
+    <HomeworkWordPicker
+      open={homeworkPickerOpen}
+      studentId={studentId}
+      currentAssignmentId={focusAssignmentId}
+      onClose={handleCloseHomeworkPicker}
+      onApply={handleApplyHomeworkWords}
+    />
   );
 
   const content = (
@@ -980,7 +715,7 @@ function TranscriptionPanelInner({
     return (
       <>
         {content}
-        {homeworkPickerDialog}
+        {homeworkPickerElement}
       </>
     );
   }
@@ -990,7 +725,7 @@ function TranscriptionPanelInner({
       <Drawer anchor="right" open={!!open} onClose={onClose} PaperProps={{ sx: { width: 440 } }}>
         {content}
       </Drawer>
-      {homeworkPickerDialog}
+      {homeworkPickerElement}
     </>
   );
 }
@@ -1003,15 +738,6 @@ export default function TranscriptionPanel(props: Props) {
       <TranscriptionPanelInner {...rest} call={call} />
     </DailyProvider>
   );
-}
-
-
-function timeMmSs(ms?: number) {
-  if (ms == null) return '';
-  const t = Math.max(0, Math.floor(ms / 1000));
-  const m = Math.floor(t / 60).toString().padStart(1, '0');
-  const s = (t % 60).toString().padStart(2, '0');
-  return `${m}:${s}`;
 }
 
 function plainText(segments: TranscriptSegment[]) {
