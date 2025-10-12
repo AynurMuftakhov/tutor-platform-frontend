@@ -28,6 +28,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import StudentPage from "../pages/StudentPage";
 import SubtitlesOutlinedIcon from "@mui/icons-material/SubtitlesOutlined";
 import TranscriptionPanel from "../components/transcription/TranscriptionPanel";
+import { FocusWordsProvider } from "../context/FocusWordsContext";
 
 interface VideoCallPageProps {
     identity?: string;
@@ -71,11 +72,13 @@ const VideoCallPage: React.FC<VideoCallPageProps> = (props) => {
     const joinStartedRef = useRef(false);
 
     return (
-        <DailyCallLayout
-            roomName={roomName ?? undefined}
-            studentId={studentId ?? undefined}
-            onLeave={handleLeave}
-        />
+        <FocusWordsProvider>
+            <DailyCallLayout
+                roomName={roomName ?? undefined}
+                studentId={studentId ?? undefined}
+                onLeave={handleLeave}
+            />
+        </FocusWordsProvider>
     );
 };
 
@@ -470,6 +473,7 @@ const DailyCallLayout: React.FC<{
                                                 embedded
                                                 call={dailyCall}
                                                 studentSessionId={studentSessionIdForDaily}
+                                                studentId={(isTutor ? studentId : resolvedStudentId) as string | undefined}
                                                 homeworkWords={homeworkWords}
                                             />
                                         </Box>

@@ -1,7 +1,8 @@
 /* eslint-disable no-empty */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Drawer, Box, Typography, Button, Stack, Divider, Chip, IconButton } from '@mui/material';
-import { Menu, MenuItem, ListItemIcon, ListItemText } from '@mui/material';
+import { Drawer, Box, Typography, Button, Stack, Divider, Chip, IconButton, TextField } from '@mui/material';
+import { Dialog, DialogTitle, DialogContent, DialogActions, List, ListItemButton, ListItemText, CircularProgress, Checkbox } from '@mui/material';
+import { Menu, MenuItem, ListItemIcon } from '@mui/material';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import StopIcon from '@mui/icons-material/Stop';
@@ -10,9 +11,13 @@ import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
 import PauseOutlinedIcon from '@mui/icons-material/PauseOutlined';
 import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
 import { DailyProvider, useTranscription } from '@daily-co/daily-react';
+import { useFocusWords } from '../../context/FocusWordsContext';
+import { useSnackbar } from 'notistack';
 import { buildWordsRegex, renderHighlighted, collectHitsFromRaw, extractSegmentKey, mergeOrAppendSegment } from './highlight';
 import type { TranscriptSegment } from './types';
 import { useAuth } from '../../context/AuthContext';
+import { useStudentAssignments, useAssignmentById } from '../../hooks/useHomeworks';
+import { useDictionary } from '../../hooks/useVocabulary';
 
 type Props = {
   open?: boolean;
@@ -20,6 +25,7 @@ type Props = {
   embedded?: boolean;
   call: any; // Daily call object (used by DailyProvider)
   studentSessionId?: string;
+  studentId?: string; // for homework picker
   homeworkWords: string[];
 };
 
@@ -28,11 +34,13 @@ function TranscriptionPanelInner({
   onClose,
   embedded,
   studentSessionId,
+  studentId,
   homeworkWords,
   call,
 }: Props) {
   const { user } = useAuth();
   const isTutor = user?.role === 'tutor';
+  const { enqueueSnackbar } = useSnackbar();
 
   // Meeting/connection state
   const [meetingState, setMeetingState] = useState<'idle' | 'joining' | 'joined' | 'left' | 'error'>('idle');
@@ -56,6 +64,9 @@ function TranscriptionPanelInner({
   const [menuEl, setMenuEl] = useState<null | HTMLElement>(null);
   const openMenu = (e: React.MouseEvent<HTMLElement>) => setMenuEl(e.currentTarget);
   const closeMenu = () => setMenuEl(null);
+  // Manual entry for focus words
+  const [manualInput, setManualInput] = useState('');
+  const seededRef = useRef(false);
 
   const togglePause = () => {
     if (!paused) {
@@ -150,8 +161,20 @@ function TranscriptionPanelInner({
     setRawLogs((prev) => [`${ts}  ${msg}`, ...prev].slice(0, 200));
   };
 
-  // Build regex for highlighting
-  const rx = useMemo(() => buildWordsRegex(homeworkWords), [homeworkWords]);
+  // Build regex for highlighting using FocusWords
+  const { words: focusWords, meta: focusMeta, setWords: setFocusWords, clear: clearFocusWords } = useFocusWords();
+  const rx = useMemo(() => buildWordsRegex(focusWords), [focusWords]);
+
+    // Seed focus words from props.homeworkWords if context is empty
+    useEffect(() => {
+      if (seededRef.current) return;
+      if (focusWords.length === 0 && Array.isArray(homeworkWords) && homeworkWords.length > 0) {
+        try {
+          setFocusWords(homeworkWords, { source: 'homework', label: 'Latest homework' }, 'replace');
+          seededRef.current = true;
+        } catch {/* ignore */}
+      }
+    }, [focusWords.length, homeworkWords, setFocusWords]);
 
     useEffect(() => {
         if (!call) return;
@@ -180,7 +203,7 @@ function TranscriptionPanelInner({
         const raw = ev?.rawResponse;
         const isFinal = !!(ev?.is_final ?? ev?.final);
         const segId = extractSegmentKey({ data: { rawResponse: raw, ...ev } });
-        const hits = collectHitsFromRaw(raw, homeworkWords, text);
+        const hits = collectHitsFromRaw(raw, focusWords, text);
 
         acc = mergeOrAppendSegment(acc, {
           id: segId,
@@ -205,7 +228,7 @@ function TranscriptionPanelInner({
       }
       return acc.slice();
     });
-  }, [transcriptions, homeworkWords]);
+  }, [transcriptions, focusWords]);
 
   // Auto-scroll to bottom when new segments arrive (respect autoscroll toggle)
   useEffect(() => {
@@ -221,8 +244,8 @@ function TranscriptionPanelInner({
     await startTranscription({
       includeRawResponse: true,
       extra: {
-        search: homeworkWords,
-        keywords: homeworkWords.map((w) => `${w}:1.5`),
+        search: focusWords,
+        keywords: focusWords.map((w) => `${w}:1.5`),
       },
     });
     // If we already know the student's participantId, narrow immediately
@@ -257,6 +280,22 @@ function TranscriptionPanelInner({
     };
     void maybeUpdate();
   }, [isTranscribing, call, studentSessionId]);
+
+  // Update transcription extras when focus words change
+  useEffect(() => {
+    if (!isTranscribing || !call) return;
+    try {
+      call.updateTranscription({
+        extra: {
+          search: focusWords,
+          keywords: focusWords.map((w) => `${w}:1.5`),
+        },
+      });
+      pushLog?.(`[AUTO] updateTranscription keywords (${focusWords.length})`);
+    } catch {
+      /* ignore */
+    }
+  }, [isTranscribing, call, focusWords]);
 
   const handleClear = () => {
     setSegments([]);
@@ -456,7 +495,7 @@ function TranscriptionPanelInner({
                   Start
               </Button>
           )}
-          <Button onClick={handleClear}>Clear</Button>
+          <Button onClick={handleClear}>Clear transcript</Button>
         <IconButton aria-label="More" onClick={openMenu}>
           <MoreVertIcon />
         </IconButton>
@@ -498,10 +537,26 @@ function TranscriptionPanelInner({
         </Box>)}
 
         <Box sx={{ mt: isTutor? 2 : 0, mb: 1 }}>
-            <Typography variant="subtitle2">Keywords</Typography>
+            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+              <Typography variant="subtitle2">Keywords</Typography>
+              <Stack direction="row" spacing={1} alignItems="center">
+                <Chip size="small" variant="outlined" label={`${focusWords.length} words`} />
+                <Chip size="small" variant="outlined" label={`Source: ${focusMeta.source === 'homework' ? `Homework${focusMeta.label ? ' — ' + focusMeta.label : ''}` : 'Manual'}`} />
+                {isTutor && (
+                  <Button size="small" onClick={() => { clearFocusWords(); enqueueSnackbar('Focus words cleared', { variant: 'info' }); }}>Clear</Button>
+                )}
+              </Stack>
+            </Stack>
+            {isTutor && (
+              <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
+                {/*<Button size="small" variant="contained" onClick={() => enqueueSnackbar('Pick from homework coming soon', { variant: 'info' })}>Pick from homework</Button>*/}
+                <TextField size="small" fullWidth placeholder="Add words (comma/space separated)" value={manualInput} onChange={(e) => setManualInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { const parts = manualInput.split(/[\s,]+/).filter(Boolean); if (parts.length) { const { applied, trimmed } = setFocusWords(parts, { source: 'manual' }, 'merge'); enqueueSnackbar(`${applied} word(s) added`, { variant: 'success' }); if (trimmed > 0) enqueueSnackbar(`Trimmed to 30 words`, { variant: 'warning' }); setManualInput(''); } } }} />
+                <Button size="small" variant="outlined" onClick={() => { const parts = manualInput.split(/[\s,]+/).filter(Boolean); if (parts.length) { const { applied, trimmed } = setFocusWords(parts, { source: 'manual' }, 'merge'); enqueueSnackbar(`${applied} word(s) added`, { variant: 'success' }); if (trimmed > 0) enqueueSnackbar(`Trimmed to 30 words`, { variant: 'warning' }); setManualInput(''); } }}>Add</Button>
+              </Stack>
+            )}
           <Stack direction="row" spacing={0} flexWrap="wrap">
-            {homeworkWords.map((w) => (
-              <Chip key={w} label={`${w} · ${totals[w.toLowerCase()] ?? 0}`} size="small" sx={{ mr: .5, mb: .5 }} />
+            {focusWords.map((w) => (
+              <Chip key={w} label={`${w} · ${totals[w.toLowerCase()] ?? 0}`} size="small" onDelete={isTutor ? () => { const rest = focusWords.filter((x) => x !== w); setFocusWords(rest, { ...focusMeta }, 'replace'); } : undefined} sx={{ mr: .5, mb: .5 }} />
             ))}
           </Stack>
         </Box>
