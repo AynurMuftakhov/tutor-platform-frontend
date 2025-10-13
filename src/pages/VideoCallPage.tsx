@@ -9,7 +9,6 @@ import {
     Switch,
     Chip,
 } from '@mui/material';
-import '@livekit/components-styles';
 import type { DailyEventObjectAppMessage } from '@daily-co/daily-js';
 import { useAuth } from '../context/AuthContext';
 import DraggableDivider from '../components/lessonDetail/DraggableDivider';
@@ -19,7 +18,6 @@ import DoneIcon from "@mui/icons-material/Done";
 import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
 
-import '../styles/livekit-custom.css';
 import { useRtc } from '../context/RtcContext';
 import RtcHost from '../components/rtc/RtcHost';
 import RtcErrorBanner from '../components/rtc/RtcErrorBanner';
@@ -93,9 +91,7 @@ const DailyCallLayout: React.FC<{
     const { user } = useAuth();
     const {
         failureMessage,
-        canFallbackToLiveKit,
         refreshJoin,
-        forceFallbackToLiveKit,
         dailyCall,
     } = useRtc();
 
@@ -110,6 +106,8 @@ const DailyCallLayout: React.FC<{
     const [openWordIdCmd, setOpenWordIdCmd] = useState<string | null>(null);
     const [openAssignmentIdCmd, setOpenAssignmentIdCmd] = useState<string | null>(null);
     const [openTaskIdCmd, setOpenTaskIdCmd] = useState<string | null>(null);
+    const [closeAssignmentCmd, setCloseAssignmentCmd] = useState(false);
+    const consumeCloseAssignmentCommand = useCallback(() => setCloseAssignmentCmd(false), []);
     const { setWordsFromRemote } = useFocusWords();
 
     // Workspace view selector: student profile or live transcription
@@ -279,6 +277,48 @@ const DailyCallLayout: React.FC<{
         [dailyCall, isTutor, user?.name, sendStudentPanelState, shareStudentProfile],
     );
 
+    const sendAssignmentCloseToStudent = useCallback(() => {
+        if (!dailyCall || !isTutor || !shareStudentProfile) return;
+        try {
+            sendStudentPanelState(true, TAB_HOMEWORK);
+            dailyCall.sendAppMessage({
+                t: 'ASSIGNMENT_CLOSE',
+                from: user?.name || 'Teacher',
+            });
+        } catch (err) {
+            console.warn('Failed to send ASSIGNMENT_CLOSE via Daily', err);
+        }
+    }, [dailyCall, isTutor, shareStudentProfile, sendStudentPanelState, user?.name]);
+
+    const consumeWordCommand = useCallback(() => {
+        setOpenWordIdCmd(null);
+    }, []);
+
+    const consumeAssignmentCommand = useCallback(() => {
+        setOpenAssignmentIdCmd(null);
+        setOpenTaskIdCmd(null);
+    }, []);
+
+    const sendWordCloseToStudent = React.useCallback(() => {
+        if (!dailyCall || !isTutor) return;
+        if (!shareStudentProfile) return; // keep behavior consistent with sharing toggle
+        try {
+            dailyCall.sendAppMessage({ t: 'WORD_CLOSE', from: user?.name || 'Teacher' });
+        } catch (err) {
+            console.warn('Failed to send WORD_CLOSE via Daily', err);
+        }
+    }, [dailyCall, isTutor, shareStudentProfile, user?.name]);
+
+    const sendWordPronounceToStudent = React.useCallback((wordId: string, audioUrl: string) => {
+        if (!dailyCall || !isTutor) return;
+        if (!shareStudentProfile) return; // keep behavior consistent with sharing toggle
+        try {
+            dailyCall.sendAppMessage({ t: 'WORD_PRONOUNCE', wordId, audioUrl, from: user?.name || 'Teacher' });
+        } catch (err) {
+            console.warn('Failed to send WORD_PRONOUNCE via Daily', err);
+        }
+    }, [dailyCall, isTutor, shareStudentProfile, user?.name]);
+
     useEffect(() => {
         if (!dailyCall) return;
 
@@ -301,6 +341,9 @@ const DailyCallLayout: React.FC<{
                 setSharedProfileTab(TAB_DICTIONARY);
                 setOpenWordIdCmd(msg?.wordId || null);
                 setSharedProfileBy(msg?.from || 'Teacher');
+            } else if (msg?.t === 'WORD_CLOSE' && !isTutor) {
+                // Close the word dialog by resetting the command
+                setOpenWordIdCmd(null);
             } else if (msg?.t === 'ASSIGNMENT_OPEN' && !isTutor) {
                 // Open student profile on Homework tab and command embedded assignment open
                 setSharedProfileOpen(true);
@@ -326,6 +369,20 @@ const DailyCallLayout: React.FC<{
                 const words = Array.isArray(msg?.words) ? msg.words : [];
                 const meta = msg && typeof msg.meta === 'object' ? msg.meta : undefined;
                 setWordsFromRemote(words, meta);
+            } else if (msg?.t === 'ASSIGNMENT_CLOSE' && !isTutor) {
+                setSharedProfileOpen(true);
+                setSharedProfileTab(TAB_HOMEWORK);
+                setCloseAssignmentCmd(true);
+                setSharedProfileBy(msg?.from || 'Teacher');
+            }else if (msg?.t === 'WORD_PRONOUNCE' && !isTutor) {
+                const url = typeof msg?.audioUrl === 'string' ? msg.audioUrl : '';
+                if (url) {
+                    try {
+                        new Audio(url).play().catch((e) => console.warn('Autoplay blocked or failed', e));
+                    } catch (e) {
+                        console.warn('Failed to play pronunciation audio', e);
+                    }
+                }
             }
         };
 
@@ -357,9 +414,7 @@ const DailyCallLayout: React.FC<{
             {!!failureMessage && (
                 <RtcErrorBanner
                     message={failureMessage}
-                    canFallback={canFallbackToLiveKit}
                     onRetry={() => refreshJoin()}
-                    onFallback={() => forceFallbackToLiveKit()}
                 />
             )}
             {isTutor && (
@@ -489,10 +544,19 @@ const DailyCallLayout: React.FC<{
                                                     studentIdOverride={(isTutor ? studentId : resolvedStudentId) as string}
                                                     embedded
                                                     hideOverviewTab
-                                                    activeTabOverride={studentProfileTab}
-                                                    onTabChange={handleStudentProfileTabChange}
+                                                    activeTabOverride={isTutor ? studentProfileTab : sharedProfileTab}
+                                                    onTabChange={isTutor ? handleStudentProfileTabChange : undefined}
+                                                    onWordPronounce={isTutor ? sendWordPronounceToStudent : undefined}
+                                                    openWordId={isTutor ? undefined : openWordIdCmd}
+                                                    onConsumeOpenWordCommand={isTutor ? sendWordCloseToStudent : consumeWordCommand}
+                                                    autoOpenAssignmentId={isTutor ? undefined : openAssignmentIdCmd}
+                                                    autoOpenTaskId={isTutor ? undefined : openTaskIdCmd}
+                                                    onConsumeOpenAssignmentCommand={isTutor ? undefined : consumeAssignmentCommand}
                                                     onWordOpen={isTutor ? sendWordOpenToStudent : undefined}
                                                     onEmbeddedAssignmentOpen={isTutor ? sendAssignmentOpenToStudent : undefined}
+                                                    onEmbeddedAssignmentClose={isTutor ? sendAssignmentCloseToStudent : undefined}
+                                                    closeEmbeddedAssignment={isTutor ? undefined : closeAssignmentCmd}
+                                                    onConsumeCloseEmbeddedAssignment={isTutor ? undefined : consumeCloseAssignmentCommand}
                                                 />
                                             ) : (
                                                 <Box sx={{ height:'100%', display:'flex', alignItems:'center', justifyContent:'center' }}>

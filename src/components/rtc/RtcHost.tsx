@@ -6,7 +6,6 @@ import DailyHost from './DailyHost';
 /**
  * Pure RTC host registry with no side effects.
  * - Daily: renders the Daily React host full-bleed
- * - LiveKit: handled by VideoCallPage directly
  */
 const RtcHost: React.FC<{ onLeft?: () => void | Promise<void> }> = ({ onLeft }) => {
   const { provider, effectiveProvider, providerReady, join } = useRtc();

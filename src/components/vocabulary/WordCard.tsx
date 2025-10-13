@@ -64,6 +64,7 @@ interface WordCardProps {
     onToggleSelection?: (id: string) => void;
     readOnly?: boolean;
     initialExpanded?: boolean;
+    onPronounce?: (id: string, audioUrl: string) => void;
 }
 
 // Helper function to get color based on difficulty level
@@ -89,7 +90,8 @@ const WordCard: React.FC<WordCardProps> = ({
     isSelected = false,
     onToggleSelection,
     readOnly = false,
-    initialExpanded = false
+    initialExpanded = false,
+    onPronounce,
 }) => {
     const [expanded, setExpanded] = useState(initialExpanded);
     const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
@@ -105,7 +107,10 @@ const WordCard: React.FC<WordCardProps> = ({
     const handlePlayAudio = (e: React.MouseEvent) => {
         e.stopPropagation();
         if (word.audioUrl) {
-            new Audio(word.audioUrl).play();
+            try {
+                new Audio(word.audioUrl).play().catch(() => {});
+            } catch {}
+            onPronounce?.(word.id, word.audioUrl);
         }
     };
 

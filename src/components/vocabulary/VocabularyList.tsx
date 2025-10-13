@@ -38,6 +38,7 @@ interface VocabularyListProps {
     onWordOpen?: (wordId: string) => void;
     openWordId?: string | null;
     onWordDialogClose?: () => void;
+    onWordPronounce?: (id: string, audioUrl: string) => void;
 }
 
 const VocabularyList: React.FC<VocabularyListProps> = ({
@@ -54,6 +55,7 @@ const VocabularyList: React.FC<VocabularyListProps> = ({
     onWordOpen,
     openWordId,
     onWordDialogClose,
+    onWordPronounce,
 }) => {
     const theme = useTheme();
     const [selectedWord, setSelectedWord] = useState<VocabularyWord | null>(null);
@@ -61,13 +63,20 @@ const VocabularyList: React.FC<VocabularyListProps> = ({
 
     // open programmatically when openWordId changes
     React.useEffect(() => {
-        if (!openWordId) return;
+        if (typeof openWordId === 'undefined') return; // prop not provided
+        if (openWordId === null) {
+            if (dialogOpen) {
+                setDialogOpen(false);
+                setSelectedWord(null);
+            }
+            return;
+        }
         const w = data.find(d => d.id === openWordId);
         if (w) {
             setSelectedWord(w);
             setDialogOpen(true);
         }
-    }, [openWordId, data]);
+    }, [openWordId, data, dialogOpen]);
 
     // Empty state when no words are available
     if (data.length === 0) {
@@ -92,10 +101,13 @@ const VocabularyList: React.FC<VocabularyListProps> = ({
         );
     }
 
-    const handlePlayAudio = (e: React.MouseEvent, audioUrl: string | null) => {
+    const handlePlayAudio = (e: React.MouseEvent, w: VocabularyWord) => {
         e.stopPropagation();
-        if (audioUrl) {
-            new Audio(audioUrl).play();
+        if (w.audioUrl) {
+            try {
+                new Audio(w.audioUrl).play().catch(() => {/*no op*/});
+            } catch {/*no op*/}
+            onWordPronounce?.(w.id, w.audioUrl);
         }
     };
 
@@ -171,7 +183,7 @@ const VocabularyList: React.FC<VocabularyListProps> = ({
                                                 <Tooltip title="Play pronunciation">
                                                     <IconButton
                                                         size="small"
-                                                        onClick={(e) => handlePlayAudio(e, word.audioUrl)}
+                                                        onClick={(e) => handlePlayAudio(e, word)}
                                                         sx={{
                                                             color: theme.palette.primary.main,
                                                             bgcolor: alpha(theme.palette.primary.main, 0.1),
@@ -318,6 +330,7 @@ const VocabularyList: React.FC<VocabularyListProps> = ({
                         isLearned={learnedWords.has(selectedWord.id)}
                         readOnly={readOnly}
                         initialExpanded={true}
+                        onPronounce={onWordPronounce}
                     />
                 )}
             </Dialog>

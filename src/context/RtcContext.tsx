@@ -19,7 +19,6 @@ interface RtcState {
   join?: RtcJoinResponse['join'];
   providerReady: boolean;
   error?: string;
-  canFallbackToLiveKit?: boolean;
   failureMessage?: string;
 }
 
@@ -27,7 +26,6 @@ interface RtcContextValue extends RtcState {
   dailyCall: DailyCall | null;
   refreshJoin: (hint?: JoinHint) => Promise<void>;
   setFailure: (message: string) => void;
-  forceFallbackToLiveKit: () => void;
   registerDailyCall: (call: DailyCall | null) => void;
 }
 
@@ -36,7 +34,6 @@ const RtcContext = createContext<RtcContextValue>({
   dailyCall: null,
   refreshJoin: async () => undefined,
   setFailure: () => undefined,
-  forceFallbackToLiveKit: () => undefined,
   registerDailyCall: () => undefined,
 });
 
@@ -44,7 +41,7 @@ export const useRtc = () => useContext(RtcContext);
 
 export const RtcProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
-  const [state, setState] = useState<RtcState>({ providerReady: false, canFallbackToLiveKit: false });
+  const [state, setState] = useState<RtcState>({ providerReady: false });
   const [dailyCall, setDailyCall] = useState<DailyCall | null>(null);
 
   const deriveLessonAndRole = (hint?: JoinHint): { lessonId?: string; role?: string } => {
@@ -81,8 +78,7 @@ export const RtcProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         join: join.join,
         providerReady: true,
         error: undefined,
-        failureMessage: undefined,
-        canFallbackToLiveKit: join.provider !== 'livekit',
+        failureMessage: undefined
       });
     } catch (e: any) {
       console.error('RTC join failed', e);
@@ -94,20 +90,15 @@ export const RtcProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setState((s) => ({ ...s, failureMessage: message }));
   };
 
-  const forceFallbackToLiveKit = () => {
-    setState((s) => ({ ...s, effectiveProvider: 'livekit', failureMessage: undefined }));
-  };
-
   const value = useMemo(
     () => ({
       ...state,
       dailyCall,
       refreshJoin,
       setFailure,
-      forceFallbackToLiveKit,
-      registerDailyCall: setDailyCall,
+      registerDailyCall: setDailyCall
     }),
-    [state, dailyCall, refreshJoin, setFailure, forceFallbackToLiveKit],
+    [state, dailyCall, refreshJoin, setFailure],
   );
   return <RtcContext.Provider value={value}>{children}</RtcContext.Provider>;
 };

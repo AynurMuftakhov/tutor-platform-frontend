@@ -138,12 +138,11 @@ const StudentHomeworkTab: React.FC<{ studentId: string; isTeacher: boolean; onAs
   // auto open command from parent (student sync)
   React.useEffect(() => {
     if (!autoOpenAssignmentId) return;
-    const a = list.find(x => x.id === autoOpenAssignmentId);
-    if (a) {
-      onAssignmentOpen(a.id, autoOpenTaskId);
+
+      onAssignmentOpen(autoOpenAssignmentId, autoOpenTaskId ?? null);
       onConsumedAutoOpen?.();
-    }
-  }, [autoOpenAssignmentId, autoOpenTaskId, list, onAssignmentOpen, onConsumedAutoOpen]);
+
+  }, [autoOpenAssignmentId, autoOpenTaskId, onAssignmentOpen, onConsumedAutoOpen]);
 
   if (isLoading) return <Typography>Loading...</Typography>;
   if (isError) return <Typography color="error">Failed to load homework.</Typography>;
@@ -232,6 +231,10 @@ export interface StudentPageProps {
   onConsumeOpenAssignmentCommand?: () => void;
   onEmbeddedAssignmentOpen?: (assignment: AssignmentDto, preselectTaskId?: string | null) => void;
   onWordOpen?: (wordId: string) => void;
+  onEmbeddedAssignmentClose?: () => void;
+  closeEmbeddedAssignment?: boolean;
+  onConsumeCloseEmbeddedAssignment?: () => void;
+  onWordPronounce?: (id: string, audioUrl: string) => void;
 }
 
 const StudentPage: React.FC<StudentPageProps> = ({
@@ -249,6 +252,10 @@ const StudentPage: React.FC<StudentPageProps> = ({
   onConsumeOpenAssignmentCommand,
   onEmbeddedAssignmentOpen,
   onWordOpen,
+  onEmbeddedAssignmentClose,
+  closeEmbeddedAssignment,
+  onConsumeCloseEmbeddedAssignment,
+  onWordPronounce,
 }) => {
   const { studentId: routeStudentId } = useParams();
   const navigate = useNavigate();
@@ -357,6 +364,15 @@ const StudentPage: React.FC<StudentPageProps> = ({
     };
     fetchUpcoming();
   }, [user, resolvedStudentId]);
+
+    useEffect(() => {
+      if (!embedded) return;
+      if (closeEmbeddedAssignment) {
+        setOpenedAssignment(null);
+        setCurrentTaskId(null);
+        onConsumeCloseEmbeddedAssignment?.(); // consume the flag
+      }
+    }, [embedded, closeEmbeddedAssignment, onConsumeCloseEmbeddedAssignment]);
 
   const levelInfo = useMemo(() => (student?.level ? ENGLISH_LEVELS[student.level] : undefined), [student?.level]);
 
@@ -469,7 +485,7 @@ const StudentPage: React.FC<StudentPageProps> = ({
             {embedded && openedAssignment ? (
               <>
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                  <Button size="small" startIcon={<ArrowBackIcon />} onClick={() => { setOpenedAssignment(null); setCurrentTaskId(null); }}>
+                  <Button size="small" startIcon={<ArrowBackIcon />} onClick={() => { setOpenedAssignment(null); setCurrentTaskId(null); onEmbeddedAssignmentClose?.(); }}>
                     Back to list
                   </Button>
                   <Typography variant="subtitle1" fontWeight={700}>{openedAssignment.title}</Typography>
@@ -531,7 +547,7 @@ const StudentPage: React.FC<StudentPageProps> = ({
               />
             </Box>
             <Box sx={{ maxHeight: 480, overflowY: 'auto' }}>
-              <VocabularyList data={filteredAssigned} readOnly onWordOpen={onWordOpen} openWordId={openWordId} onWordDialogClose={onConsumeOpenWordCommand} />
+              <VocabularyList data={filteredAssigned} readOnly onWordOpen={onWordOpen} openWordId={openWordId} onWordDialogClose={onConsumeOpenWordCommand} onWordPronounce={onWordPronounce}/>
             </Box>
 
             {/* Assign words modal */}
@@ -553,7 +569,24 @@ const StudentPage: React.FC<StudentPageProps> = ({
         ),
       },*/
     ];
-  }, [student, hideOverviewTab, upcoming, upcomingError, isTeacher, handleAssignmentOpen, dictSearch, filteredAssigned, assignOpen, openedAssignment, currentTaskId]);
+  }, [
+    student,
+    hideOverviewTab,
+    upcoming,
+    upcomingError,
+    isTeacher,
+    handleAssignmentOpen,
+    dictSearch,
+    filteredAssigned,
+    assignOpen,
+    openedAssignment,
+    currentTaskId,
+    openWordId,
+    onConsumeOpenWordCommand,
+    autoOpenAssignmentId,
+    autoOpenTaskId,
+    onConsumeOpenAssignmentCommand
+  ]);
 
   const visibleTabs = tabDefinitions.filter((tab) => !tab.hidden);
   const effectiveActiveTab = Math.min(activeTab, Math.max(visibleTabs.length - 1, 0));
