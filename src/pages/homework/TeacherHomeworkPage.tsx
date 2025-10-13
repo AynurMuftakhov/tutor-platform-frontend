@@ -22,11 +22,12 @@ const TeacherHomeworkPage: React.FC = () => {
   const [studentFilter, setStudentFilter] = useState(studentId);
 
     const [filters, setFilters] = useState<FiltersState>({
-        status: 'active',
-        range: 'last7',
+        status: 'all',
+        range: 'custom',
         hideCompleted: true,
         sort: 'assignedDesc',
     });
+    const [filtersApplied, setFiltersApplied] = useState(false);
 
     const computeRange = (f: FiltersState) => {
         const now = new Date();
@@ -55,7 +56,7 @@ const TeacherHomeworkPage: React.FC = () => {
   };
 
   const [page, setPage] = useState<number>(Number(params.get('page') || '1'));
-  const [size, setSize] = useState<number>(Number(params.get('size') || '20'));
+  const [size, setSize] = useState<number>(Number(params.get('size') || '10'));
 
 
   // reset to first page when filters or student changes
@@ -63,18 +64,33 @@ const TeacherHomeworkPage: React.FC = () => {
     setPage(1);
   }, [studentFilter, filters?.status, filters?.range, filters?.from, filters?.to, filters?.hideCompleted, filters?.sort]);
 
-  const { data, isError, refetch } = useTeacherAssignments(user?.id || '', {
-    studentId: studentFilter || undefined,
-    status: filters?.status || 'all',
-    from,
-    to,
-    includeOverdue: true,
-    hideCompleted: !!filters?.hideCompleted,
-    sort: sortMap[filters?.sort || 'assignedDesc'],
-    view: 'full',
-    page: page - 1,
-    size,
-  });
+  const effectiveParams = React.useMemo(() => {
+    if (!filtersApplied) {
+      return {
+        studentId: studentFilter || undefined,
+        status: 'all' as const,
+        includeOverdue: true,
+        sort: 'assigned_desc' as const,
+        view: 'full' as const,
+        page: page - 1,
+        size,
+      };
+    }
+    return {
+      studentId: studentFilter || undefined,
+      status: (filters?.status || 'all') as any,
+      from,
+      to,
+      includeOverdue: true,
+      hideCompleted: !!filters?.hideCompleted,
+      sort: sortMap[filters?.sort || 'assignedDesc'],
+      view: 'full' as const,
+      page: page - 1,
+      size,
+    };
+  }, [filtersApplied, studentFilter, filters?.status, filters?.hideCompleted, from, to, page, size, filters?.sort]);
+
+  const { data, isError, refetch } = useTeacherAssignments(user?.id || '', effectiveParams);
 
   // Keep previous data to avoid list flashing during refetch
   const [prevData, setPrevData] = useState<typeof data>(undefined);
@@ -230,7 +246,7 @@ const TeacherHomeworkPage: React.FC = () => {
         </Stack>
       </Stack>
 
-      <FiltersBar value={filters} onChange={setFilters} sticky />
+      <FiltersBar value={filters} onChange={(f) => { setFiltersApplied(true); setFilters(f); }} sticky />
 
       {isError && <Typography color="error">Failed to load.</Typography>}
 

@@ -91,11 +91,12 @@ const StudentHomeworkTab: React.FC<{ studentId: string; isTeacher: boolean; onAs
 
     const [composerOpen, setComposerOpen] = useState(false);
     const [filters, setFilters] = useState<FiltersState>({
-        status: 'active',
-        range: 'last7',
+        status: 'all',
+        range: 'custom',
         hideCompleted: true,
         sort: 'assignedDesc',
     });
+    const [filtersApplied, setFiltersApplied] = useState(false);
 
     const computeRange = (f: FiltersState) => {
         const now = new Date();
@@ -123,16 +124,29 @@ const StudentHomeworkTab: React.FC<{ studentId: string; isTeacher: boolean; onAs
     dueDesc: 'due_desc',
   };
 
-  const { data, isLoading, isError, refetch } = useStudentAssignments(studentId, {
-    status: (filters?.status as any) || 'active',
-    from,
-    to,
-    includeOverdue: true,
-    hideCompleted: filters?.hideCompleted ?? (filters?.status === 'active'),
-    sort: sortMap[filters?.sort || 'assignedDesc'],
-    view: 'full',
-    size: 100,
-  });
+  const effectiveParams = React.useMemo(() => {
+    if (!filtersApplied) {
+      return {
+        status: 'all' as const,
+        includeOverdue: true,
+        sort: 'assigned_desc' as const,
+        view: 'full' as const,
+        size: 10,
+      };
+    }
+    return {
+      status: (filters?.status as any) || 'active',
+      from,
+      to,
+      includeOverdue: true,
+      hideCompleted: filters?.hideCompleted ?? (filters?.status === 'active'),
+      sort: sortMap[filters?.sort || 'assignedDesc'],
+      view: 'full' as const,
+      size: 100,
+    };
+  }, [filtersApplied, filters?.status, filters?.hideCompleted, from, to, filters?.sort]);
+
+  const { data, isLoading, isError, refetch } = useStudentAssignments(studentId, effectiveParams);
   const list = data?.content || [];
 
   // auto open command from parent (student sync)
@@ -155,7 +169,7 @@ const StudentHomeworkTab: React.FC<{ studentId: string; isTeacher: boolean; onAs
         )}
       </Box>
       <Box sx={{ flex: 1, minWidth: 260 }}>
-        <FiltersBar value={filters} onChange={setFilters} collapsed={embedded} />
+        <FiltersBar value={filters} onChange={(f) => { setFiltersApplied(true); setFilters(f); }} collapsed={embedded} />
       </Box>
       <HomeworkComposerDrawer
         open={composerOpen}

@@ -65,11 +65,13 @@ const StudentHomeworkPage: React.FC = () => {
   const isTeacher = role === 'tutor' || role === 'teacher';
 
   const [filters, setFilters] = useState<FiltersState>({
-    status: 'active',
-    range: 'last7',
+    status: 'all',
+    range: 'custom',
     hideCompleted: true,
     sort: 'assignedDesc',
   });
+
+  const [filtersApplied, setFiltersApplied] = useState(false);
 
   const computeRange = (f: FiltersState) => {
     const now = new Date();
@@ -100,24 +102,38 @@ const StudentHomeworkPage: React.FC = () => {
   const studentId = !isTeacher ? (user?.id || '') : '';
 
   const [page, setPage] = useState<number>(1);
-  const [size, setSize] = useState<number>(20);
+  const [size, setSize] = useState<number>(10);
 
   // reset to first page when filters change
   React.useEffect(() => {
     setPage(1);
   }, [filters.status, filters.range, filters.from, filters.to, filters.hideCompleted, filters.sort]);
 
-  const { data, isError, isFetching } = useStudentAssignments(studentId, {
-    status: filters.status,
-    from,
-    to,
-    includeOverdue: true,
-    hideCompleted: filters.hideCompleted,
-    sort: sortMap[filters.sort],
-    view: 'full',
-    page: page - 1,
-    size,
-  });
+  const effectiveParams = React.useMemo(() => {
+    if (!filtersApplied) {
+      return {
+        status: 'all' as const,
+        includeOverdue: true,
+        sort: 'assigned_desc' as const,
+        view: 'full' as const,
+        page: page - 1,
+        size,
+      };
+    }
+    return {
+      status: filters.status,
+      from,
+      to,
+      includeOverdue: true,
+      hideCompleted: filters.hideCompleted,
+      sort: sortMap[filters.sort],
+      view: 'full' as const,
+      page: page - 1,
+      size,
+    };
+  }, [filtersApplied, filters.status, filters.hideCompleted, from, to, page, size, filters.sort]);
+
+  const { data, isError, isFetching } = useStudentAssignments(studentId, effectiveParams);
 
   // Keep previous data to avoid list flashing during refetch
   const [prevData, setPrevData] = useState<typeof data>(undefined);
@@ -153,7 +169,7 @@ const StudentHomeworkPage: React.FC = () => {
     <Container sx={{ py: 4, height: '100%', display: 'flex', flexDirection: 'column' }}>
       <Typography variant="h4" sx={{ mb: 2, fontWeight: 600, color: '#2573ff' }}>Here is your homework</Typography>
       <Box sx={{ mb: 2 }}>
-        <FiltersBar value={filters} onChange={setFilters} sticky />
+        <FiltersBar value={filters} onChange={(f) => { setFiltersApplied(true); setFilters(f); }} sticky />
       </Box>
       <Box sx={{ flex: 1, overflowY: 'auto', pr: 0.5, scrollbarWidth: 'none', msOverflowStyle: 'none', '&::-webkit-scrollbar': { display: 'none' } }}>
           <Grid container spacing={2}>
