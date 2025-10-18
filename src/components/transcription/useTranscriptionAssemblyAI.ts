@@ -13,8 +13,10 @@ export type Segment = {
     hits?: { word: string; startMs?: number; endMs?: number; confidence?: number }[];
 };
 
+export type TranscriptionStatus = 'idle' | 'starting' | 'live' | 'paused';
 export type UseTranscription = {
     isTranscribing: boolean;
+    status: TranscriptionStatus;
     segments: Segment[];
     error?: string | null;
     start: () => Promise<void>;
@@ -27,6 +29,7 @@ export type ProviderOpts = {
     studentSessionId?: string;
 };
 
+type StreamStatus = TranscriptionStatus;
 const AUDIO_CONSTRAINTS: MediaStreamConstraints = {
     audio: {
         echoCancellation: true,
@@ -52,6 +55,7 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
     const { words: focusWords } = useFocusWords();
 
     const [isTranscribing, setIsTranscribing] = useState(false);
+    const [status, setStatusState] = useState<StreamStatus>('idle');
     const [segments, setSegments] = useState<Segment[]>([]);
     const [error, setError] = useState<string | null>(null);
 
@@ -75,6 +79,9 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
     const isMutedRef = useRef<boolean>(false);
 
     const connectWsRef = useRef<() => void>(noop);
+    const statusRef = useRef<StreamStatus>('idle');
+    const lastBroadcastStatusRef = useRef<StreamStatus | null>(null);
+    const pingTimerRef = useRef<number | null>(null);
 
     const sanitizedKeyterms = useMemo(() => {
         if (!Array.isArray(focusWords) || focusWords.length === 0) return null;
@@ -101,9 +108,35 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
             ts: new Date().toISOString(),
             ...extra,
         };
-        // eslint-disable-next-line no-console
-        console.info('[stt.telemetry]', payload);
+        console.trace('[stt.telemetry]', payload);
     }, [studentSessionId]);
+
+    const applyStatus = useCallback((next: StreamStatus, opts?: { broadcast?: boolean }) => {
+        statusRef.current = next;
+        setStatusState(next);
+        setIsTranscribing(next === 'live');
+
+        if (!opts?.broadcast || isTutor) return;
+        if (!call || typeof call.sendAppMessage !== 'function') return;
+        if (lastBroadcastStatusRef.current === next) return;
+        lastBroadcastStatusRef.current = next;
+        try {
+            call.sendAppMessage({ t: 'A2T_STATUS', state: next });
+        } catch (err) {
+            console.warn('[transcription] failed to broadcast status', err);
+        }
+    }, [call, isTutor]);
+
+    useEffect(() => {
+        lastBroadcastStatusRef.current = null;
+    }, [call]);
+
+    const clearPingTimer = useCallback(() => {
+        if (pingTimerRef.current) {
+            window.clearInterval(pingTimerRef.current);
+            pingTimerRef.current = null;
+        }
+    }, []);
 
     const clearReconnectTimer = useCallback(() => {
         if (reconnectTimerRef.current) {
@@ -149,7 +182,7 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
         }
         try { ws.close(); } catch { /* noop */ }
         wsRef.current = null;
-    }, []);
+    }, [clearPingTimer]);
 
     const floatTo16BitPCM = useCallback((input: Float32Array): Uint8Array => {
         const buffer = new ArrayBuffer(input.length * 2);
@@ -269,12 +302,13 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
         const nextAttempt = reconnectAttemptRef.current + 1;
         reconnectAttemptRef.current = nextAttempt;
         const delay = Math.min(RECONNECT_MAX_DELAY_MS, RECONNECT_BASE_DELAY_MS * Math.pow(2, nextAttempt - 1));
+        applyStatus('starting', { broadcast: true });
         logTelemetry('stt_reconnect', { attempt: nextAttempt, reason, delayMs: delay, ...extra });
         clearReconnectTimer();
         reconnectTimerRef.current = window.setTimeout(() => {
             connectWsRef.current();
         }, delay);
-    }, [clearReconnectTimer, logTelemetry]);
+    }, [applyStatus, clearReconnectTimer, logTelemetry]);
 
     const mapCloseCodeToMessage = useCallback((code: number, reason?: string): string | null => {
         if (code === 3005) return 'Audio chunk rejected: please retry.';
@@ -376,7 +410,9 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
 
         ws.onopen = () => {
             reconnectAttemptRef.current = 0;
-            logTelemetry('stt_ws_open', {});
+            const nextState: StreamStatus = isMutedRef.current ? 'paused' : 'live';
+            applyStatus(nextState, { broadcast: true });
+            logTelemetry('stt_ws_open', { status: nextState });
         };
 
         ws.onmessage = handleWsMessage;
@@ -391,11 +427,12 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
             wsRef.current = null;
 
             if (!shouldStreamRef.current) {
-                setIsTranscribing(false);
+                applyStatus('idle', { broadcast: true });
                 return;
             }
             if (manualStopRef.current) {
                 manualStopRef.current = false;
+                applyStatus('idle', { broadcast: true });
                 return;
             }
 
@@ -403,6 +440,7 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
             if (mappedMessage) {
                 setError(mappedMessage);
             }
+            applyStatus('starting', { broadcast: true });
             scheduleReconnect('ws_close', { code: event.code, reason: event.reason });
         };
 
@@ -425,6 +463,8 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
         scheduleReconnect,
         clearTokenRefreshTimer,
         closeWebSocket,
+        applyStatus,
+        clearPingTimer,
     ]);
 
     connectWsRef.current = () => { void connectWs(); };
@@ -436,8 +476,8 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
         clearTokenRefreshTimer();
         closeWebSocket(true);
         cleanupAudio();
-        setIsTranscribing(false);
-    }, [clearReconnectTimer, clearTokenRefreshTimer, closeWebSocket, cleanupAudio]);
+        applyStatus('idle', { broadcast: true });
+    }, [applyStatus, clearReconnectTimer, clearTokenRefreshTimer, closeWebSocket, cleanupAudio, clearPingTimer]);
 
     const startStreaming = useCallback(async (origin: StartOrigin) => {
         if (isTutor) return;
@@ -447,6 +487,7 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
         reconnectAttemptRef.current = 0;
         shouldStreamRef.current = true;
         manualStopRef.current = false;
+        applyStatus('starting', { broadcast: true });
 
         try {
             await ensureAudioPipeline();
@@ -456,12 +497,12 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
             const message = err?.message || 'Microphone access required';
             setError(message);
             logTelemetry('stt_error', { reason: 'mic_initialise_failed', message, origin });
+            applyStatus('idle', { broadcast: true });
             return;
         }
 
-        setIsTranscribing(true);
         await connectWs();
-    }, [connectWs, ensureAudioPipeline, isTutor, logTelemetry]);
+    }, [applyStatus, connectWs, ensureAudioPipeline, isTutor, logTelemetry]);
 
     const updateMuteState = useCallback(() => {
         if (!call || typeof call.participants !== 'function') return;
@@ -471,10 +512,17 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
             const state = local?.tracks?.audio?.state;
             const muted = state === 'off' || state === 'blocked';
             isMutedRef.current = Boolean(muted);
+            if (!isTutor && shouldStreamRef.current) {
+                const wsReady = wsRef.current && wsRef.current.readyState === WebSocket.OPEN;
+                if (wsReady) {
+                    const nextStatus: StreamStatus = isMutedRef.current ? 'paused' : 'live';
+                    applyStatus(nextStatus, { broadcast: true });
+                }
+            }
         } catch {
             /* noop */
         }
-    }, [call]);
+    }, [applyStatus, call, isTutor]);
 
     useEffect(() => {
         if (!call) return;
@@ -508,8 +556,13 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
                     endMs: typeof seg.endMs === 'number' ? seg.endMs : undefined,
                     hits: Array.isArray(seg.hits) ? seg.hits : undefined,
                 };
-                setIsTranscribing(true);
+                applyStatus('live');
                 setSegments((prev) => mergeOrAppendSegment(prev as any, incoming as any) as any);
+            } else if (msg.t === 'A2T_STATUS' && isTutor) {
+                const state = typeof msg.state === 'string' ? msg.state.toLowerCase() : '';
+                if (state === 'idle' || state === 'starting' || state === 'live' || state === 'paused') {
+                    applyStatus(state as StreamStatus);
+                }
             } else if (msg.t === 'STT_CONTROL' && !isTutor) {
                 const action = msg.action;
                 if (action === 'start') {
@@ -518,6 +571,8 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
                     });
                 } else if (action === 'stop') {
                     stopStreaming().catch(() => {/* noop */});
+                } else if (action === 'clear') {
+                    setSegments([]);
                 }
             }
         };
@@ -525,7 +580,7 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
         return () => {
             try { call.off?.('app-message', handler); } catch { /* noop */ }
         };
-    }, [call, isTutor, startStreaming, stopStreaming]);
+    }, [applyStatus, call, isTutor, startStreaming, stopStreaming]);
 
     useEffect(() => {
         if (isTutor || !call) return;
@@ -558,7 +613,8 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
         clearTokenRefreshTimer();
         closeWebSocket(false);
         cleanupAudio();
-    }, [clearReconnectTimer, clearTokenRefreshTimer, closeWebSocket, cleanupAudio]);
+        applyStatus('idle');
+    }, [applyStatus, clearReconnectTimer, clearTokenRefreshTimer, clearPingTimer, closeWebSocket, cleanupAudio]);
 
     const start = useCallback(async () => {
         if (!call) {
@@ -566,10 +622,11 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
             return;
         }
         if (isTutor) {
+            applyStatus('starting');
             try {
                 call.sendAppMessage?.({ t: 'STT_CONTROL', action: 'start' });
-                setIsTranscribing(true);
             } catch (err) {
+                applyStatus('idle');
                 const message = (err as Error)?.message || 'Failed to notify student';
                 setError(message);
                 logTelemetry('stt_error', { reason: 'control_send_failed', message });
@@ -577,7 +634,7 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
             return;
         }
         await startStreaming('local');
-    }, [call, isTutor, logTelemetry, startStreaming]);
+    }, [applyStatus, call, isTutor, logTelemetry, startStreaming]);
 
     const stop = useCallback(async () => {
         if (isTutor) {
@@ -586,22 +643,30 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
             } catch {
                 /* noop */
             }
-            setIsTranscribing(false);
+            applyStatus('idle');
             return;
         }
         await stopStreaming();
-    }, [call, isTutor, stopStreaming]);
+    }, [applyStatus, call, isTutor, stopStreaming]);
 
     const clear = useCallback(() => {
         setSegments([]);
-    }, []);
+        if (isTutor && call && typeof call.sendAppMessage === 'function') {
+            try {
+                call.sendAppMessage({ t: 'STT_CONTROL', action: 'clear' });
+            } catch (err) {
+                console.warn('[transcription] failed to send clear control', err);
+            }
+        }
+    }, [call, isTutor]);
 
     return useMemo<UseTranscription>(() => ({
         isTranscribing,
+        status,
         segments,
         error,
         start,
         stop,
         clear,
-    }), [isTranscribing, segments, error, start, stop, clear]);
+    }), [isTranscribing, status, segments, error, start, stop, clear]);
 }

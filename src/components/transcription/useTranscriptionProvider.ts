@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useDailyTranscription } from './useDailyTranscription';
-import { useTranscriptionAssemblyAI } from './useTranscriptionAssemblyAI';
+import { useTranscriptionAssemblyAI, type TranscriptionStatus } from './useTranscriptionAssemblyAI';
 
 export type Segment = {
   id: string;
@@ -13,6 +13,7 @@ export type Segment = {
 
 export type UseTranscription = {
   isTranscribing: boolean;
+  status: TranscriptionStatus;
   segments: Segment[];
   error?: string | null;
   start: () => Promise<void>;
@@ -34,6 +35,7 @@ export function useTranscriptionDaily(opts: ProviderOpts): UseTranscription {
   });
   return useMemo<UseTranscription>(() => ({
     isTranscribing: state.isActive,
+    status: state.isActive ? 'live' : 'idle',
     segments: state.segments.map(s => ({
       id: s.id,
       text: s.text,

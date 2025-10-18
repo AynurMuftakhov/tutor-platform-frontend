@@ -9,11 +9,12 @@ export function escapeRegExp(s: string) {
 }
 
 const WORD_RX = /\b[\p{L}\p{M}’']+\b/gu;
+const POSSESSIVE_RX = /’s$|'s$/;
 
 // Cache lemma forms to avoid repeated lookups per token
 const lemmaFormsCache = new Map<string, string[]>();
 function getLemmaForms(input: string): string[] {
-  const token = input.toLowerCase().trim().replace(/’s$|'s$/,'');
+  const token = input.toLowerCase().trim().replace(POSSESSIVE_RX,'');
   const cached = lemmaFormsCache.get(token);
   if (cached) return cached;
 
@@ -44,7 +45,7 @@ function toLemmaSet(words: string[]): Set<string> {
   const out = new Set<string>();
   for (const raw of words) {
     if (!raw) continue;
-    const token = String(raw).toLowerCase().trim().replace(/’s$|'s$/,'');
+    const token = String(raw).toLowerCase().trim().replace(POSSESSIVE_RX,'');
     if (!token) continue;
     for (const form of getLemmaForms(token)) out.add(form);
   }
@@ -72,7 +73,7 @@ export function renderHighlightedByStem(text: string, focusWords: string[]) {
         const start = m.index;
         const end = start + m[0].length;
         const token = m[0];
-        const normalized = token.toLowerCase().replace(/’s$|'s$/,'');
+        const normalized = token.toLowerCase().replace(POSSESSIVE_RX,'');
         const lemmaForms = getLemmaForms(normalized);
 
         let matches = false;
@@ -118,7 +119,7 @@ export function collectHitsFromRaw(
         for (const m of matches) {
             const token = String((m as any)?.text ?? (m as any)?.word ?? '').toLowerCase();
             if (!token) continue;
-            const normalized = token.replace(/’s$|'s$/,'');
+            const normalized = token.replace(POSSESSIVE_RX,'');
             const lemmaForms = getLemmaForms(normalized);
             if (lemmaForms.some((form) => targetLemmas.has(form))) {
                 hits.push({
@@ -163,4 +164,40 @@ export function mergeOrAppendSegment(arr: TranscriptSegment[], next: TranscriptS
     return copy;
   }
   return [...arr, next];
+}
+
+export function countFocusWordMatches(text: string, focusWords: string[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  if (!text || !focusWords || focusWords.length === 0) return counts;
+
+  const lemmaToBase = new Map<string, Set<string>>();
+  for (const raw of focusWords) {
+    const base = String(raw ?? '').trim().toLowerCase();
+    if (!base) continue;
+    const forms = getLemmaForms(base);
+    for (const form of forms) {
+      if (!lemmaToBase.has(form)) lemmaToBase.set(form, new Set());
+      lemmaToBase.get(form)!.add(base);
+    }
+  }
+  if (lemmaToBase.size === 0) return counts;
+
+  WORD_RX.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = WORD_RX.exec(text))) {
+    const token = match[0];
+    const normalized = token.toLowerCase().replace(POSSESSIVE_RX, '');
+    const forms = getLemmaForms(normalized);
+    const matchedBases = new Set<string>();
+    for (const form of forms) {
+      const targets = lemmaToBase.get(form);
+      if (!targets) continue;
+      for (const base of targets) matchedBases.add(base);
+    }
+    matchedBases.forEach((base) => {
+      counts[base] = (counts[base] ?? 0) + 1;
+    });
+  }
+
+  return counts;
 }

@@ -13,7 +13,7 @@ import { DailyProvider } from '@daily-co/daily-react';
 import { useTranscriptionProvider } from './useTranscriptionProvider';
 import { useFocusWords } from '../../context/FocusWordsContext';
 import { useSnackbar } from 'notistack';
-import { renderHighlightedByStem } from './highlight';
+import { countFocusWordMatches, renderHighlightedByStem } from './highlight';
 import { useAuth } from '../../context/AuthContext';
 import HomeworkWordPicker from './HomeworkWordPicker';
 
@@ -46,6 +46,7 @@ function TranscriptionPanelInner({
     // Provider-agnostic transcription hook
     const {
         isTranscribing,
+        status,
         segments: providerSegments,
         start,
         stop,
@@ -56,6 +57,9 @@ function TranscriptionPanelInner({
     // Meeting/connection state (only for showing UI hints about Daily call)
     const [meetingState, setMeetingState] = useState<'idle' | 'joining' | 'joined' | 'left' | 'error'>('idle');
     const [hasRemote, setHasRemote] = useState(false);
+
+    const streamStatus = status ?? (isTranscribing ? 'live' : 'idle');
+    const isSessionActive = streamStatus !== 'idle';
 
     // Debug panel (Daily-only)
     const [debugOpen, setDebugOpen] = useState(false);
@@ -279,31 +283,22 @@ function TranscriptionPanelInner({
     // Totals: prefer provider hits; fallback to a lightweight text scan
     const [totals, setTotals] = useState<Record<string, number>>({});
     useEffect(() => {
-        const counts: Record<string, number> = {};
-
-        // 1) Use hits if present
-        let usedHits = false;
-        for (const s of providerSegments) {
-            if (Array.isArray(s.hits) && s.hits.length) {
-                usedHits = true;
-                for (const h of s.hits) {
-                    const k = String(h.word || '').toLowerCase();
-                    if (!k) continue;
-                    counts[k] = (counts[k] ?? 0) + 1;
-                }
-            }
+        if (!focusWords.length) {
+            setTotals({});
+            return;
         }
 
-        // 2) Fallback: quick scan of finalized text (approximate; stem-aware UI still highlights accurately)
-        if (!usedHits && focusWords.length) {
-            const text = providerSegments.filter(s => s.isFinal && s.text).map(s => s.text).join(' ');
-            for (const w of focusWords) {
-                const rx = new RegExp(`\\b${escapeRegExp(String(w))}\\b`, 'gi');
-                const m = text.match(rx);
-                if (m?.length) counts[w.toLowerCase()] = (counts[w.toLowerCase()] ?? 0) + m.length;
-            }
+        const finalsText = providerSegments
+            .filter((s) => s.isFinal && s.text)
+            .map((s) => s.text)
+            .join(' ');
+
+        if (!finalsText.trim()) {
+            setTotals({});
+            return;
         }
 
+        const counts = countFocusWordMatches(finalsText, focusWords);
         setTotals(counts);
     }, [providerSegments, focusWords]);
 
@@ -450,13 +445,28 @@ function TranscriptionPanelInner({
         ? { label: 'Student joined', color: 'success' as const }
         : { label: 'Waiting for student…', color: 'default' as const };
 
-    const transcriptionChip = (!isTranscribing)
-        ? { label: 'Idle', color: 'default' as const }
-        : (isAssembly
-            ? { label: 'Listening to student', color: 'success' as const }
+    const assemblyChip = (() => {
+        switch (streamStatus) {
+            case 'starting':
+                return { label: isTutor ? 'Starting transcription…' : 'Preparing mic…', color: 'info' as const };
+            case 'live':
+                return { label: isTutor ? 'Listening to student' : 'Live — speak now', color: 'success' as const };
+            case 'paused':
+                return { label: isTutor ? 'Paused (student muted)' : 'Paused — unmute to resume', color: 'warning' as const };
+            default:
+                return { label: 'Idle', color: 'default' as const };
+        }
+    })();
+
+    const transcriptionChip = isAssembly
+        ? assemblyChip
+        : (!isTranscribing
+            ? { label: 'Idle', color: 'default' as const }
             : (appliedPid
                 ? { label: 'Listening to student', color: 'success' as const }
                 : { label: 'Listening (all)', color: 'info' as const }));
+
+    const chipVariant = streamStatus === 'live' ? 'filled' : 'outlined';
 
     const focusAssignmentId = focusMeta.source === 'homework' ? focusMeta.assignmentId : undefined;
 
@@ -504,7 +514,7 @@ function TranscriptionPanelInner({
                     }}
                 >
                     <Stack direction="row" alignItems="center" spacing={1}>
-                        {isTranscribing ? (
+                        {isSessionActive ? (
                             <Button variant="outlined" color="primary" onClick={handleStop} startIcon={<StopIcon/>}>
                                 Stop
                             </Button>
@@ -548,12 +558,34 @@ function TranscriptionPanelInner({
                             <Chip size="small" variant="outlined" color={studentChip.color} label={studentChip.label} />
                             <Chip
                                 size="small"
-                                variant={isTranscribing ? 'filled' : 'outlined'}
+                                variant={chipVariant}
                                 color={transcriptionChip.color}
                                 label={transcriptionChip.label}
                             />
                             {providerError ? <Chip size="small" color="error" variant="outlined" label="Error" /> : null}
                         </Stack>
+                    </Stack>
+                </Box>
+            )}
+
+            {!isTutor && isAssembly && (
+                <Box sx={{ mb: 2 }}>
+                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                        <Chip
+                            size="small"
+                            variant={chipVariant}
+                            color={transcriptionChip.color}
+                            label={transcriptionChip.label}
+                        />
+                        <Typography variant="body2" color="text.secondary">
+                            {streamStatus === 'live'
+                                ? 'You can start speaking now.'
+                                : streamStatus === 'paused'
+                                    ? 'Transcription is paused while your mic is muted.'
+                                    : streamStatus === 'starting'
+                                        ? 'Preparing your microphone…'
+                                        : 'Transcription is idle.'}
+                        </Typography>
                     </Stack>
                 </Box>
             )}
@@ -770,8 +802,4 @@ function triggerDownload(blob: Blob, filename: string) {
     a.download = filename;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-function escapeRegExp(s: string) {
-    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
