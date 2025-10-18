@@ -9,87 +9,141 @@ import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
 import PauseOutlinedIcon from '@mui/icons-material/PauseOutlined';
 import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
-import { DailyProvider, useTranscription } from '@daily-co/daily-react';
+import { DailyProvider } from '@daily-co/daily-react';
+import { useTranscriptionProvider } from './useTranscriptionProvider';
 import { useFocusWords } from '../../context/FocusWordsContext';
 import { useSnackbar } from 'notistack';
-import { collectHitsFromRaw, extractSegmentKey, mergeOrAppendSegment, renderHighlightedByStem } from './highlight';
-import type { TranscriptSegment } from './types';
+import { renderHighlightedByStem } from './highlight';
 import { useAuth } from '../../context/AuthContext';
 import HomeworkWordPicker from './HomeworkWordPicker';
 
 type Props = {
-  open?: boolean;
-  onClose?: () => void;
-  embedded?: boolean;
-  call: any; // Daily call object (used by DailyProvider)
-  studentSessionId?: string;
-  studentId?: string; // for homework picker
-  homeworkWords: string[];
+    open?: boolean;
+    onClose?: () => void;
+    embedded?: boolean;
+    call: any; // Daily call object (used by DailyProvider)
+    studentSessionId?: string;
+    studentId?: string; // for homework picker
+    homeworkWords: string[];
 };
 
 function TranscriptionPanelInner({
-  open,
-  onClose,
-  embedded,
-  studentSessionId,
-  studentId,
-  homeworkWords,
-  call,
-}: Props) {
-  const { user } = useAuth();
-  const isTutor = user?.role === 'tutor';
-  const { enqueueSnackbar } = useSnackbar();
+                                     open,
+                                     onClose,
+                                     embedded,
+                                     studentSessionId,
+                                     studentId,
+                                     homeworkWords,
+                                     call,
+                                 }: Props) {
+    const { user } = useAuth();
+    const isTutor = user?.role === 'tutor';
+    const { enqueueSnackbar } = useSnackbar();
 
-  // Meeting/connection state
-  const [meetingState, setMeetingState] = useState<'idle' | 'joining' | 'joined' | 'left' | 'error'>('idle');
-  const [hasRemote, setHasRemote] = useState(false);
-  const [debugOpen, setDebugOpen] = useState(false); // hidden by default; teachers can open
-  const { isTranscribing, transcriptions, startTranscription, stopTranscription, error } = useTranscription();
+    // Which provider are we using?
+    const isAssembly = true;
 
-  const [segments, setSegments] = useState<TranscriptSegment[]>([]);
-  const [totals, setTotals] = useState<Record<string, number>>({});
-  const lastCountRef = useRef(0);
-  const listRef = useRef<HTMLDivElement>(null);
-  // Track which participantId has been applied to transcription filter
-  const lastAppliedPidRef = useRef<string | undefined>(undefined);
-  // UI indicator of currently applied participant filter (undefined => ALL)
-  const [appliedPid, setAppliedPid] = useState<string | undefined>(undefined);
+    // Provider-agnostic transcription hook
+    const {
+        isTranscribing,
+        segments: providerSegments,
+        start,
+        stop,
+        clear: clearProvider,
+        error: providerError,
+    } = useTranscriptionProvider({ call, studentSessionId, homeworkWords });
 
-  // Utilities: pause/autoscroll and renderedSegments
-  const [autoscroll, setAutoscroll] = useState(true);
-  const [paused, setPaused] = useState(false);
-  const pausedSnapshotRef = useRef<TranscriptSegment[] | null>(null);
-  const [menuEl, setMenuEl] = useState<null | HTMLElement>(null);
-  const openMenu = (e: React.MouseEvent<HTMLElement>) => setMenuEl(e.currentTarget);
-  const closeMenu = () => setMenuEl(null);
-  // Manual entry for focus words
-  const [manualInput, setManualInput] = useState('');
-  const [homeworkPickerOpen, setHomeworkPickerOpen] = useState(false);
-  const seededRef = useRef(false);
+    // Meeting/connection state (only for showing UI hints about Daily call)
+    const [meetingState, setMeetingState] = useState<'idle' | 'joining' | 'joined' | 'left' | 'error'>('idle');
+    const [hasRemote, setHasRemote] = useState(false);
 
-  const togglePause = () => {
-    if (!paused) {
-      pausedSnapshotRef.current = segments.slice();
-      setPaused(true);
-    } else {
-      pausedSnapshotRef.current = null;
-      setPaused(false);
-    }
-  };
+    // Debug panel (Daily-only)
+    const [debugOpen, setDebugOpen] = useState(false);
+    const [rawActive, setRawActive] = useState(false);
+    const [rawLogs, setRawLogs] = useState<string[]>([]);
+    const rawHandlersRef = useRef<{ onStarted?: (e:any)=>void; onMsg?: (e:any)=>void; onErr?: (e:any)=>void; onStopped?: (e:any)=>void } | null>(null);
+    const lastProviderErrorRef = useRef<string | null>(null);
 
-  const renderedSegments = paused && pausedSnapshotRef.current
-    ? pausedSnapshotRef.current
-    : segments;
-
-  // ---- RAW DEBUG (bypass daily-react; talk to call object directly) ----
-  const [rawActive, setRawActive] = useState(false);
-  const [rawLogs, setRawLogs] = useState<string[]>([]);
-  const rawHandlersRef = useRef<{ onStarted?: (e:any)=>void; onMsg?: (e:any)=>void; onErr?: (e:any)=>void; onStopped?: (e:any)=>void } | null>(null);
-
-    // Participants snapshot (Daily ждёт participantId = КЛЮЧ из participants(), не user_id)
+    // Daily participants snapshot (for Daily-only filtering)
     const [ptList, setPtList] = useState<Array<{ id: string; label: string }>>([]);
     const [selectedPid, setSelectedPid] = useState<string | undefined>(undefined);
+    const [appliedPid, setAppliedPid] = useState<string | undefined>(undefined);
 
+    // UI helper state
+    const listRef = useRef<HTMLDivElement>(null);
+    const [autoscroll, setAutoscroll] = useState(true);
+    const [paused, setPaused] = useState(false);
+    const pausedSnapshotRef = useRef<typeof providerSegments | null>(null);
+    const [menuEl, setMenuEl] = useState<null | HTMLElement>(null);
+    const openMenu = (e: React.MouseEvent<HTMLElement>) => setMenuEl(e.currentTarget);
+    const closeMenu = () => setMenuEl(null);
+
+    // Manual entry for focus words
+    const [manualInput, setManualInput] = useState('');
+    const [homeworkPickerOpen, setHomeworkPickerOpen] = useState(false);
+    const seededRef = useRef(false);
+
+    // Focus words (shared context)
+    const { words: focusWords, meta: focusMeta, setWords: setFocusWords, clear: clearFocusWords } = useFocusWords();
+    const lastBroadcastRef = useRef<string>('');
+
+    const pushLog = (msg: string) => {
+        const ts = new Date().toLocaleTimeString();
+        setRawLogs((prev) => [`${ts}  ${msg}`, ...prev].slice(0, 200));
+    };
+
+    // Pause toggling uses a snapshot of the current provider segments
+    const togglePause = () => {
+        if (!paused) {
+            pausedSnapshotRef.current = providerSegments.slice();
+            setPaused(true);
+        } else {
+            pausedSnapshotRef.current = null;
+            setPaused(false);
+        }
+    };
+
+    const displayedSegments = paused && pausedSnapshotRef.current
+        ? pausedSnapshotRef.current
+        : providerSegments;
+
+    useEffect(() => {
+        if (!providerError) return;
+        if (lastProviderErrorRef.current === providerError) return;
+        lastProviderErrorRef.current = providerError;
+        enqueueSnackbar(providerError, { variant: 'error' });
+    }, [providerError, enqueueSnackbar]);
+
+    // Daily meeting state helpers (for header chips)
+    useEffect(() => {
+        if (!call) return;
+        try {
+            const ms = typeof call.meetingState === 'function' ? call.meetingState() : undefined;
+            if (ms === 'joined-meeting') setMeetingState('joined');
+            else if (ms === 'joining-meeting') setMeetingState('joining');
+            else if (ms === 'left-meeting') setMeetingState('left');
+            else setMeetingState('idle');
+        } catch { setMeetingState('idle'); }
+
+        const onJoining = () => setMeetingState('joining');
+        const onJoined = () => setMeetingState('joined');
+        const onLeft = () => setMeetingState('left');
+        const onErr = () => setMeetingState('error');
+
+        call.on('joining-meeting', onJoining);
+        call.on('joined-meeting', onJoined);
+        call.on('left-meeting', onLeft);
+        call.on('error', onErr);
+
+        return () => {
+            try { call.off('joining-meeting', onJoining); } catch {}
+            try { call.off('joined-meeting', onJoined); } catch {}
+            try { call.off('left-meeting', onLeft); } catch {}
+            try { call.off('error', onErr); } catch {}
+        };
+    }, [call]);
+
+    // Participants list (Daily-only)
     const refreshParticipants = React.useCallback(() => {
         if (!call || !call.participants) return;
         try {
@@ -102,100 +156,9 @@ function TranscriptionPanelInner({
             }));
             setPtList(mapped);
             setHasRemote(mapped.length > 0);
-            // Приоритет выбора: уже выбранный -> переданный studentSessionId -> первый в списке
             setSelectedPid(prev => prev ?? (studentSessionId ?? mapped[0]?.id));
         } catch {/* noop */}
     }, [call, studentSessionId]);
-  useEffect(() => {
-    if (!call) return;
-    // initial snapshot
-    try {
-      const ms = typeof call.meetingState === 'function' ? call.meetingState() : undefined;
-      if (ms === 'joined-meeting') setMeetingState('joined');
-      else if (ms === 'joining-meeting') setMeetingState('joining');
-      else if (ms === 'left-meeting') setMeetingState('left');
-      else setMeetingState('idle');
-    } catch { setMeetingState('idle'); }
-
-    const onJoining = () => setMeetingState('joining');
-    const onJoined = () => setMeetingState('joined');
-    const onLeft = () => setMeetingState('left');
-    const onErr = () => setMeetingState('error');
-
-    call.on('joining-meeting', onJoining);
-    call.on('joined-meeting', onJoined);
-    call.on('left-meeting', onLeft);
-    call.on('error', onErr);
-
-    return () => {
-      try { call.off('joining-meeting', onJoining); } catch {}
-      try { call.off('joined-meeting', onJoined); } catch {}
-      try { call.off('left-meeting', onLeft); } catch {}
-      try { call.off('error', onErr); } catch {}
-    };
-  }, [call]);
-  // Derived human-friendly statuses
-  const connectionChip = (() => {
-    switch (meetingState) {
-      case 'joining': return { label: 'Connecting…', color: 'info' as const };
-      case 'joined':  return { label: 'Connected',   color: 'success' as const };
-      case 'left':    return { label: 'Left call',    color: 'default' as const };
-      case 'error':   return { label: 'Error',        color: 'error' as const };
-      default:        return { label: 'Idle',         color: 'default' as const };
-    }
-  })();
-
-  const studentChip = hasRemote
-    ? { label: 'Student joined', color: 'success' as const }
-    : { label: 'Waiting for student…', color: 'default' as const };
-
-  const transcriptionChip = (!isTranscribing)
-    ? { label: 'Idle', color: 'default' as const }
-    : (appliedPid
-        ? { label: 'Listening to student', color: 'success' as const }
-        : { label: 'Listening (all)', color: 'info' as const });
-
-  const pushLog = (msg: string) => {
-    const ts = new Date().toLocaleTimeString();
-    setRawLogs((prev) => [`${ts}  ${msg}`, ...prev].slice(0, 200));
-  };
-
-  // Focus words come from context; used for stem-aware highlighting
-  const { words: focusWords, meta: focusMeta, setWords: setFocusWords, clear: clearFocusWords } = useFocusWords();
-  const lastBroadcastRef = useRef<string>('');
-
-  useEffect(() => {
-    lastBroadcastRef.current = '';
-  }, [call]);
-
-  useEffect(() => {
-    if (!isTutor) return;
-    if (!call || typeof call.sendAppMessage !== 'function') return;
-    const payload = {
-      t: 'FOCUS_WORDS',
-      words: focusWords,
-      meta: focusMeta,
-    };
-    const serialized = JSON.stringify(payload);
-    if (lastBroadcastRef.current === serialized) return;
-    lastBroadcastRef.current = serialized;
-    try {
-      call.sendAppMessage(payload);
-    } catch (err) {
-      console.warn('Failed to broadcast focus words', err);
-    }
-  }, [call, focusWords, focusMeta, isTutor]);
-
-    // Seed focus words from props.homeworkWords if context is empty
-    useEffect(() => {
-      if (seededRef.current) return;
-      if (focusWords.length === 0 && Array.isArray(homeworkWords) && homeworkWords.length > 0) {
-        try {
-          setFocusWords(homeworkWords, { source: 'homework', label: 'Latest homework' }, 'replace');
-          seededRef.current = true;
-        } catch {/* ignore */}
-      }
-    }, [focusWords.length, homeworkWords, setFocusWords]);
 
     useEffect(() => {
         if (!call) return;
@@ -211,178 +174,149 @@ function TranscriptionPanelInner({
         };
     }, [call, refreshParticipants]);
 
-  const applyManualWords = () => {
-    const parts = manualInput.split(/[\s,]+/).map((entry) => entry.trim()).filter(Boolean);
-    if (parts.length === 0) return;
-    const { applied, trimmed } = setFocusWords(parts, { source: 'manual' }, 'merge');
-    enqueueSnackbar(`${applied} word${applied === 1 ? '' : 's'} added`, { variant: 'success' });
-    if (trimmed > 0) {
-      enqueueSnackbar('Trimmed to 30 words', { variant: 'warning' });
-    }
-    setManualInput('');
-  };
+    // Broadcast focus words to the student via Daily app-message (teacher only)
+    useEffect(() => {
+        lastBroadcastRef.current = '';
+    }, [call]);
 
-  const handleManualKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.key !== 'Enter') return;
-    event.preventDefault();
-    applyManualWords();
-  };
-
-  const handleOpenHomeworkPicker = () => {
-    if (!studentId) {
-      enqueueSnackbar('Select a student to load homework vocabulary.', { variant: 'warning' });
-      return;
-    }
-    setHomeworkPickerOpen(true);
-  };
-
-  const handleCloseHomeworkPicker = () => {
-    setHomeworkPickerOpen(false);
-  };
-
-  const handleApplyHomeworkWords = ({
-    words,
-    assignmentId,
-    assignmentTitle,
-  }: {
-    words: string[];
-    assignmentId: string;
-    assignmentTitle?: string;
-  }) => {
-    if (!Array.isArray(words) || words.length === 0) return;
-    const { applied, trimmed } = setFocusWords(
-      words,
-      {
-        source: 'homework',
-        assignmentId,
-        label: assignmentTitle,
-      },
-      'replace',
-    );
-    seededRef.current = true;
-    enqueueSnackbar(
-      `Loaded ${applied} word${applied === 1 ? '' : 's'} from ${assignmentTitle || 'homework'}`,
-      { variant: 'success' },
-    );
-    if (trimmed > 0) {
-      enqueueSnackbar('Trimmed to 30 words', { variant: 'warning' });
-    }
-    setHomeworkPickerOpen(false);
-  };
-
-  // Append new messages into our persistent segments & counters
-  useEffect(() => {
-    if (!transcriptions || transcriptions.length <= lastCountRef.current) return;
-    const newMsgs = transcriptions.slice(lastCountRef.current);
-    lastCountRef.current = transcriptions.length;
-
-    setSegments((prev) => {
-      let acc = prev;
-      for (const ev of newMsgs as any[]) {
-        const text: string = ev?.text ?? '';
-        const raw = ev?.rawResponse;
-        const isFinal = !!(ev?.is_final ?? ev?.final);
-        const segId = extractSegmentKey({ data: { rawResponse: raw, ...ev } });
-        const hits = collectHitsFromRaw(raw, focusWords, text);
-
-        acc = mergeOrAppendSegment(acc, {
-          id: segId,
-          text,
-          isFinal,
-          startMs: raw?.start ?? ev?.start,
-          endMs: raw?.end ?? ev?.end,
-          hits,
-        });
-
-        if (hits?.length) {
-          // update totals
-          setTotals((t) => {
-            const copy = { ...t };
-            for (const h of hits) {
-              const k = h.word.toLowerCase();
-              copy[k] = (copy[k] ?? 0) + 1;
-            }
-            return copy;
-          });
+    useEffect(() => {
+        if (!isTutor) return;
+        if (!call || typeof call.sendAppMessage !== 'function') return;
+        const payload = { t: 'FOCUS_WORDS', words: focusWords, meta: focusMeta };
+        const serialized = JSON.stringify(payload);
+        if (lastBroadcastRef.current === serialized) return;
+        lastBroadcastRef.current = serialized;
+        try {
+            call.sendAppMessage(payload);
+        } catch (err) {
+            console.warn('Failed to broadcast focus words', err);
         }
-      }
-      return acc.slice();
-    });
-  }, [transcriptions, focusWords]);
+    }, [call, focusWords, focusMeta, isTutor]);
 
-  // Auto-scroll to bottom when new segments arrive (respect autoscroll toggle)
-  useEffect(() => {
-    if (!autoscroll) return;
-    const el = listRef.current;
-    if (!el) return;
-    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
-    if (nearBottom) el.scrollTop = el.scrollHeight;
-  }, [renderedSegments.length, autoscroll]);
+    // Seed focus words from props.homeworkWords if context is empty
+    useEffect(() => {
+        if (seededRef.current) return;
+        if (focusWords.length === 0 && Array.isArray(homeworkWords) && homeworkWords.length > 0) {
+            try {
+                setFocusWords(homeworkWords, { source: 'homework', label: 'Latest homework' }, 'replace');
+                seededRef.current = true;
+            } catch {/* ignore */}
+        }
+    }, [focusWords.length, homeworkWords, setFocusWords]);
 
-  const handleStart = async () => {
-    // Start for ALL first to avoid races; then narrow to student when ready
-    await startTranscription({
-      includeRawResponse: true,
-      extra: {
-        search: focusWords,
-        keywords: focusWords.map((w) => `${w}:1.5`),
-      },
-    });
-    // If we already know the student's participantId, narrow immediately
-    if (call && studentSessionId) {
-      try {
-        await call.updateTranscription({ participants: [studentSessionId] });
-        lastAppliedPidRef.current = studentSessionId;
-        setAppliedPid(studentSessionId);
-      } catch (e) {
-        // non-fatal: we will retry via the effect below when pid stabilizes
-      }
-    }
-  };
-
-  const handleStop = async () => {
-    await stopTranscription();
-    lastAppliedPidRef.current = undefined;
-    setAppliedPid(undefined);
-  };
-  // Auto-apply/update participants filter when studentSessionId becomes available or changes
-  useEffect(() => {
-    const maybeUpdate = async () => {
-      if (!isTranscribing || !call) return;
-      if (!studentSessionId) return;
-      if (lastAppliedPidRef.current === studentSessionId) return;
-      try {
-        await call.updateTranscription({ participants: [studentSessionId] });
-        lastAppliedPidRef.current = studentSessionId;
-        setAppliedPid(studentSessionId);
-        pushLog?.(`[AUTO] updateTranscription → [${studentSessionId}]`);
-      } catch {/* swallow; will retry on next change */}
+    // Start/Stop using provider API. Daily-only participant narrowing is optional.
+    const handleStart = async () => {
+        await start(); // provider decides how to start (Assembly / Daily)
+        if (!isAssembly && call && studentSessionId) {
+            try {
+                await call.updateTranscription({ participants: [studentSessionId] });
+                setAppliedPid(studentSessionId);
+            } catch {/* ignore – provider may handle it */}
+        }
     };
-    void maybeUpdate();
-  }, [isTranscribing, call, studentSessionId]);
 
-  // Update transcription extras when focus words change
-  useEffect(() => {
-    if (!isTranscribing || !call) return;
-    try {
-      call.updateTranscription({
-        extra: {
-          search: focusWords,
-          keywords: focusWords.map((w) => `${w}:1.5`),
-        },
-      });
-      pushLog?.(`[AUTO] updateTranscription keywords (${focusWords.length})`);
-    } catch {
-      /* ignore */
+    const handleStop = async () => {
+        await stop();
+        setAppliedPid(undefined);
+    };
+
+    // Update Daily transcription extras when focus words change (Daily-only)
+    useEffect(() => {
+        if (isAssembly) return; // Assembly keyterms are set via WS URL at session start
+        if (!isTranscribing || !call) return;
+        try {
+            call.updateTranscription({
+                extra: {
+                    search: focusWords,
+                    keywords: focusWords.map((w: string) => `${w}:1.5`),
+                },
+            });
+            pushLog?.(`[AUTO] updateTranscription keywords (${focusWords.length})`);
+        } catch { /* ignore */ }
+    }, [isTranscribing, call, focusWords, isAssembly]);
+
+    // Clear transcript
+    const handleClear = () => {
+        clearProvider();
+        setTotals({});
+    };
+
+    // Paragraph rendering from final segments
+    type Seg = { id: string; text: string; isFinal?: boolean; startMs?: number; endMs?: number };
+    function toParagraphs(
+        segments: Seg[],
+        { gapMs = 900, maxChars = 260 }: { gapMs?: number; maxChars?: number } = {}
+    ) {
+        const finals = segments.filter(s => s.isFinal && s.text?.trim());
+        const out: Array<{ text: string; startMs: number; endMs: number }> = [];
+        let buf = '';
+        let start = finals[0]?.startMs ?? 0;
+        let lastEnd = start;
+
+        const flush = () => {
+            if (!buf.trim()) return;
+            out.push({ text: buf.trim(), startMs: start, endMs: lastEnd ?? start });
+            buf = '';
+        };
+
+        for (const s of finals) {
+            const gap = s.startMs != null && lastEnd != null ? s.startMs - lastEnd : 0;
+            const punctEnd = /[.!?]\s*$/.test(buf);
+            const tooLong = buf.length >= maxChars;
+            if (gap > gapMs || punctEnd || tooLong) {
+                flush();
+                start = s.startMs ?? start;
+            }
+            buf += (buf ? ' ' : '') + s.text.trim();
+            lastEnd = s.endMs ?? s.startMs ?? lastEnd;
+        }
+        flush();
+        return out;
     }
-  }, [isTranscribing, call, focusWords]);
 
-  const handleClear = () => {
-    setSegments([]);
-    setTotals({});
-    lastCountRef.current = transcriptions?.length ?? 0;
-  };
+    const paragraphs = useMemo(() => toParagraphs(displayedSegments), [displayedSegments]);
 
+    // Totals: prefer provider hits; fallback to a lightweight text scan
+    const [totals, setTotals] = useState<Record<string, number>>({});
+    useEffect(() => {
+        const counts: Record<string, number> = {};
+
+        // 1) Use hits if present
+        let usedHits = false;
+        for (const s of providerSegments) {
+            if (Array.isArray(s.hits) && s.hits.length) {
+                usedHits = true;
+                for (const h of s.hits) {
+                    const k = String(h.word || '').toLowerCase();
+                    if (!k) continue;
+                    counts[k] = (counts[k] ?? 0) + 1;
+                }
+            }
+        }
+
+        // 2) Fallback: quick scan of finalized text (approximate; stem-aware UI still highlights accurately)
+        if (!usedHits && focusWords.length) {
+            const text = providerSegments.filter(s => s.isFinal && s.text).map(s => s.text).join(' ');
+            for (const w of focusWords) {
+                const rx = new RegExp(`\\b${escapeRegExp(String(w))}\\b`, 'gi');
+                const m = text.match(rx);
+                if (m?.length) counts[w.toLowerCase()] = (counts[w.toLowerCase()] ?? 0) + m.length;
+            }
+        }
+
+        setTotals(counts);
+    }, [providerSegments, focusWords]);
+
+    // Auto-scroll when new paragraphs arrive (respect autoscroll)
+    useEffect(() => {
+        if (!autoscroll) return;
+        const el = listRef.current;
+        if (!el) return;
+        const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+        if (nearBottom) el.scrollTop = el.scrollHeight;
+    }, [paragraphs.length, autoscroll]);
+
+    // Daily raw debugging helpers (hidden for Assembly)
     const handleRawStartAll = async () => {
         if (!call || rawActive) return;
         const onStarted = () => { setRawActive(true); pushLog('[RAW] STARTED'); };
@@ -438,7 +372,7 @@ function TranscriptionPanelInner({
     };
 
     const handleRawStartAllThenUpdate = async () => {
-        await handleRawStartAll(); // стартуем всех, чтобы не ловить гонки
+        await handleRawStartAll();
         const pid = selectedPid ?? studentSessionId;
         if (!pid) { pushLog('[RAW] No participantId to update'); return; }
         setTimeout(async () => {
@@ -488,301 +422,356 @@ function TranscriptionPanelInner({
         }
     };
 
-    const dumpEnv = () => {
-        try {
-            const me = call?.participants?.().local;
-            pushLog(`[RAW] owner=${!!me?.owner} canAdmin=${JSON.stringify(me?.permissions?.canAdmin)}`);
-            const ids = Object.keys(call?.participants?.() || {});
-            pushLog(`[RAW] participant keys: ${ids.join(', ') || '(none)'}`);
-        } catch { pushLog('[RAW] dump failed'); }
-    };
-
-  // Cleanup on unmount or call change
-  useEffect(() => {
-    return () => {
-      const h = rawHandlersRef.current;
-      if (!call || !h) return;
-      try { call.off('transcription-started', h.onStarted as any); } catch {}
-      try { call.off('transcription-message', h.onMsg as any); } catch {}
-      try { call.off('transcription-error', h.onErr as any); } catch {}
-      try { call.off('transcription-stopped', h.onStopped as any); } catch {}
-      rawHandlersRef.current = null;
-    };
-  }, [call]);
-    const paragraphs = useMemo(() => toParagraphs(renderedSegments), [renderedSegments]);
-    type Seg = { id: string; text: string; isFinal?: boolean; startMs?: number; endMs?: number };
-
-    function toParagraphs(
-        segments: Seg[],
-        { gapMs = 900, maxChars = 260 }: { gapMs?: number; maxChars?: number } = {}
-    ) {
-        const finals = segments.filter(s => s.isFinal && s.text?.trim());
-        const out: Array<{ text: string; startMs: number; endMs: number }> = [];
-        let buf = '';
-        let start = finals[0]?.startMs ?? 0;
-        let lastEnd = start;
-
-        const flush = () => {
-            if (!buf.trim()) return;
-            out.push({ text: buf.trim(), startMs: start, endMs: lastEnd ?? start });
-            buf = '';
+    // Cleanup Daily raw handlers on unmount/change
+    useEffect(() => {
+        return () => {
+            const h = rawHandlersRef.current;
+            if (!call || !h) return;
+            try { call.off('transcription-started', h.onStarted as any); } catch {}
+            try { call.off('transcription-message', h.onMsg as any); } catch {}
+            try { call.off('transcription-error', h.onErr as any); } catch {}
+            try { call.off('transcription-stopped', h.onStopped as any); } catch {}
+            rawHandlersRef.current = null;
         };
+    }, [call]);
 
-        for (const s of finals) {
-            const gap = s.startMs != null && lastEnd != null ? s.startMs - lastEnd : 0;
-            const punctEnd = /[.!?]\s*$/.test(buf);
-            const tooLong = buf.length >= maxChars;
-
-            if (gap > gapMs || punctEnd || tooLong) {
-                flush();
-                start = s.startMs ?? start;
-            }
-
-            buf += (buf ? ' ' : '') + s.text.trim();
-            lastEnd = s.endMs ?? s.startMs ?? lastEnd;
+    // Header chips
+    const connectionChip = (() => {
+        switch (meetingState) {
+            case 'joining': return { label: 'Connecting…', color: 'info' as const };
+            case 'joined':  return { label: 'Connected',   color: 'success' as const };
+            case 'left':    return { label: 'Left call',   color: 'default' as const };
+            case 'error':   return { label: 'Error',       color: 'error' as const };
+            default:        return { label: 'Idle',        color: 'default' as const };
         }
-        flush();
-        return out;
+    })();
+
+    const studentChip = hasRemote
+        ? { label: 'Student joined', color: 'success' as const }
+        : { label: 'Waiting for student…', color: 'default' as const };
+
+    const transcriptionChip = (!isTranscribing)
+        ? { label: 'Idle', color: 'default' as const }
+        : (isAssembly
+            ? { label: 'Listening to student', color: 'success' as const }
+            : (appliedPid
+                ? { label: 'Listening to student', color: 'success' as const }
+                : { label: 'Listening (all)', color: 'info' as const }));
+
+    const focusAssignmentId = focusMeta.source === 'homework' ? focusMeta.assignmentId : undefined;
+
+    const homeworkPickerElement = (
+        <HomeworkWordPicker
+            open={homeworkPickerOpen}
+            studentId={studentId}
+            currentAssignmentId={focusAssignmentId}
+            onClose={() => setHomeworkPickerOpen(false)}
+            onApply={({ words, assignmentId, assignmentTitle }) => {
+                if (!Array.isArray(words) || words.length === 0) return;
+                const { applied, trimmed } = setFocusWords(
+                    words,
+                    { source: 'homework', assignmentId, label: assignmentTitle },
+                    'replace',
+                );
+                seededRef.current = true;
+                enqueueSnackbar(
+                    `Loaded ${applied} word${applied === 1 ? '' : 's'} from ${assignmentTitle || 'homework'}`,
+                    { variant: 'success' },
+                );
+                if (trimmed > 0) enqueueSnackbar('Trimmed to 30 words', { variant: 'warning' });
+                setHomeworkPickerOpen(false);
+            }}
+        />
+    );
+
+    const content = (
+        <Box ref={listRef} sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto' }}>
+            {/* Header */}
+            {!embedded && (
+                <Typography variant="h6" sx={{ flex: 1, fontWeight: 700 }}>
+                    Live Transcript
+                </Typography>
+            )}
+
+            {isTutor && (
+                <Box
+                    sx={{
+                        position: 'sticky', top: 0, zIndex: 1,
+                        bgcolor: 'background.paper',
+                        p: 1.5,
+                        borderBottom: '1px solid', borderColor: 'divider',
+                        boxShadow: (t) => t.shadows[1],
+                    }}
+                >
+                    <Stack direction="row" alignItems="center" spacing={1}>
+                        {isTranscribing ? (
+                            <Button variant="outlined" color="primary" onClick={handleStop} startIcon={<StopIcon/>}>
+                                Stop
+                            </Button>
+                        ) : (
+                            <Button variant="contained" color="primary" onClick={handleStart} startIcon={<PlayArrowIcon/>} disabled={!call && !isAssembly}>
+                                Start
+                            </Button>
+                        )}
+                        <Button onClick={handleClear}>Clear transcript</Button>
+                        <IconButton aria-label="More" onClick={openMenu}>
+                            <MoreVertIcon />
+                        </IconButton>
+                        <Menu anchorEl={menuEl} open={Boolean(menuEl)} onClose={closeMenu}>
+                            {!isAssembly && (
+                                <MenuItem onClick={() => { setDebugOpen(v => !v); closeMenu(); }}>
+                                    <ListItemIcon><MoreVertIcon fontSize="small" /></ListItemIcon>
+                                    <ListItemText primary={debugOpen ? 'Hide developer tools' : 'Show developer tools'} />
+                                </MenuItem>
+                            )}
+                            <MenuItem onClick={() => { copyAllText(providerSegments); closeMenu(); }}>
+                                <ListItemIcon><ContentCopyOutlinedIcon fontSize="small" /></ListItemIcon>
+                                <ListItemText primary="Copy transcript" />
+                            </MenuItem>
+                            <MenuItem onClick={() => { downloadTxt(providerSegments); closeMenu(); }}>
+                                <ListItemIcon><FileDownloadOutlinedIcon fontSize="small" /></ListItemIcon>
+                                <ListItemText primary="Export .txt" />
+                            </MenuItem>
+                            <MenuItem onClick={() => { setAutoscroll(v => !v); closeMenu(); }}>
+                                <ListItemIcon>{/* iconless toggle */}</ListItemIcon>
+                                <ListItemText primary={autoscroll ? 'Autoscroll: On' : 'Autoscroll: Off'} />
+                            </MenuItem>
+                            <MenuItem onClick={() => { togglePause(); closeMenu(); }}>
+                                <ListItemIcon>{paused ? <PlayCircleOutlineIcon fontSize="small" /> : <PauseOutlinedIcon fontSize="small" />}</ListItemIcon>
+                                <ListItemText primary={paused ? 'Resume stream' : 'Pause stream'} />
+                            </MenuItem>
+                        </Menu>
+
+                        {/* Status row */}
+                        <Stack direction="row" spacing={1} sx={{ ml: 1, flexWrap: 'wrap' }}>
+                            <Chip size="small" variant="outlined" color={connectionChip.color} label={connectionChip.label} />
+                            <Chip size="small" variant="outlined" color={studentChip.color} label={studentChip.label} />
+                            <Chip
+                                size="small"
+                                variant={isTranscribing ? 'filled' : 'outlined'}
+                                color={transcriptionChip.color}
+                                label={transcriptionChip.label}
+                            />
+                            {providerError ? <Chip size="small" color="error" variant="outlined" label="Error" /> : null}
+                        </Stack>
+                    </Stack>
+                </Box>
+            )}
+
+            {/* Focus words */}
+            <Box sx={{ mt: isTutor? 2 : 0, mb: 1 }}>
+                <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+                    <Typography variant="subtitle2">Keywords</Typography>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                        <Chip size="small" variant="outlined" label={`${focusWords.length} words`} />
+                        <Chip
+                            size="small"
+                            variant="outlined"
+                            label={`Source: ${focusMeta.source === 'homework' ? `Homework${focusMeta.label ? ' — ' + focusMeta.label : ''}` : 'Manual'}`}
+                        />
+                        {isTutor && (
+                            <Button size="small" onClick={() => { clearFocusWords(); enqueueSnackbar('Focus words cleared', { variant: 'info' }); }}>
+                                Clear
+                            </Button>
+                        )}
+                    </Stack>
+                </Stack>
+
+                {isTutor && (
+                    <Stack direction="row" spacing={1} sx={{ mb: 1, flexWrap: 'wrap' }}>
+                        <Button size="small" variant="outlined" onClick={() => {
+                            if (!studentId) {
+                                enqueueSnackbar('Select a student to load homework vocabulary.', { variant: 'warning' });
+                                return;
+                            }
+                            setHomeworkPickerOpen(true);
+                        }}>
+                            Pick from homework
+                        </Button>
+                        <TextField
+                            size="small"
+                            placeholder="Add words (comma/space separated)"
+                            value={manualInput}
+                            onChange={(e) => setManualInput(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key !== 'Enter') return;
+                                e.preventDefault();
+                                const parts = manualInput.split(/[\s,]+/).map((entry) => entry.trim()).filter(Boolean);
+                                if (parts.length === 0) return;
+                                const { applied, trimmed } = setFocusWords(parts, { source: 'manual' }, 'merge');
+                                enqueueSnackbar(`${applied} word${applied === 1 ? '' : 's'} added`, { variant: 'success' });
+                                if (trimmed > 0) enqueueSnackbar('Trimmed to 30 words', { variant: 'warning' });
+                                setManualInput('');
+                            }}
+                            sx={{ flexGrow: 1, minWidth: 200 }}
+                        />
+                        <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={() => {
+                                const parts = manualInput.split(/[\s,]+/).map((entry) => entry.trim()).filter(Boolean);
+                                if (parts.length === 0) return;
+                                const { applied, trimmed } = setFocusWords(parts, { source: 'manual' }, 'merge');
+                                enqueueSnackbar(`${applied} word${applied === 1 ? '' : 's'} added`, { variant: 'success' });
+                                if (trimmed > 0) enqueueSnackbar('Trimmed to 30 words', { variant: 'warning' });
+                                setManualInput('');
+                            }}
+                            disabled={!manualInput.trim()}
+                        >
+                            Add
+                        </Button>
+                    </Stack>
+                )}
+
+                <Stack direction="row" spacing={0} flexWrap="wrap">
+                    {focusWords.map((w) => (
+                        <Chip
+                            key={w}
+                            label={`${w} · ${totals[w.toLowerCase()] ?? 0}`}
+                            size="small"
+                            onDelete={isTutor ? () => {
+                                const rest = focusWords.filter((x) => x !== w);
+                                setFocusWords(rest, { ...focusMeta }, 'replace');
+                            } : undefined}
+                            sx={{ mr: .5, mb: .5 }}
+                        />
+                    ))}
+                </Stack>
+            </Box>
+
+            <Divider />
+
+            {/* Transcript */}
+            <Box sx={{ px: 2, py: 1, display: 'flex', justifyContent: 'flex-start' }}>
+                <Box sx={{ maxWidth: '64ch', width: '100%' }}>
+                    {paragraphs.map((p, i) => (
+                        <Typography
+                            key={i}
+                            variant="body2"
+                            sx={{
+                                mb: 1.25,
+                                lineHeight: 1.6,
+                                letterSpacing: 0.1,
+                                wordBreak: 'break-word',
+                                '& mark': (theme) => ({
+                                    backgroundColor: theme.palette.mode === 'light'
+                                        ? 'rgba(253,200,80,.22)' : 'rgba(253,200,80,.30)',
+                                    borderRadius: '4px',
+                                    padding: '0 2px',
+                                    boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.05)',
+                                }),
+                            }}
+                        >
+                            {renderHighlightedByStem(p.text, focusWords)}
+                        </Typography>
+                    ))}
+                </Box>
+            </Box>
+
+            {/* Daily raw debug – hidden for Assembly */}
+            {!isAssembly && isTutor && debugOpen && (
+                <>
+                    <Divider sx={{ mt: 1, mb: 1 }} />
+                    <Typography variant="overline" sx={{ letterSpacing: 1 }}>Debug: Raw Daily STT</Typography>
+
+                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1, flexWrap: 'wrap' }}>
+                        <Button variant="outlined" onClick={handleRawStartAll} disabled={!call || rawActive}>Start (all)</Button>
+                        <Button variant="outlined" onClick={handleRawStartSelected} disabled={!call || rawActive || !(selectedPid || studentSessionId)}>Start (selected)</Button>
+                        <Button variant="outlined" onClick={handleRawStartAllThenUpdate} disabled={!call || rawActive}>Start → Update(selected)</Button>
+                        <Button variant="outlined" onClick={handleRawUpdateSelected} disabled={!call || !rawActive || !(selectedPid || studentSessionId)}>Update(selected)</Button>
+                        <Button variant="outlined" color="warning" onClick={handleRawStop} disabled={!call}>Stop</Button>
+                        <Button onClick={() => {
+                            try {
+                                const me = call?.participants?.().local;
+                                pushLog(`[RAW] owner=${!!me?.owner} canAdmin=${JSON.stringify(me?.permissions?.canAdmin)}`);
+                                const ids = Object.keys(call?.participants?.() || {});
+                                pushLog(`[RAW] participant keys: ${ids.join(', ') || '(none)'}`);
+                            } catch { pushLog('[RAW] dump failed'); }
+                        }}>Dump env</Button>
+                        <Button onClick={() => { setRawLogs([]); refreshParticipants(); }}>Clear logs</Button>
+                    </Stack>
+
+                    <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="caption" sx={{ mr: 1 }}>participantId:</Typography>
+                        <select
+                            value={selectedPid ?? ''}
+                            onChange={(e) => setSelectedPid(e.target.value || undefined)}
+                            style={{ fontFamily: 'monospace', fontSize: 12 }}
+                        >
+                            <option value="">(auto)</option>
+                            {ptList.map((p) => (
+                                <option key={p.id} value={p.id}>{p.label}</option>
+                            ))}
+                        </select>
+                    </Box>
+
+                    <Box sx={{ bgcolor: 'grey.100', border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 1, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace', fontSize: 12, maxHeight: 160, overflowY: 'auto' }}>
+                        {rawLogs.length === 0 ? (
+                            <Typography variant="caption" color="text.secondary">No logs yet.</Typography>
+                        ) : (
+                            <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{rawLogs.join('\n')}</pre>
+                        )}
+                    </Box>
+                </>
+            )}
+        </Box>
+    );
+
+    if (embedded) {
+        return (
+            <>
+                {content}
+                {homeworkPickerElement}
+            </>
+        );
     }
 
-  const focusAssignmentId = focusMeta.source === 'homework' ? focusMeta.assignmentId : undefined;
-
-  const homeworkPickerElement = (
-    <HomeworkWordPicker
-      open={homeworkPickerOpen}
-      studentId={studentId}
-      currentAssignmentId={focusAssignmentId}
-      onClose={handleCloseHomeworkPicker}
-      onApply={handleApplyHomeworkWords}
-    />
-  );
-
-  const content = (
-      <Box
-          ref={listRef}
-          sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto' }}
-      >
-        {/* Header */}
-          {!embedded && (
-              <Typography variant="h6" sx={{ flex: 1, fontWeight: 700 }}>
-                  Live Transcript
-              </Typography>
-          )}
-          {isTutor && (<Box
-              sx={{
-                  position: 'sticky', top: 0, zIndex: 1,
-                  bgcolor: 'background.paper',
-                  p: 1.5,
-                  borderBottom: '1px solid', borderColor: 'divider',
-                  boxShadow: (t) => t.shadows[1],
-              }}
-          >
-          <Stack direction="row" alignItems="center" spacing={1}>
-          {isTranscribing ? (
-              <Button variant="outlined" color="primary" onClick={handleStop} startIcon={<StopIcon/>}>
-                  Stop
-              </Button>
-          ) : (
-              <Button variant="contained" color="primary" onClick={handleStart} startIcon={<PlayArrowIcon/>} disabled={!call}>
-                  Start
-              </Button>
-          )}
-          <Button onClick={handleClear}>Clear transcript</Button>
-        <IconButton aria-label="More" onClick={openMenu}>
-          <MoreVertIcon />
-        </IconButton>
-        <Menu anchorEl={menuEl} open={Boolean(menuEl)} onClose={closeMenu}>
-          <MenuItem onClick={() => { setDebugOpen(v => !v); closeMenu(); }}>
-            <ListItemIcon><MoreVertIcon fontSize="small" /></ListItemIcon>
-            <ListItemText primary={debugOpen ? 'Hide developer tools' : 'Show developer tools'} />
-          </MenuItem>
-          <MenuItem onClick={() => { copyAllText(segments); closeMenu(); }}>
-            <ListItemIcon><ContentCopyOutlinedIcon fontSize="small" /></ListItemIcon>
-            <ListItemText primary="Copy transcript" />
-          </MenuItem>
-          <MenuItem onClick={() => { downloadTxt(segments); closeMenu(); }}>
-            <ListItemIcon><FileDownloadOutlinedIcon fontSize="small" /></ListItemIcon>
-            <ListItemText primary="Export .txt" />
-          </MenuItem>
-          <MenuItem onClick={() => { setAutoscroll(v => !v); closeMenu(); }}>
-            <ListItemIcon>{/* iconless toggle */}</ListItemIcon>
-            <ListItemText primary={autoscroll ? 'Autoscroll: On' : 'Autoscroll: Off'} />
-          </MenuItem>
-          <MenuItem onClick={() => { togglePause(); closeMenu(); }}>
-            <ListItemIcon>{paused ? <PlayCircleOutlineIcon fontSize="small" /> : <PauseOutlinedIcon fontSize="small" />}</ListItemIcon>
-            <ListItemText primary={paused ? 'Resume stream' : 'Pause stream'} />
-          </MenuItem>
-        </Menu>
-          {/* Status row */}
-          <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap' }}>
-              <Chip size="small" variant="outlined" color={connectionChip.color} label={connectionChip.label} />
-              <Chip size="small" variant="outlined" color={studentChip.color} label={studentChip.label} />
-              <Chip
-                  size="small"
-                  variant={isTranscribing ? 'filled' : 'outlined'}
-                  color={transcriptionChip.color}
-                  label={transcriptionChip.label}
-              />
-          </Stack>
-
-          </Stack>
-        </Box>)}
-
-        <Box sx={{ mt: isTutor? 2 : 0, mb: 1 }}>
-            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
-              <Typography variant="subtitle2">Keywords</Typography>
-              <Stack direction="row" spacing={1} alignItems="center">
-                <Chip size="small" variant="outlined" label={`${focusWords.length} words`} />
-                <Chip size="small" variant="outlined" label={`Source: ${focusMeta.source === 'homework' ? `Homework${focusMeta.label ? ' — ' + focusMeta.label : ''}` : 'Manual'}`} />
-                {isTutor && (
-                  <Button size="small" onClick={() => { clearFocusWords(); enqueueSnackbar('Focus words cleared', { variant: 'info' }); }}>Clear</Button>
-                )}
-              </Stack>
-            </Stack>
-            {isTutor && (
-              <Stack direction="row" spacing={1} sx={{ mb: 1, flexWrap: 'wrap' }}>
-                <Button size="small" variant="outlined" onClick={handleOpenHomeworkPicker}>
-                  Pick from homework
-                </Button>
-                <TextField
-                  size="small"
-                  placeholder="Add words (comma/space separated)"
-                  value={manualInput}
-                  onChange={(e) => setManualInput(e.target.value)}
-                  onKeyDown={handleManualKeyDown}
-                  sx={{ flexGrow: 1, minWidth: 200 }}
-                />
-                <Button size="small" variant="outlined" onClick={applyManualWords} disabled={!manualInput.trim()}>
-                  Add
-                </Button>
-              </Stack>
-            )}
-          <Stack direction="row" spacing={0} flexWrap="wrap">
-            {focusWords.map((w) => (
-              <Chip key={w} label={`${w} · ${totals[w.toLowerCase()] ?? 0}`} size="small" onDelete={isTutor ? () => { const rest = focusWords.filter((x) => x !== w); setFocusWords(rest, { ...focusMeta }, 'replace'); } : undefined} sx={{ mr: .5, mb: .5 }} />
-            ))}
-          </Stack>
-        </Box>
-
-          <Divider />
-
-          <Box sx={{ px: 2, py: 1, display: 'flex', justifyContent: 'flex-start' }}>
-              <Box sx={{ maxWidth: '64ch', width: '100%' }}>
-                  {paragraphs.map((p, i) => (
-                      <Typography
-                          key={i}
-                          variant="body2"
-                          sx={{
-                              mb: 1.25,
-                              lineHeight: 1.6,
-                              letterSpacing: 0.1,
-                              wordBreak: 'break-word',
-                              '& mark': (theme) => ({
-                                  backgroundColor: theme.palette.mode === 'light'
-                                      ? 'rgba(253,200,80,.22)' : 'rgba(253,200,80,.30)',
-                                  borderRadius: '4px',
-                                  padding: '0 2px',
-                                  boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.05)',
-                              }),
-                          }}
-                      >
-                          {renderHighlightedByStem(p.text, focusWords)}
-                      </Typography>
-                  ))}
-              </Box>
-          </Box>
-
-        {isTutor && debugOpen && (
-          <>
-            <Divider sx={{ mt: 1, mb: 1 }} />
-            <Typography variant="overline" sx={{ letterSpacing: 1 }}>Debug: Raw Daily STT</Typography>
-
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1, flexWrap: 'wrap' }}>
-              <Button variant="outlined" onClick={handleRawStartAll} disabled={!call || rawActive}>Start (all)</Button>
-              <Button variant="outlined" onClick={handleRawStartSelected} disabled={!call || rawActive || !(selectedPid || studentSessionId)}>Start (selected)</Button>
-              <Button variant="outlined" onClick={handleRawStartAllThenUpdate} disabled={!call || rawActive}>Start → Update(selected)</Button>
-              <Button variant="outlined" onClick={handleRawUpdateSelected} disabled={!call || !rawActive || !(selectedPid || studentSessionId)}>Update(selected)</Button>
-              <Button variant="outlined" color="warning" onClick={handleRawStop} disabled={!call}>Stop</Button>
-              <Button onClick={dumpEnv}>Dump env</Button>
-              <Button onClick={() => { setRawLogs([]); refreshParticipants(); }}>Clear logs</Button>
-            </Stack>
-
-            <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Typography variant="caption" sx={{ mr: 1 }}>participantId:</Typography>
-              <select
-                value={selectedPid ?? ''}
-                onChange={(e) => setSelectedPid(e.target.value || undefined)}
-                style={{ fontFamily: 'monospace', fontSize: 12 }}
-              >
-                <option value="">(auto)</option>
-                {ptList.map((p) => (
-                  <option key={p.id} value={p.id}>{p.label}</option>
-                ))}
-              </select>
-            </Box>
-
-            <Box sx={{ bgcolor: 'grey.100', border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 1, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace', fontSize: 12, maxHeight: 160, overflowY: 'auto' }}>
-              {rawLogs.length === 0 ? (
-                <Typography variant="caption" color="text.secondary">No logs yet.</Typography>
-              ) : (
-                <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{rawLogs.join('\n')}</pre>
-              )}
-            </Box>
-          </>
-        )}
-      </Box>
-  );
-
-  if (embedded) {
     return (
-      <>
-        {content}
-        {homeworkPickerElement}
-      </>
+        <>
+            <Drawer anchor="right" open={!!open} onClose={onClose} PaperProps={{ sx: { width: 440 } }}>
+                {content}
+            </Drawer>
+            {homeworkPickerElement}
+        </>
     );
-  }
-
-  return (
-    <>
-      <Drawer anchor="right" open={!!open} onClose={onClose} PaperProps={{ sx: { width: 440 } }}>
-        {content}
-      </Drawer>
-      {homeworkPickerElement}
-    </>
-  );
 }
 
 export default function TranscriptionPanel(props: Props) {
-  const { call, ...rest } = props;
-  // Provide the Daily call object to @daily-co/daily-react so useTranscription works.
-  return (
-    <DailyProvider callObject={call}>
-      <TranscriptionPanelInner {...rest} call={call} />
-    </DailyProvider>
-  );
+    const { call, ...rest } = props;
+    // DailyProvider is harmless for Assembly (it just provides context to Daily hooks when used)
+    return (
+        <DailyProvider callObject={call}>
+            <TranscriptionPanelInner {...rest} call={call} />
+        </DailyProvider>
+    );
 }
 
-function plainText(segments: TranscriptSegment[]) {
-  return segments
-    .filter((s) => s.text?.trim())
-    .map((s) => s.text.trim())
-    .join('\n');
+// ---------- helpers ----------
+function plainText(items: Array<{ text?: string }>) {
+    return items
+        .filter((s) => s.text && s.text.trim())
+        .map((s) => String(s.text).trim())
+        .join('\n');
 }
 
-async function copyAllText(segments: TranscriptSegment[]) {
-  await navigator.clipboard.writeText(plainText(segments));
+async function copyAllText(items: Array<{ text?: string }>) {
+    await navigator.clipboard.writeText(plainText(items));
 }
 
-function downloadTxt(segments: TranscriptSegment[]) {
-  const blob = new Blob([plainText(segments)], { type: 'text/plain;charset=utf-8' });
-  triggerDownload(blob, 'transcript.txt');
+function downloadTxt(items: Array<{ text?: string }>) {
+    const blob = new Blob([plainText(items)], { type: 'text/plain;charset=utf-8' });
+    triggerDownload(blob, 'transcript.txt');
 }
 
 function triggerDownload(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function escapeRegExp(s: string) {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

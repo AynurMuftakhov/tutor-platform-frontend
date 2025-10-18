@@ -233,34 +233,35 @@ export const fetchLiveKitToken = async (identity: string, roomName: string, user
     return response.data;
 }
 
+export type AssemblyAiStreamingToken = {
+    token: string;
+    expiresAt: number;
+    ttlSeconds?: number;
+};
+
+export const fetchAssemblyAiToken = async (): Promise<AssemblyAiStreamingToken> => {
+    const response = await api.post(`video-service/api/assemblyai/token`, {});
+    const { token, expiresAt, ttlSeconds } = response?.data ?? {};
+    if (!token || typeof token !== 'string') {
+        throw new Error('AssemblyAI token missing in response');
+    }
+    const resolvedExpiry =
+        typeof expiresAt === 'number' && Number.isFinite(expiresAt)
+            ? expiresAt
+            : Date.now() + 60_000;
+    const resolvedTtl =
+        typeof ttlSeconds === 'number' && Number.isFinite(ttlSeconds)
+            ? ttlSeconds
+            : undefined;
+    return {
+        token,
+        expiresAt: resolvedExpiry,
+        ttlSeconds: resolvedTtl,
+    };
+};
+
 export const getLessonTasks = async (lessonId: string) => {
   const response = await api.get(`/lessons-service/api/lessons/${lessonId}/tasks`);
-  return response.data;
-}
-
-// Legacy API functions - deprecated
-/**
- * @deprecated Use deleteListeningTask instead
- */
-export const deleteGlobalListeningTask = async (taskId: string) => {
-    const response = await api.delete(`/lessons-service/api/listening-tasks/${taskId}`);
-    return response.data;
-}
-
-/**
- * @deprecated Use fetchListeningTasks instead
- */
-export const getAllListeningTasks = async () => {
-    const response = await api.get(`/lessons-service/api/listening-tasks`);
-    return response.data;
-}
-
-/**
- * @deprecated Use fetchListeningTasks instead
- */
-export const geListeningTasks = async (folderId: string) => {
-  const query = folderId ? `?folderId=${folderId}` : '';
-  const response = await api.get(`/lessons-service/api/listening-tasks${query}`);
   return response.data;
 }
 
