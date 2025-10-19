@@ -74,6 +74,7 @@ const VideoCallPage: React.FC<VideoCallPageProps> = (props) => {
             <DailyCallLayout
                 roomName={roomName ?? undefined}
                 studentId={studentId ?? undefined}
+                lessonId={lessonId ?? undefined}
                 onLeave={handleLeave}
             />
         </FocusWordsProvider>
@@ -86,8 +87,9 @@ const VideoCallPage: React.FC<VideoCallPageProps> = (props) => {
 const DailyCallLayout: React.FC<{
     roomName?: string;
     studentId?: string;
+    lessonId?: string;
     onLeave: () => void;
-}> = ({ roomName, studentId, onLeave }) => {
+}> = ({ roomName, studentId, lessonId, onLeave }) => {
     const { user } = useAuth();
     const {
         failureMessage,
@@ -535,6 +537,7 @@ const DailyCallLayout: React.FC<{
                                                 studentSessionId={studentSessionIdForDaily}
                                                 studentId={(isTutor ? studentId : resolvedStudentId) as string | undefined}
                                                 homeworkWords={homeworkWords}
+                                                lessonId={lessonId || undefined}
                                             />
                                         </Box>
                                     ) : (

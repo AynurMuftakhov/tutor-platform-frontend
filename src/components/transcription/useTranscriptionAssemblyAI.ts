@@ -1,8 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useFocusWords } from '../../context/FocusWordsContext';
-import { useAuth } from '../../context/AuthContext';
-import { collectHitsFromRaw, mergeOrAppendSegment } from './highlight';
-import { fetchAssemblyAiToken } from '../../services/api';
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {useSnackbar} from 'notistack';
+import {useFocusWords} from '../../context/FocusWordsContext';
+import {useAuth} from '../../context/AuthContext';
+import {collectHitsFromRaw, mergeOrAppendSegment} from './highlight';
+import {fetchAssemblyAiToken, type TurnClipResponse, uploadTurnClip} from '../../services/api';
+import type {TranscriptSegmentClip} from './types';
+
+export type SegmentClip = TranscriptSegmentClip;
 
 export type Segment = {
     id: string;
@@ -11,13 +15,16 @@ export type Segment = {
     startMs?: number;
     endMs?: number;
     hits?: { word: string; startMs?: number; endMs?: number; confidence?: number }[];
+    clip?: SegmentClip;
 };
 
 export type TranscriptionStatus = 'idle' | 'starting' | 'live' | 'paused';
+
 export type UseTranscription = {
     isTranscribing: boolean;
     status: TranscriptionStatus;
     segments: Segment[];
+    sessionClip?: SegmentClip;
     error?: string | null;
     start: () => Promise<void>;
     stop: () => Promise<void>;
@@ -27,9 +34,12 @@ export type UseTranscription = {
 export type ProviderOpts = {
     call: any;
     studentSessionId?: string;
+    lessonId?: string;
 };
 
 type StreamStatus = TranscriptionStatus;
+type StartOrigin = 'local' | 'remote';
+
 const AUDIO_CONSTRAINTS: MediaStreamConstraints = {
     audio: {
         echoCancellation: true,
@@ -40,16 +50,50 @@ const AUDIO_CONSTRAINTS: MediaStreamConstraints = {
 
 const TARGET_SAMPLE_RATE = 16_000;
 const CHUNK_MS = 50;
-const CHUNK_SAMPLES = (TARGET_SAMPLE_RATE * CHUNK_MS) / 1000; // 800 samples @16kHz
+const CHUNK_SAMPLES = (TARGET_SAMPLE_RATE * CHUNK_MS) / 1000;
 const TOKEN_REFRESH_BUFFER_MS = 5_000;
 const RECONNECT_BASE_DELAY_MS = 1_000;
 const RECONNECT_MAX_DELAY_MS = 5_000;
+const MIN_CLIP_DURATION_MS = 400;
+const MAX_CLIP_UPLOAD_ATTEMPTS = 3;
 
-type StartOrigin = 'local' | 'remote';
+const API_BASE = ((import.meta as any).env?.VITE_API_URL as string | undefined) || '';
 
-const noop = () => {/* no op*/};
+const noop = () => { /* no-op */ };
 
-export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderOpts): UseTranscription {
+function toAbsoluteClipUrl(relative: string): string {
+    const safe = relative?.startsWith('/') ? relative : `/${relative ?? ''}`;
+    const cleanBase = API_BASE.endsWith('/') ? API_BASE.slice(0, -1) : API_BASE;
+    const prefix = `${cleanBase}${cleanBase ? '' : ''}/lessons-service`;
+    return `${prefix}${safe}`;
+}
+
+function sleep(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function chooseRecorderMime(): string {
+    if (typeof window === 'undefined' || typeof MediaRecorder === 'undefined') return 'audio/webm';
+    const candidates = [
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/ogg;codecs=opus',
+        'audio/ogg',
+    ];
+    for (const candidate of candidates) {
+        try {
+            if ((MediaRecorder as any).isTypeSupported?.(candidate)) {
+                return candidate;
+            }
+        } catch {
+            // ignore and continue
+        }
+    }
+    return 'audio/webm';
+}
+
+export function useTranscriptionAssemblyAI({ call, studentSessionId, lessonId }: ProviderOpts): UseTranscription {
+    const { enqueueSnackbar } = useSnackbar();
     const { user } = useAuth();
     const isTutor = user?.role === 'tutor';
     const { words: focusWords } = useFocusWords();
@@ -57,6 +101,7 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
     const [isTranscribing, setIsTranscribing] = useState(false);
     const [status, setStatusState] = useState<StreamStatus>('idle');
     const [segments, setSegments] = useState<Segment[]>([]);
+    const [sessionClip, setSessionClip] = useState<SegmentClip | undefined>(undefined);
     const [error, setError] = useState<string | null>(null);
 
     const audioCtxRef = useRef<AudioContext | null>(null);
@@ -81,7 +126,19 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
     const connectWsRef = useRef<() => void>(noop);
     const statusRef = useRef<StreamStatus>('idle');
     const lastBroadcastStatusRef = useRef<StreamStatus | null>(null);
-    const pingTimerRef = useRef<number | null>(null);
+    const lessonIdRef = useRef<string | undefined>(lessonId);
+    const sessionClipRef = useRef<SegmentClip | null>(null);
+    const sessionTurnIdRef = useRef<string | null>(null);
+    const sessionRecorderRef = useRef<MediaRecorder | null>(null);
+    const sessionRecorderChunksRef = useRef<Blob[]>([]);
+    const sessionRecorderMimeRef = useRef<string>('audio/webm');
+    const sessionRecorderShouldUploadRef = useRef<boolean>(false);
+    const sessionRecorderStartPendingRef = useRef<boolean>(false);
+    const sessionRecorderStartedAtRef = useRef<number | null>(null);
+
+    useEffect(() => {
+        lessonIdRef.current = lessonId;
+    }, [lessonId]);
 
     const sanitizedKeyterms = useMemo(() => {
         if (!Array.isArray(focusWords) || focusWords.length === 0) return null;
@@ -89,9 +146,7 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
         const trimmed: string[] = [];
         for (const raw of focusWords) {
             if (trimmed.length >= 100) break;
-            const word = String(raw ?? '')
-                .trim()
-                .slice(0, 50);
+            const word = String(raw ?? '').trim().slice(0, 50);
             if (!word) continue;
             const lower = word.toLowerCase();
             if (unique.has(lower)) continue;
@@ -108,7 +163,8 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
             ts: new Date().toISOString(),
             ...extra,
         };
-        console.trace('[stt.telemetry]', payload);
+        // eslint-disable-next-line no-console
+        console.info('[stt.telemetry]', payload);
     }, [studentSessionId]);
 
     const applyStatus = useCallback((next: StreamStatus, opts?: { broadcast?: boolean }) => {
@@ -131,12 +187,155 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
         lastBroadcastStatusRef.current = null;
     }, [call]);
 
-    const clearPingTimer = useCallback(() => {
-        if (pingTimerRef.current) {
-            window.clearInterval(pingTimerRef.current);
-            pingTimerRef.current = null;
-        }
+    const setSessionClipState = useCallback((clip?: SegmentClip) => {
+        sessionClipRef.current = clip ?? null;
+        setSessionClip(clip);
     }, []);
+
+    const uploadSessionClip = useCallback(async (turnId: string, blob: Blob, durationMs: number) => {
+        const lessonIdValue = lessonIdRef.current;
+        if (!lessonIdValue) return;
+
+        let attempt = 0;
+        while (attempt < MAX_CLIP_UPLOAD_ATTEMPTS) {
+            try {
+                const response: TurnClipResponse = await uploadTurnClip({
+                    lessonId: lessonIdValue,
+                    turnId,
+                    blob,
+                    durationMs,
+                });
+
+                const clip: SegmentClip = {
+                    clipId: response.clipId,
+                    url: toAbsoluteClipUrl(response.url),
+                    mime: response.mime,
+                    durationMs: response.durationMs ?? durationMs,
+                    expiresAt: response.expiresAt,
+                };
+
+                setSessionClipState(clip);
+
+                if (call && typeof call.sendAppMessage === 'function') {
+                    try {
+                        call.sendAppMessage({
+                            t: 'SESSION_CLIP',
+                            lessonId: response.lessonId,
+                            turnId: response.turnId,
+                            clip: {
+                                clipId: response.clipId,
+                                url: response.url,
+                                mime: response.mime,
+                                durationMs: response.durationMs ?? durationMs,
+                                expiresAt: response.expiresAt,
+                            },
+                        });
+                    } catch (err) {
+                        console.warn('[transcription] failed to emit SESSION_CLIP', err);
+                    }
+                }
+
+                logTelemetry('session_clip_uploaded', { clipId: response.clipId, sizeBytes: response.sizeBytes });
+                return;
+            } catch (err) {
+                attempt += 1;
+                if (attempt >= MAX_CLIP_UPLOAD_ATTEMPTS) {
+                    console.warn('Session clip upload failed', err);
+                    enqueueSnackbar?.('Failed to upload session recording', { variant: 'error' });
+                    logTelemetry('session_clip_upload_failed', { turnId, message: (err as Error)?.message });
+                    return;
+                }
+                await sleep(500 * attempt);
+            }
+        }
+    }, [call, enqueueSnackbar, logTelemetry, setSessionClipState]);
+
+    const startSessionRecorder = useCallback(() => {
+        if (isTutor || !mediaStreamRef.current) return;
+        if (typeof MediaRecorder === 'undefined') return;
+        if (sessionRecorderRef.current && sessionRecorderRef.current.state !== 'inactive') return;
+        if (!sessionRecorderStartPendingRef.current) return;
+        if (!sessionTurnIdRef.current) {
+            sessionTurnIdRef.current = `session-${Date.now()}`;
+        }
+
+        try {
+            const mimeType = chooseRecorderMime();
+            const recorder = new MediaRecorder(mediaStreamRef.current, mimeType ? { mimeType } : undefined);
+            sessionRecorderMimeRef.current = recorder.mimeType || mimeType || 'audio/webm';
+            sessionRecorderChunksRef.current = [];
+            sessionRecorderShouldUploadRef.current = true;
+            sessionRecorderStartedAtRef.current = Date.now();
+
+            recorder.ondataavailable = (ev: BlobEvent) => {
+                if (ev.data && ev.data.size > 0) {
+                    sessionRecorderChunksRef.current.push(ev.data);
+                }
+            };
+            recorder.onerror = (ev) => {
+                console.warn('MediaRecorder error', ev);
+                sessionRecorderShouldUploadRef.current = false;
+            };
+            recorder.onstop = () => {
+                const currentTurnId = sessionTurnIdRef.current;
+                const chunks = sessionRecorderChunksRef.current.slice();
+                sessionRecorderChunksRef.current = [];
+                const startedAt = sessionRecorderStartedAtRef.current;
+                sessionRecorderStartedAtRef.current = null;
+                const shouldUpload = sessionRecorderShouldUploadRef.current;
+                sessionRecorderShouldUploadRef.current = false;
+                sessionRecorderRef.current = null;
+
+                if (!shouldUpload || !currentTurnId || chunks.length === 0) {
+                    return;
+                }
+
+                const blob = new Blob(chunks, { type: sessionRecorderMimeRef.current || 'audio/webm' });
+                if (blob.size === 0) return;
+
+                const durationMs = Math.max(Date.now() - (startedAt ?? Date.now()), 0);
+                if (durationMs < MIN_CLIP_DURATION_MS) return;
+
+                void uploadSessionClip(currentTurnId, blob, durationMs);
+            };
+
+            sessionRecorderRef.current = recorder;
+            sessionRecorderStartPendingRef.current = false;
+            recorder.start();
+            logTelemetry('session_record_start', { turnId: sessionTurnIdRef.current });
+        } catch (err) {
+            console.warn('Failed to start MediaRecorder', err);
+            sessionRecorderShouldUploadRef.current = false;
+            sessionRecorderStartPendingRef.current = false;
+        }
+    }, [isTutor, logTelemetry, uploadSessionClip]);
+
+    const stopSessionRecorder = useCallback((opts?: { upload?: boolean }) => {
+        const shouldUpload = opts?.upload !== false;
+        sessionRecorderShouldUploadRef.current = shouldUpload;
+        sessionRecorderStartPendingRef.current = false;
+
+        const recorder = sessionRecorderRef.current;
+        if (!recorder) {
+            if (!shouldUpload) {
+                sessionRecorderChunksRef.current = [];
+            }
+            sessionTurnIdRef.current = null;
+            return;
+        }
+
+        try {
+            if (recorder.state !== 'inactive') {
+                recorder.stop();
+                logTelemetry('session_record_stop', {
+                    turnId: sessionTurnIdRef.current,
+                    upload: shouldUpload,
+                });
+            }
+        } catch (err) {
+            console.warn('Failed to stop MediaRecorder', err);
+        }
+    }, [logTelemetry]);
 
     const clearReconnectTimer = useCallback(() => {
         if (reconnectTimerRef.current) {
@@ -182,7 +381,7 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
         }
         try { ws.close(); } catch { /* noop */ }
         wsRef.current = null;
-    }, [clearPingTimer]);
+    }, []);
 
     const floatTo16BitPCM = useCallback((input: Float32Array): Uint8Array => {
         const buffer = new ArrayBuffer(input.length * 2);
@@ -257,7 +456,7 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
             offset += CHUNK_SAMPLES;
         }
         pending16kRef.current = combined.subarray(offset);
-    }, [floatTo16BitPCM, resampleLinear, logTelemetry]);
+    }, [floatTo16BitPCM, logTelemetry, resampleLinear]);
 
     const ensureAudioPipeline = useCallback(async () => {
         if (audioCtxRef.current) return;
@@ -319,7 +518,7 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
     }, []);
 
     const handleWsMessage = useCallback((ev: MessageEvent) => {
-        if (isTutor) return;
+        if (isTutor && !call) return;
         let payload: any;
         try {
             payload = JSON.parse((ev as any).data);
@@ -339,13 +538,15 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
 
         const startMs = words.length ? words[0]?.start ?? null : (payload.audio_start ?? payload.start ?? null);
         const endMs = words.length ? words[words.length - 1]?.end ?? null : (payload.audio_end ?? payload.end ?? null);
-        const id = payload.utterance_id
+        const turnId = String(
+            payload.utterance_id
             || payload.id
-            || (startMs != null && endMs != null ? `${startMs}-${endMs}` : `${Date.now()}`);
+            || (startMs != null && endMs != null ? `${startMs}-${endMs}` : Date.now())
+        );
 
         const hits = collectHitsFromRaw({ matches: words }, focusWords, text);
         const segment: Segment = {
-            id: String(id),
+            id: turnId,
             text,
             isFinal,
             startMs: startMs ?? undefined,
@@ -353,10 +554,13 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
             hits: hits as any,
         };
 
-        setSegments((prev) => mergeOrAppendSegment(prev as any, segment as any) as any);
+        setSegments((prev) => {
+            return mergeOrAppendSegment(prev as any, segment as any) as Segment[];
+        });
+
         logTelemetry('stt_turn', { isFinal, chars: text.length });
 
-        if (call && typeof call.sendAppMessage === 'function') {
+        if (!isTutor && call && typeof call.sendAppMessage === 'function') {
             try {
                 call.sendAppMessage({ t: 'A2T_TURN', seg: segment });
             } catch (err) {
@@ -413,6 +617,9 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
             const nextState: StreamStatus = isMutedRef.current ? 'paused' : 'live';
             applyStatus(nextState, { broadcast: true });
             logTelemetry('stt_ws_open', { status: nextState });
+            if (!isTutor) {
+                startSessionRecorder();
+            }
         };
 
         ws.onmessage = handleWsMessage;
@@ -440,44 +647,33 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
             if (mappedMessage) {
                 setError(mappedMessage);
             }
-            applyStatus('starting', { broadcast: true });
             scheduleReconnect('ws_close', { code: event.code, reason: event.reason });
         };
 
         clearTokenRefreshTimer();
-        const refreshDelay = Math.max(
-            10_000,
-            token.expiresAt - Date.now() - TOKEN_REFRESH_BUFFER_MS,
-        );
+        const refreshDelay = Math.max(10_000, token.expiresAt - Date.now() - TOKEN_REFRESH_BUFFER_MS);
         tokenRefreshTimerRef.current = window.setTimeout(() => {
             if (!shouldStreamRef.current) return;
             logTelemetry('stt_reconnect', { reason: 'token_refresh' });
             manualStopRef.current = false;
             closeWebSocket(true);
         }, refreshDelay);
-    }, [
-        sanitizedKeyterms,
-        handleWsMessage,
-        logTelemetry,
-        mapCloseCodeToMessage,
-        scheduleReconnect,
-        clearTokenRefreshTimer,
-        closeWebSocket,
-        applyStatus,
-        clearPingTimer,
-    ]);
+    }, [applyStatus, clearTokenRefreshTimer, closeWebSocket, handleWsMessage, isTutor, logTelemetry, mapCloseCodeToMessage, sanitizedKeyterms, scheduleReconnect, startSessionRecorder]);
 
     connectWsRef.current = () => { void connectWs(); };
 
     const stopStreaming = useCallback(async () => {
         shouldStreamRef.current = false;
         manualStopRef.current = true;
+        if (!isTutor) {
+            stopSessionRecorder({ upload: true });
+        }
         clearReconnectTimer();
         clearTokenRefreshTimer();
         closeWebSocket(true);
         cleanupAudio();
         applyStatus('idle', { broadcast: true });
-    }, [applyStatus, clearReconnectTimer, clearTokenRefreshTimer, closeWebSocket, cleanupAudio, clearPingTimer]);
+    }, [applyStatus, clearReconnectTimer, clearTokenRefreshTimer, cleanupAudio, closeWebSocket, isTutor, stopSessionRecorder]);
 
     const startStreaming = useCallback(async (origin: StartOrigin) => {
         if (isTutor) return;
@@ -489,11 +685,23 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
         manualStopRef.current = false;
         applyStatus('starting', { broadcast: true });
 
+        if (!isTutor) {
+            stopSessionRecorder({ upload: false });
+            const sessionId = Date.now();
+            sessionTurnIdRef.current = `session-${sessionId}`;
+            sessionRecorderChunksRef.current = [];
+            sessionRecorderStartedAtRef.current = null;
+            sessionRecorderStartPendingRef.current = true;
+            setSessionClipState(undefined);
+        }
+
         try {
             await ensureAudioPipeline();
         } catch (err: any) {
             shouldStreamRef.current = false;
             manualStopRef.current = false;
+            sessionRecorderStartPendingRef.current = false;
+            sessionTurnIdRef.current = null;
             const message = err?.message || 'Microphone access required';
             setError(message);
             logTelemetry('stt_error', { reason: 'mic_initialise_failed', message, origin });
@@ -502,7 +710,7 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
         }
 
         await connectWs();
-    }, [applyStatus, connectWs, ensureAudioPipeline, isTutor, logTelemetry]);
+    }, [applyStatus, connectWs, ensureAudioPipeline, isTutor, logTelemetry, setSessionClipState, stopSessionRecorder]);
 
     const updateMuteState = useCallback(() => {
         if (!call || typeof call.participants !== 'function') return;
@@ -555,14 +763,29 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
                     startMs: typeof seg.startMs === 'number' ? seg.startMs : undefined,
                     endMs: typeof seg.endMs === 'number' ? seg.endMs : undefined,
                     hits: Array.isArray(seg.hits) ? seg.hits : undefined,
+                    clip: seg.clip,
                 };
-                applyStatus('live');
-                setSegments((prev) => mergeOrAppendSegment(prev as any, incoming as any) as any);
+                setSegments((prev) => {
+                    return mergeOrAppendSegment(prev as any, incoming as any) as Segment[];
+                });
             } else if (msg.t === 'A2T_STATUS' && isTutor) {
                 const state = typeof msg.state === 'string' ? msg.state.toLowerCase() : '';
                 if (state === 'idle' || state === 'starting' || state === 'live' || state === 'paused') {
                     applyStatus(state as StreamStatus);
                 }
+            } else if (msg.t === 'SESSION_CLIP') {
+                const clipPayload = msg.clip;
+                const turnId = String(msg.turnId || clipPayload?.clipId || '');
+                if (!turnId || !clipPayload || typeof clipPayload !== 'object') return;
+                const clip: SegmentClip = {
+                    clipId: String(clipPayload.clipId || ''),
+                    url: toAbsoluteClipUrl(String(clipPayload.url || '')),
+                    mime: String(clipPayload.mime || 'audio/webm'),
+                    durationMs: typeof clipPayload.durationMs === 'number' ? clipPayload.durationMs : undefined,
+                    expiresAt: typeof clipPayload.expiresAt === 'number' ? clipPayload.expiresAt : undefined,
+                };
+                sessionTurnIdRef.current = turnId;
+                setSessionClipState(clip);
             } else if (msg.t === 'STT_CONTROL' && !isTutor) {
                 const action = msg.action;
                 if (action === 'start') {
@@ -570,8 +793,9 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
                         setError(err?.message || 'Failed to start transcription');
                     });
                 } else if (action === 'stop') {
-                    stopStreaming().catch(() => {/* noop */});
+                    stopStreaming().catch(() => { /* noop */ });
                 } else if (action === 'clear') {
+                    setSessionClipState(undefined);
                     setSegments([]);
                 }
             }
@@ -580,12 +804,12 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
         return () => {
             try { call.off?.('app-message', handler); } catch { /* noop */ }
         };
-    }, [applyStatus, call, isTutor, startStreaming, stopStreaming]);
+    }, [call, isTutor, setSessionClipState, startStreaming, stopStreaming]);
 
     useEffect(() => {
         if (isTutor || !call) return;
         const handleExit = () => {
-            stopStreaming().catch(() => {/* noop */});
+            stopStreaming().catch(() => { /* noop */ });
         };
         call.on?.('left-meeting', handleExit);
         call.on?.('error', handleExit);
@@ -598,7 +822,7 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
     useEffect(() => {
         if (isTutor) return noop;
         const handleUnload = () => {
-            stopStreaming().catch(() => {/* noop */});
+            stopStreaming().catch(() => { /* noop */ });
         };
         window.addEventListener('beforeunload', handleUnload);
         window.addEventListener('pagehide', handleUnload);
@@ -613,8 +837,10 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
         clearTokenRefreshTimer();
         closeWebSocket(false);
         cleanupAudio();
+        setSessionClipState(undefined);
+        stopSessionRecorder({ upload: false });
         applyStatus('idle');
-    }, [applyStatus, clearReconnectTimer, clearTokenRefreshTimer, clearPingTimer, closeWebSocket, cleanupAudio]);
+    }, [applyStatus, clearReconnectTimer, clearTokenRefreshTimer, cleanupAudio, closeWebSocket, setSessionClipState, stopSessionRecorder]);
 
     const start = useCallback(async () => {
         if (!call) {
@@ -651,6 +877,7 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
 
     const clear = useCallback(() => {
         setSegments([]);
+        setSessionClipState(undefined);
         if (isTutor && call && typeof call.sendAppMessage === 'function') {
             try {
                 call.sendAppMessage({ t: 'STT_CONTROL', action: 'clear' });
@@ -658,15 +885,16 @@ export function useTranscriptionAssemblyAI({ call, studentSessionId }: ProviderO
                 console.warn('[transcription] failed to send clear control', err);
             }
         }
-    }, [call, isTutor]);
+    }, [call, isTutor, setSessionClipState]);
 
     return useMemo<UseTranscription>(() => ({
         isTranscribing,
         status,
         segments,
+        sessionClip,
         error,
         start,
         stop,
         clear,
-    }), [isTranscribing, status, segments, error, start, stop, clear]);
+    }), [clear, error, isTranscribing, segments, sessionClip, start, status, stop]);
 }

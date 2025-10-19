@@ -260,10 +260,40 @@ export const fetchAssemblyAiToken = async (): Promise<AssemblyAiStreamingToken> 
     };
 };
 
-export const getLessonTasks = async (lessonId: string) => {
-  const response = await api.get(`/lessons-service/api/lessons/${lessonId}/tasks`);
-  return response.data;
-}
+export type TurnClipResponse = {
+    clipId: string;
+    lessonId: string;
+    turnId: string;
+    mime: string;
+    sizeBytes: number;
+    durationMs?: number;
+    expiresAt: number;
+    url: string;
+};
+
+export const uploadTurnClip = async (params: {
+    lessonId: string;
+    turnId: string;
+    blob: Blob;
+    durationMs?: number;
+}): Promise<TurnClipResponse> => {
+    const { lessonId, turnId, blob, durationMs } = params;
+    const path = `/lessons-service/api/lessons/${encodeURIComponent(lessonId)}/turns/${encodeURIComponent(turnId)}/clips`;
+    const headers: Record<string, string> = {
+        'Content-Type': blob.type || 'audio/webm',
+    };
+    if (typeof durationMs === 'number' && Number.isFinite(durationMs)) {
+        headers['X-Clip-Duration-Ms'] = String(Math.max(0, Math.round(durationMs)));
+    }
+
+    const response = await api.post<TurnClipResponse>(path, blob, {
+        headers,
+        withCredentials: true,
+    });
+
+    return response.data;
+};
+
 
 /**
  * @deprecated Use createListeningTask instead

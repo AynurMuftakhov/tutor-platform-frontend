@@ -1,6 +1,6 @@
 /* eslint-disable no-empty */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Drawer, Box, Typography, Button, Stack, Divider, Chip, IconButton, TextField } from '@mui/material';
+import { Drawer, Box, Typography, Button, Stack, Divider, Chip, IconButton, TextField, Slider } from '@mui/material';
 import { Menu, MenuItem, ListItemIcon, ListItemText } from '@mui/material';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -25,6 +25,7 @@ type Props = {
     studentSessionId?: string;
     studentId?: string; // for homework picker
     homeworkWords: string[];
+    lessonId?: string;
 };
 
 function TranscriptionPanelInner({
@@ -34,6 +35,7 @@ function TranscriptionPanelInner({
                                      studentSessionId,
                                      studentId,
                                      homeworkWords,
+                                     lessonId,
                                      call,
                                  }: Props) {
     const { user } = useAuth();
@@ -48,11 +50,12 @@ function TranscriptionPanelInner({
         isTranscribing,
         status,
         segments: providerSegments,
+        sessionClip,
         start,
         stop,
         clear: clearProvider,
         error: providerError,
-    } = useTranscriptionProvider({ call, studentSessionId, homeworkWords });
+    } = useTranscriptionProvider({ call, studentSessionId, homeworkWords, lessonId });
 
     // Meeting/connection state (only for showing UI hints about Daily call)
     const [meetingState, setMeetingState] = useState<'idle' | 'joining' | 'joined' | 'left' | 'error'>('idle');
@@ -67,6 +70,55 @@ function TranscriptionPanelInner({
     const [rawLogs, setRawLogs] = useState<string[]>([]);
     const rawHandlersRef = useRef<{ onStarted?: (e:any)=>void; onMsg?: (e:any)=>void; onErr?: (e:any)=>void; onStopped?: (e:any)=>void } | null>(null);
     const lastProviderErrorRef = useRef<string | null>(null);
+    const audioRef = useRef<HTMLAudioElement | null>(null);
+    const [activeClipId, setActiveClipId] = useState<string | null>(null);
+    const [isClipPlaying, setIsClipPlaying] = useState(false);
+    const [durationSec, setDurationSec] = useState<number>(0);
+    const [currentSec, setCurrentSec] = useState<number>(0);
+    const [dragSec, setDragSec] = useState<number | null>(null);
+    // --- RAF-based progress ticker for audio playback
+    const rafRef = useRef<number | null>(null);
+    const dragSecRef = useRef<number | null>(null);
+    const currentSecRef = useRef<number>(0);
+    const pendingRemoteSeekRef = useRef<number | null>(null);
+    // Dynamic slider max so progress can advance even if duration isn't known yet
+    const sliderMax = React.useMemo(() => {
+        const known = Number.isFinite(durationSec) && (durationSec || 0) > 0;
+        return known ? durationSec : Math.max((dragSec ?? currentSec) + 1, 1);
+    }, [durationSec, currentSec, dragSec]);
+    useEffect(() => {
+        currentSecRef.current = currentSec;
+    }, [currentSec]);
+    const readAudioTime = React.useCallback(() => {
+        const audio = audioRef.current;
+        if (!audio) return currentSecRef.current || 0;
+        try {
+            const value = audio.currentTime;
+            if (!Number.isFinite(value)) return currentSecRef.current || 0;
+            return Math.max(0, value || 0);
+        } catch {
+            return currentSecRef.current || 0;
+        }
+    }, []);
+
+    // RAF-based smooth progress ticker for audio playback
+    const startProgressRaf = React.useCallback(() => {
+        if (rafRef.current != null) return;
+        const loop = () => {
+            if (dragSecRef.current == null) {
+                setCurrentSec(readAudioTime());
+            }
+            rafRef.current = requestAnimationFrame(loop);
+        };
+        rafRef.current = requestAnimationFrame(loop);
+    }, [readAudioTime]);
+
+    const stopProgressRaf = React.useCallback(() => {
+        if (rafRef.current != null) {
+            cancelAnimationFrame(rafRef.current);
+            rafRef.current = null;
+        }
+    }, []);
 
     // Daily participants snapshot (for Daily-only filtering)
     const [ptList, setPtList] = useState<Array<{ id: string; label: string }>>([]);
@@ -111,12 +163,298 @@ function TranscriptionPanelInner({
         ? pausedSnapshotRef.current
         : providerSegments;
 
+    const formatClipDuration = (durationMs?: number) => {
+        if (!durationMs || !Number.isFinite(durationMs)) return '';
+        const seconds = Math.max(0, durationMs / 1000);
+        if (seconds < 1) {
+            return `${Math.round(seconds * 1000) / 1000}s`;
+        }
+        if (seconds < 10) {
+            return `${seconds.toFixed(1)}s`;
+        }
+        return `${Math.round(seconds)}s`;
+    };
+
+    const formatTime = (sec: number) => {
+        if (!isFinite(sec) || sec < 0) sec = 0;
+        const m = Math.floor(sec / 60);
+        const s = Math.floor(sec % 60);
+        return `${m}:${s.toString().padStart(2, '0')}`;
+    };
+
+    const isSessionClipActive = sessionClip ? (activeClipId === sessionClip.clipId && isClipPlaying) : false;
+
+    const broadcastSessionControl = React.useCallback((payload: { action: 'play' | 'pause' | 'seek'; time?: number; playing?: boolean }) => {
+        if (!isTutor) return;
+        if (!call || typeof call.sendAppMessage !== 'function') return;
+        const clipId = sessionClip?.clipId;
+        const url = sessionClip?.url;
+        if (!clipId || !url) return;
+        const message: Record<string, unknown> = {
+            t: 'SESSION_CLIP_CTRL',
+            action: payload.action,
+            clipId,
+            url,
+        };
+        if (typeof payload.time === 'number' && Number.isFinite(payload.time)) {
+            const sanitizedTime = Math.max(0, Number(payload.time.toFixed(3)));
+            message.time = sanitizedTime;
+        }
+        if (typeof payload.playing === 'boolean') {
+            message.playing = payload.playing;
+        }
+        const clipDuration = sessionClip?.durationMs ? sessionClip.durationMs / 1000 : undefined;
+        const effectiveDuration = Number.isFinite(durationSec) && durationSec > 0 ? durationSec : clipDuration;
+        if (typeof effectiveDuration === 'number' && effectiveDuration > 0) {
+            message.durationSec = effectiveDuration;
+        }
+        try {
+            call.sendAppMessage(message);
+        } catch (err) {
+            console.warn('[transcription] failed to send SESSION_CLIP_CTRL', err);
+        }
+    }, [call, durationSec, isTutor, sessionClip?.clipId, sessionClip?.durationMs, sessionClip?.url]);
+
+    const handleToggleSessionClip = async () => {
+        if (!sessionClip) return;
+        const audio = audioRef.current;
+        if (!audio) return;
+        const clipId = sessionClip.clipId;
+        const clipUrl = sessionClip.url;
+        const isSameClip = activeClipId === clipId;
+        const isCurrentlyPlaying = isSameClip && !audio.paused;
+        try {
+            if (isCurrentlyPlaying) {
+                const now = readAudioTime();
+                audio.pause();
+                broadcastSessionControl({ action: 'pause', time: now, playing: false });
+                return;
+            }
+
+            if (!isSameClip || audio.src !== clipUrl) {
+                audio.preload = 'metadata';
+                (audio as any).crossOrigin = 'use-credentials';
+                audio.src = clipUrl;
+                try { audio.load(); } catch { /* noop */ }
+                setCurrentSec(0);
+                dragSecRef.current = null;
+            }
+
+            const startAt = dragSecRef.current ?? currentSecRef.current;
+            if (Number.isFinite(startAt) && startAt > 0) {
+                try { audio.currentTime = startAt; } catch {
+                    pendingRemoteSeekRef.current = startAt;
+                }
+            }
+
+            await audio.play();
+            startProgressRaf();
+            setActiveClipId(clipId);
+            broadcastSessionControl({ action: 'play', time: readAudioTime(), playing: true });
+        } catch (err) {
+            enqueueSnackbar('Unable to play session recording', { variant: 'error' });
+        }
+    };
+
+    const handleSeekChange = (_: Event, value: number | number[]) => {
+        if (!isTutor) return;
+        const v = Array.isArray(value) ? value[0] : value;
+        setDragSec(v);
+        dragSecRef.current = v;
+    };
+    const handleSeekCommit = (_: React.SyntheticEvent | Event, value: number | number[]) => {
+        if (!sessionClip) return;
+        const v = Array.isArray(value) ? value[0] : value;
+        const audio = audioRef.current;
+        if (audio && Number.isFinite(v)) {
+            const target = Math.max(0, Number(v) || 0);
+            try {
+                audio.currentTime = target;
+            } catch {
+                pendingRemoteSeekRef.current = target;
+            }
+            setCurrentSec(target);
+            if (isTutor) {
+                broadcastSessionControl({ action: 'seek', time: target, playing: !audio.paused });
+            }
+        }
+        setDragSec(null);
+        dragSecRef.current = null;
+    };
+    useEffect(() => {
+        if (!sessionClip) {
+            setDurationSec(0);
+            setCurrentSec(0);
+            setDragSec(null);
+            return;
+        }
+        // Defensive: stop any running RAF when switching session clip
+        stopProgressRaf();
+        // initialize from server-provided duration if available
+        if (typeof sessionClip.durationMs === 'number') {
+            setDurationSec(Math.max(0, (sessionClip.durationMs || 0) / 1000));
+        } else {
+            setDurationSec(0);
+        }
+        setCurrentSec(0);
+        setDragSec(null);
+    }, [sessionClip, stopProgressRaf]);
+
     useEffect(() => {
         if (!providerError) return;
         if (lastProviderErrorRef.current === providerError) return;
         lastProviderErrorRef.current = providerError;
         enqueueSnackbar(providerError, { variant: 'error' });
     }, [providerError, enqueueSnackbar]);
+
+    useEffect(() => {
+        if (!sessionClip && audioRef.current) {
+            audioRef.current.pause();
+            setActiveClipId(null);
+        }
+    }, [sessionClip]);
+
+    useEffect(() => {
+        if (typeof Audio === 'undefined') return;
+        const audio = new Audio();
+        audioRef.current = audio;
+        audio.preload = 'metadata';
+        (audio as any).crossOrigin = 'use-credentials';
+        const handlePause = () => {
+            stopProgressRaf();
+            setIsClipPlaying(false);
+        };
+        const handlePlay = () => {
+            startProgressRaf();
+            setIsClipPlaying(true);
+        };
+        const handleEnded = () => {
+            stopProgressRaf();
+            setIsClipPlaying(false);
+            setActiveClipId(null);
+            setCurrentSec(0);
+            setDragSec(null);
+        };
+        const onLoaded = () => {
+            if (Number.isFinite(audio.duration)) {
+                const dur = Math.max(0, audio.duration || 0);
+                setDurationSec((prev) => (prev && prev > 0 ? prev : dur));
+            }
+            if (pendingRemoteSeekRef.current != null) {
+                const pending = pendingRemoteSeekRef.current;
+                pendingRemoteSeekRef.current = null;
+                try { audio.currentTime = pending; } catch { /* noop */ }
+                setCurrentSec(pending);
+                dragSecRef.current = null;
+            }
+        };
+        const onTime = () => {
+            // Fallback if RAF is throttled (e.g., background tab)
+            if (dragSecRef.current == null && !rafRef.current) {
+                setCurrentSec(readAudioTime());
+            }
+        };
+        const onSeeking = () => {/* no-op but reserved if needed */};
+        const onSeeked = () => {/* no-op */};
+        audio.addEventListener('play', handlePlay);
+        audio.addEventListener('playing', handlePlay); // some browsers fire 'playing' after buffering
+        audio.addEventListener('pause', handlePause);
+        audio.addEventListener('ended', handleEnded);
+        audio.addEventListener('loadedmetadata', onLoaded);
+        audio.addEventListener('durationchange', onLoaded);
+        audio.addEventListener('timeupdate', onTime);
+        audio.addEventListener('seeking', onSeeking);
+        audio.addEventListener('seeked', onSeeked);
+        return () => {
+            stopProgressRaf();
+            audio.pause();
+            audio.removeEventListener('play', handlePlay);
+            audio.removeEventListener('playing', handlePlay);
+            audio.removeEventListener('pause', handlePause);
+            audio.removeEventListener('ended', handleEnded);
+            audio.removeEventListener('loadedmetadata', onLoaded);
+            audio.removeEventListener('durationchange', onLoaded);
+            audio.removeEventListener('timeupdate', onTime);
+            audio.removeEventListener('seeking', onSeeking);
+            audio.removeEventListener('seeked', onSeeked);
+        };
+    }, [readAudioTime, startProgressRaf, stopProgressRaf]);
+
+    useEffect(() => {
+        if (!call) return;
+        const handleSessionClipCtrl = (event: any) => {
+            if (isTutor) return;
+            const msg = event?.data;
+            if (!msg || typeof msg !== 'object') return;
+            if (msg.t !== 'SESSION_CLIP_CTRL') return;
+            const clipId = typeof msg.clipId === 'string' ? msg.clipId : sessionClip?.clipId;
+            const clipUrl = typeof msg.url === 'string' ? msg.url : sessionClip?.url;
+            if (!clipId || !clipUrl) return;
+            const audio = audioRef.current;
+            if (!audio) return;
+
+            const targetTime = typeof msg.time === 'number' && Number.isFinite(msg.time)
+                ? Math.max(0, msg.time)
+                : undefined;
+            const playingFlag = typeof msg.playing === 'boolean' ? msg.playing : undefined;
+            const durationFromMsg = typeof msg.durationSec === 'number' && msg.durationSec > 0 ? msg.durationSec : undefined;
+            if (durationFromMsg) {
+                setDurationSec((prev) => {
+                    const next = Math.max(0, durationFromMsg);
+                    return Math.abs(prev - next) < 0.01 ? prev : next;
+                });
+            }
+
+            setActiveClipId(clipId);
+            if (audio.src !== clipUrl) {
+                audio.preload = 'metadata';
+                (audio as any).crossOrigin = 'use-credentials';
+                audio.src = clipUrl;
+                try { audio.load(); } catch { /* noop */ }
+            }
+
+            if (targetTime != null) {
+                pendingRemoteSeekRef.current = null;
+                try {
+                    audio.currentTime = targetTime;
+                } catch {
+                    pendingRemoteSeekRef.current = targetTime;
+                }
+                setCurrentSec(targetTime);
+                dragSecRef.current = null;
+            }
+
+            const playClip = () => {
+                audio.play()
+                    .then(() => startProgressRaf())
+                    .catch((err: any) => {
+                        console.warn('[transcription] remote play failed', err);
+                    });
+            };
+
+            if (msg.action === 'play') {
+                playClip();
+            } else if (msg.action === 'pause') {
+                audio.pause();
+                stopProgressRaf();
+                setCurrentSec(readAudioTime());
+                dragSecRef.current = null;
+            } else if (msg.action === 'seek') {
+                if (playingFlag) {
+                    playClip();
+                } else {
+                    audio.pause();
+                    stopProgressRaf();
+                    setCurrentSec(readAudioTime());
+                    dragSecRef.current = null;
+                }
+            }
+        };
+        call.on?.('app-message', handleSessionClipCtrl);
+        return () => {
+            try { call.off?.('app-message', handleSessionClipCtrl); } catch { /* noop */ }
+        };
+    }, [call, isTutor, readAudioTime, sessionClip?.clipId, sessionClip?.url, startProgressRaf, stopProgressRaf]);
 
     // Daily meeting state helpers (for header chips)
     useEffect(() => {
@@ -279,7 +617,6 @@ function TranscriptionPanelInner({
     }
 
     const paragraphs = useMemo(() => toParagraphs(displayedSegments), [displayedSegments]);
-
     // Totals: prefer provider hits; fallback to a lightweight text scan
     const [totals, setTotals] = useState<Record<string, number>>({});
     useEffect(() => {
@@ -672,6 +1009,53 @@ function TranscriptionPanelInner({
             </Box>
 
             <Divider />
+
+            {sessionClip && (
+                <Box sx={{ px: 2, py: 1 }}>
+                    <Typography variant="subtitle2" sx={{ mb: 1 }}>Session Recording</Typography>
+                    <Box
+                        sx={{
+                            border: '1px solid',
+                            borderColor: 'divider',
+                            borderRadius: 1,
+                            p: 1,
+                            backgroundColor: 'background.paper',
+                        }}
+                    >
+                        <Stack direction="column" spacing={1}>
+                            <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
+                                <Button
+                                    variant="outlined"
+                                    size="small"
+                                    onClick={handleToggleSessionClip}
+                                    startIcon={isSessionClipActive ? <PauseOutlinedIcon fontSize="small" /> : <PlayArrowIcon fontSize="small" />}
+                                >
+                                    {isSessionClipActive ? 'Pause recording' : 'Play recording'}
+                                    {sessionClip.durationMs ? ` (${formatClipDuration(sessionClip.durationMs)})` : ''}
+                                </Button>
+                            </Stack>
+                            <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 0.5 }}>
+                                <Typography variant="caption" sx={{ width: 36, textAlign: 'right' }}>
+                                    {formatTime(dragSec ?? currentSec)}
+                                </Typography>
+                                <Slider
+                                    size="small"
+                                    min={0}
+                                    max={sliderMax}
+                                    step={0.01}
+                                    value={Math.min(Math.max(0, dragSec ?? currentSec), sliderMax)}
+                                    onChange={handleSeekChange}
+                                    onChangeCommitted={handleSeekCommit}
+                                    aria-label="Seek session recording"
+                                />
+                                <Typography variant="caption" sx={{ width: 36 }}>
+                                    {formatTime(durationSec || 0)}
+                                </Typography>
+                            </Stack>
+                        </Stack>
+                    </Box>
+                </Box>
+            )}
 
             {/* Transcript */}
             <Box sx={{ px: 2, py: 1, display: 'flex', justifyContent: 'flex-start' }}>

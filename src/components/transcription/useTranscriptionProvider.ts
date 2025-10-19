@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useDailyTranscription } from './useDailyTranscription';
-import { useTranscriptionAssemblyAI, type TranscriptionStatus } from './useTranscriptionAssemblyAI';
+import { useTranscriptionAssemblyAI, type SegmentClip, type TranscriptionStatus } from './useTranscriptionAssemblyAI';
 
 export type Segment = {
   id: string;
@@ -9,12 +9,14 @@ export type Segment = {
   startMs?: number;
   endMs?: number;
   hits?: { word: string; startMs?: number; endMs?: number; confidence?: number }[];
+  clip?: SegmentClip;
 };
 
 export type UseTranscription = {
   isTranscribing: boolean;
   status: TranscriptionStatus;
   segments: Segment[];
+  sessionClip?: SegmentClip;
   error?: string | null;
   start: () => Promise<void>;
   stop: () => Promise<void>;
@@ -25,6 +27,7 @@ export type ProviderOpts = {
   call: any;
   studentSessionId?: string;
   homeworkWords?: string[];
+  lessonId?: string;
 };
 
 export function useTranscriptionDaily(opts: ProviderOpts): UseTranscription {
@@ -43,7 +46,9 @@ export function useTranscriptionDaily(opts: ProviderOpts): UseTranscription {
       startMs: s.startMs,
       endMs: s.endMs,
       hits: s.hits,
+      clip: s.clip,
     })),
+    sessionClip: undefined,
     error: null,
     start,
     stop,

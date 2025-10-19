@@ -158,7 +158,16 @@ export function collectHitsFromRaw(
 export function mergeOrAppendSegment(arr: TranscriptSegment[], next: TranscriptSegment) {
   const idx = arr.findIndex(s => s.id === next.id);
   if (idx >= 0) {
-    const merged: TranscriptSegment = { ...arr[idx], ...next, text: next.text || arr[idx].text, isFinal: arr[idx].isFinal || next.isFinal };
+    const merged: TranscriptSegment = {
+      ...arr[idx],
+      ...next,
+      text: next.text || arr[idx].text,
+      isFinal: arr[idx].isFinal || next.isFinal,
+      hits: next.hits && next.hits.length ? next.hits : arr[idx].hits,
+    };
+    if (!next.clip && arr[idx].clip) {
+      merged.clip = arr[idx].clip;
+    }
     const copy = arr.slice();
     copy[idx] = merged;
     return copy;

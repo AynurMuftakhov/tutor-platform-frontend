@@ -12,10 +12,19 @@ export type TranscriptSegment = {
   startMs?: number;
   endMs?: number;
   hits: TranscriptWordHit[]; // homework-word matches inside this segment
+  clip?: TranscriptSegmentClip;
 };
 
 export type TranscriptionState = {
   isActive: boolean;
   segments: TranscriptSegment[];
   totals: Record<string, number>; // per-word counters
+};
+
+export type TranscriptSegmentClip = {
+  clipId: string;
+  url: string;
+  mime: string;
+  durationMs?: number;
+  expiresAt?: number;
 };
