@@ -8,6 +8,11 @@ import {
   Grid,
   useTheme,
   Dialog,
+  Stack,
+  Divider,
+  Select,
+  MenuItem,
+  Pagination,
 } from '@mui/material';
 import ListeningTaskManager from '../components/materials/ListeningTaskManager';
 import {
@@ -49,8 +54,10 @@ const LearningMaterialsPage: React.FC = () => {
     searchParams.get('tags') ? searchParams.get('tags')!.split(',') : []
   );
   const [viewMode, setViewMode] = useState<ViewMode>(
-    getParamOrDefault('view', localStorage.getItem('materialsViewMode') as ViewMode || 'grid')
+    getParamOrDefault('view', (localStorage.getItem('materialsViewMode') as ViewMode) || 'grid')
   );
+  const [page, setPage] = useState<number>(() => Math.max(1, parseInt(getParamOrDefault('page', '1'), 10) || 1));
+  const [size, setSize] = useState<number>(() => Math.max(1, parseInt(getParamOrDefault('size', '12'), 10) || 12));
   const [isAddFolderModalOpen, setIsAddFolderModalOpen] = useState(false);
   const [isAddMaterialModalOpen, setIsAddMaterialModalOpen] = useState(false);
   const [currentMaterial, setCurrentMaterial] = useState<Material | null>(null);
@@ -68,10 +75,17 @@ const LearningMaterialsPage: React.FC = () => {
     search: searchTerm,
     type: selectedType === 'all' ? undefined : selectedType === 'grammar' ? 'GRAMMAR' : selectedType,
     tags: selectedTags.length > 0 ? selectedTags : undefined,
+    page: page - 1,
+    size,
   });
 
   // Extract materials array from response (handle both array and object responses)
   const materials = Array.isArray(materialsData) ? materialsData : materialsData.content || [];
+  // Pagination metadata
+  const total: number = Array.isArray(materialsData) ? materials.length : (materialsData.totalElements ?? materials.length ?? 0);
+  const totalPages: number = Array.isArray(materialsData) ? 1 : (materialsData.totalPages ?? Math.max(1, Math.ceil(((materialsData.totalElements ?? 0) / (materialsData.size ?? size)) || 1)));
+  const from: number = total === 0 ? 0 : (page - 1) * size + 1;
+  const to: number = Math.min(page * size, total);
 
   // Update URL params when state changes
   useEffect(() => {
@@ -97,30 +111,41 @@ const LearningMaterialsPage: React.FC = () => {
       params.view = viewMode;
     }
 
+    if (page !== 1) {
+      params.page = String(page);
+    }
+    if (size !== 12) {
+      params.size = String(size);
+    }
+
     setSearchParams(params, { replace: true });
 
     // Save view mode to localStorage
     localStorage.setItem('materialsViewMode', viewMode);
-  }, [selectedFolderId, searchTerm, selectedType, selectedTags, viewMode, setSearchParams]);
+  }, [selectedFolderId, searchTerm, selectedType, selectedTags, viewMode, page, size, setSearchParams]);
 
   // Handle folder selection
   const handleFolderSelect = (folderId: string) => {
     setSelectedFolderId(folderId);
+    setPage(1);
   };
 
   // Handle search term change
   const handleSearchChange = (value: string) => {
     setSearchTerm(value);
+    setPage(1);
   };
 
   // Handle material type change
   const handleTypeChange = (type: MaterialType) => {
     setSelectedType(type);
+    setPage(1);
   };
 
   // Handle tags change
   const handleTagsChange = (tags: string[]) => {
     setSelectedTags(tags);
+    setPage(1);
   };
 
   // Handle view mode change
@@ -318,7 +343,9 @@ const LearningMaterialsPage: React.FC = () => {
           flexGrow: 1,
           p: 3,
           ml: { xs: 0, md: `${SIDEBAR_WIDTH}px`},
-          overflow: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
           borderLeft: { xs: 'none', md: `1px solid ${theme.palette.divider}` },
           boxShadow: { xs: 'none', md: '-2px 0 5px rgba(0,0,0,0.02)' },
         }}
@@ -337,37 +364,57 @@ const LearningMaterialsPage: React.FC = () => {
         />
 
         {/* Materials content */}
-        {materialsLoading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-            <CircularProgress />
-          </Box>
-        ) : materials.length === 0 ? (
-          <EmptyState />
-        ) : (
-          <Grid container spacing={2}>
-            {materials.map((material: any) => (
-              <Grid
-                size ={{
-                xs: 12,
-                sm: viewMode === 'list' ? 12 : 6,
-                md: viewMode === 'list' ? 12 : 4,
-                lg: viewMode === 'list' ? 12 : 3
-                }}
-                key={material.id}
-              >
-                <MaterialCard
-                  material={material}
-                  viewMode={viewMode}
-                  onPlay={handlePlay}
-                  onEdit={handleEditMaterial}
-                  onMove={handleMoveMaterial}
-                  onDelete={handleDeleteMaterial}
-                  onManageTasks={handleManageTasks}
-                />
-              </Grid>
-            ))}
-          </Grid>
-        )}
+        <Box sx={{ flex: 1, overflow: 'auto' }}>
+          {materialsLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+              <CircularProgress />
+            </Box>
+          ) : materials.length === 0 ? (
+            <EmptyState />
+          ) : (
+            <Grid container spacing={2}>
+              {materials.map((material: any) => (
+                <Grid
+                  size={{
+                    xs: 12,
+                    sm: viewMode === 'list' ? 12 : 6,
+                    md: viewMode === 'list' ? 12 : 4,
+                    lg: viewMode === 'list' ? 12 : 3,
+                  }}
+                  key={material.id}
+                >
+                  <MaterialCard
+                    material={material}
+                    viewMode={viewMode}
+                    onPlay={handlePlay}
+                    onEdit={handleEditMaterial}
+                    onMove={handleMoveMaterial}
+                    onDelete={handleDeleteMaterial}
+                    onManageTasks={handleManageTasks}
+                  />
+                </Grid>
+              ))}
+            </Grid>
+          )}
+        </Box>
+
+        <Divider sx={{ mt: 2 }} />
+
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'flex-start', sm: 'center' }} justifyContent="space-between" mt={2}>
+          <Typography variant="body2" color="text.secondary">
+            {total > 0 ? `Showing ${from}–${to} of ${total}` : 'No results'}
+          </Typography>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <Typography variant="caption" color="text.secondary">Per page</Typography>
+            <Select size="small" value={String(size)} onChange={(e) => { const v = parseInt(String(e.target.value), 10); setSize(v); setPage(1); }} sx={{ width: 100 }}>
+              <MenuItem value={8}>8</MenuItem>
+              <MenuItem value={12}>12</MenuItem>
+              <MenuItem value={24}>24</MenuItem>
+              <MenuItem value={48}>48</MenuItem>
+            </Select>
+          </Stack>
+          <Pagination color="primary" shape="rounded" count={Math.max(1, totalPages)} page={page} onChange={(_, v) => setPage(v)} />
+        </Stack>
       </Box>
 
       {/* Add Folder Modal */}
