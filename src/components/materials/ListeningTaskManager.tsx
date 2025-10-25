@@ -1,36 +1,34 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Box,
   Button,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   IconButton,
   List,
   ListItem,
-  ListItemText,
   ListItemSecondaryAction,
-  TextField,
-  Typography,
-  Divider,
+  ListItemText,
+  Stack,
   Tooltip,
-  CircularProgress
+  Typography,
+  CircularProgress,
 } from '@mui/material';
-import {
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  Add as AddIcon,
-  Close as CloseIcon
-} from '@mui/icons-material';
-import { Material } from '../../types/material';
-import { ListeningTask } from '../../types';
-import { 
-  useListeningTasks, 
-  useCreateListeningTask, 
-  useUpdateListeningTask, 
-  useDeleteListeningTask 
-} from '../../hooks/useListeningTasks';
+import { Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
+import { useListeningTasks, useDeleteListeningTask } from '../../hooks/useListeningTasks';
+import type { ListeningTask } from '../../types';
+import type { Material } from '../../types/material';
+import ListeningTaskEditor from './listening/ListeningTaskEditor';
+
+const formatTime = (seconds: number) => {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+};
 
 interface ListeningTaskManagerProps {
   material: Material;
@@ -39,87 +37,32 @@ interface ListeningTaskManagerProps {
   onTaskChange?: () => void; // Callback for when tasks are created, updated, or deleted
 }
 
-interface TaskFormData {
-  id?: string;
-  title: string;
-  startSec: number;
-  endSec: number;
-  wordLimit?: number;
-  timeLimitSec?: number;
-}
-
 const ListeningTaskManager: React.FC<ListeningTaskManagerProps> = ({
   material,
   open,
   onClose,
   onTaskChange
 }) => {
-  const [isAddingTask, setIsAddingTask] = useState(false);
-  const [isEditingTask, setIsEditingTask] = useState(false);
-  const [currentTask, setCurrentTask] = useState<TaskFormData>({
-    title: '',
-    startSec: 0,
-    endSec: 0
-  });
-
-  // Fetch tasks for this material
   const { data: tasks = [], isLoading } = useListeningTasks(material.id);
-
-  // Mutations
-  const createTask = useCreateListeningTask();
-  const updateTask = useUpdateListeningTask();
   const deleteTask = useDeleteListeningTask();
-
-  // Format time (seconds to MM:SS)
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  // Handle opening the add task form
-  const handleAddTask = () => {
-    setCurrentTask({
-      title: '',
-      startSec: 0,
-      endSec: material.duration || 60
-    });
-    setIsAddingTask(true);
-    setIsEditingTask(false);
-  };
-
-  // Handle opening the edit task form
-  const handleEditTask = (task: ListeningTask) => {
-    setCurrentTask({
-      id: task.id,
-      title: task.title || '',
-      startSec: task.startSec,
-      endSec: task.endSec,
-      wordLimit: task.wordLimit,
-      timeLimitSec: task.timeLimitSec
-    });
-    setIsEditingTask(true);
-    setIsAddingTask(false);
-  };
-
-  // State for delete confirmation dialog
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editorTask, setEditorTask] = useState<ListeningTask | undefined>(undefined);
 
-  // Handle opening delete confirmation dialog
+  const audioCount = useMemo(() => tasks.filter((task: ListeningTask) => Boolean(task.audioUrl)).length, [tasks]);
+
   const handleDeleteClick = (taskId: string) => {
     setTaskToDelete(taskId);
     setDeleteConfirmOpen(true);
   };
 
-  // Handle confirming task deletion
   const handleDeleteConfirm = () => {
     if (taskToDelete) {
       deleteTask.mutate(
         { materialId: material.id, taskId: taskToDelete },
         {
           onSuccess: () => {
-            // Call the onTaskChange callback if provided
             if (onTaskChange) onTaskChange();
           }
         }
@@ -129,86 +72,28 @@ const ListeningTaskManager: React.FC<ListeningTaskManagerProps> = ({
     }
   };
 
-  // Handle canceling task deletion
   const handleDeleteCancel = () => {
     setDeleteConfirmOpen(false);
     setTaskToDelete(null);
   };
 
-  // Handle form input changes
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-
-    // Convert numeric fields
-    if (['startSec', 'endSec', 'wordLimit', 'timeLimitSec'].includes(name)) {
-      setCurrentTask({
-        ...currentTask,
-        [name]: value === '' ? undefined : Number(value)
-      });
-    } else {
-      setCurrentTask({
-        ...currentTask,
-        [name]: value
-      });
-    }
+  const openEditorForCreate = () => {
+    setEditorTask(undefined);
+    setEditorOpen(true);
   };
 
-  // Handle form submission
-  const handleSubmitTask = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (isEditingTask && currentTask.id) {
-      // Update existing task
-      updateTask.mutate(
-        {
-          materialId: material.id,
-          taskId: currentTask.id,
-          taskData: {
-            title: currentTask.title || undefined,
-            startSec: currentTask.startSec,
-            endSec: currentTask.endSec,
-            wordLimit: currentTask.wordLimit,
-            timeLimitSec: currentTask.timeLimitSec
-          }
-        },
-        {
-          onSuccess: () => {
-            // Call the onTaskChange callback if provided
-            if (onTaskChange) onTaskChange();
-          }
-        }
-      );
-    } else {
-      // Create new task
-      createTask.mutate(
-        {
-          materialId: material.id,
-          taskData: {
-            title: currentTask.title || undefined,
-            startSec: currentTask.startSec,
-            endSec: currentTask.endSec,
-            wordLimit: currentTask.wordLimit,
-            timeLimitSec: currentTask.timeLimitSec
-          }
-        },
-        {
-          onSuccess: () => {
-            // Call the onTaskChange callback if provided
-            if (onTaskChange) onTaskChange();
-          }
-        }
-      );
-    }
-
-    // Close the form
-    setIsAddingTask(false);
-    setIsEditingTask(false);
+  const openEditorForEdit = (task: ListeningTask) => {
+    setEditorTask(task);
+    setEditorOpen(true);
   };
 
-  // Handle canceling the form
-  const handleCancelForm = () => {
-    setIsAddingTask(false);
-    setIsEditingTask(false);
+  const handleEditorClose = () => {
+    setEditorOpen(false);
+    setEditorTask(undefined);
+  };
+
+  const handleEditorSaved = () => {
+    if (onTaskChange) onTaskChange();
   };
 
   return (
@@ -219,14 +104,7 @@ const ListeningTaskManager: React.FC<ListeningTaskManagerProps> = ({
       maxWidth="sm"
     >
       <DialogTitle>
-        <Box display="flex" justifyContent="space-between" alignItems="center">
-          <Typography variant="h6">
-            Listening Tasks for {material.title}
-          </Typography>
-          <IconButton edge="end" onClick={onClose} aria-label="close">
-            <CloseIcon />
-          </IconButton>
-        </Box>
+        <Typography variant="h6">Listening tasks for {material.title}</Typography>
       </DialogTitle>
 
       <DialogContent>
@@ -235,154 +113,75 @@ const ListeningTaskManager: React.FC<ListeningTaskManagerProps> = ({
             <CircularProgress />
           </Box>
         ) : (
-          <>
-            {(isAddingTask || isEditingTask) ? (
-              // Task form
-              <Box component="form" onSubmit={handleSubmitTask} sx={{ mt: 1 }}>
-                <TextField
-                  name="title"
-                  label="Task Title (optional)"
-                  value={currentTask.title}
-                  onChange={handleInputChange}
-                  fullWidth
-                  margin="normal"
-                />
+          <Stack spacing={3}>
+            <Button startIcon={<AddIcon />} variant="contained" onClick={openEditorForCreate}>
+              New listening task
+            </Button>
 
-                <Box display="flex" gap={2} mt={2}>
-                  <TextField
-                    name="startSec"
-                    label="Start Time (seconds)"
-                    type="number"
-                    value={currentTask.startSec}
-                    onChange={handleInputChange}
-                    fullWidth
-                    required
-                    margin="normal"
-                    InputProps={{ inputProps: { min: 0 } }}
-                  />
-
-                  <TextField
-                    name="endSec"
-                    label="End Time (seconds)"
-                    type="number"
-                    value={currentTask.endSec}
-                    onChange={handleInputChange}
-                    fullWidth
-                    required
-                    margin="normal"
-                    InputProps={{ inputProps: { min: currentTask.startSec + 1 } }}
-                  />
-                </Box>
-
-                <Box display="flex" gap={2} mt={2}>
-                  <TextField
-                    name="wordLimit"
-                    label="Word Limit (optional)"
-                    type="number"
-                    value={currentTask.wordLimit || ''}
-                    onChange={handleInputChange}
-                    fullWidth
-                    margin="normal"
-                    InputProps={{ inputProps: { min: 0 } }}
-                  />
-
-                  <TextField
-                    name="timeLimitSec"
-                    label="Time Limit (seconds, optional)"
-                    type="number"
-                    value={currentTask.timeLimitSec || ''}
-                    onChange={handleInputChange}
-                    fullWidth
-                    margin="normal"
-                    InputProps={{ inputProps: { min: 0 } }}
-                  />
-                </Box>
-
-                <Box display="flex" justifyContent="flex-end" gap={1} mt={3}>
-                  <Button onClick={handleCancelForm}>
-                    Cancel
-                  </Button>
-                  <Button 
-                    type="submit" 
-                    variant="contained" 
-                    color="primary"
-                    disabled={createTask.isPending || updateTask.isPending}
-                  >
-                    {createTask.isPending || updateTask.isPending ? (
-                      <CircularProgress size={24} />
-                    ) : isEditingTask ? 'Update Task' : 'Add Task'}
-                  </Button>
-                </Box>
-              </Box>
+            {tasks.length === 0 ? (
+              <Typography color="text.secondary" align="center" sx={{ py: 4 }}>
+                No listening tasks yet. Create one to reuse across lessons.
+              </Typography>
             ) : (
-              // Task list
               <>
-                <Box display="flex" justifyContent="flex-end" mb={2}>
-                  <Button 
-                    startIcon={<AddIcon />} 
-                    variant="contained" 
-                    color="primary"
-                    onClick={handleAddTask}
-                  >
-                    Add Task
-                  </Button>
-                </Box>
-
-                {tasks.length === 0 ? (
-                  <Typography color="textSecondary" align="center" sx={{ py: 4 }}>
-                    No listening tasks yet. Click &quot;Add Task&quot; to create one.
-                  </Typography>
-                ) : (
-                  <List>
-                    {tasks.map((task: ListeningTask) => (
-                      <React.Fragment key={task.id}>
-                        <ListItem>
-                          <ListItemText
-                            primary={task.title || `Task ${formatTime(task.startSec)} - ${formatTime(task.endSec)}`}
-                            secondary={
-                              <Box component="span">
-                                <Typography component="span" variant="body2">
-                                  {formatTime(task.startSec)} - {formatTime(task.endSec)}
-                                </Typography>
-                                {(task.wordLimit || task.timeLimitSec) && (
-                                  <Typography component="span" variant="body2" sx={{ ml: 2 }}>
-                                    {task.wordLimit && `${task.wordLimit} words`}
-                                    {task.wordLimit && task.timeLimitSec && ' • '}
-                                    {task.timeLimitSec && `${task.timeLimitSec}s limit`}
-                                  </Typography>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Chip label={`${tasks.length} ${tasks.length === 1 ? 'task' : 'tasks'}`} color="primary" variant="outlined" />
+                  <Chip label={`${audioCount} with audio`} variant="outlined" />
+                </Stack>
+                <List>
+                  {tasks.map((task: ListeningTask) => (
+                    <React.Fragment key={task.id}>
+                      <ListItem alignItems="flex-start">
+                        <ListItemText
+                          primary={task.title || `Clip ${formatTime(task.startSec)} – ${formatTime(task.endSec)}`}
+                          secondary={
+                            <Stack spacing={0.5} sx={{ mt: 0.5 }}>
+                              <Typography variant="body2" color="text.secondary">
+                                {formatTime(task.startSec)} – {formatTime(task.endSec)}
+                                {task.wordLimit ? ` • up to ${task.wordLimit} words` : ''}
+                                {task.timeLimitSec ? ` • ${task.timeLimitSec}s` : ''}
+                              </Typography>
+                              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                                <Chip size="small" label={task.status || 'DRAFT'} color={task.status === 'READY' ? 'success' : 'default'} />
+                                {task.targetWords && task.targetWords.length > 0 && (
+                                  <Chip size="small" label={`${task.targetWords.length} blanks`} />
                                 )}
-                              </Box>
-                            }
-                          />
-                          <ListItemSecondaryAction>
-                            <Tooltip title="Edit">
-                              <IconButton edge="end" onClick={() => handleEditTask(task)}>
-                                <EditIcon />
-                              </IconButton>
-                            </Tooltip>
-                            <Tooltip title="Delete">
-                              <IconButton edge="end" onClick={() => handleDeleteClick(task.id)}>
-                                <DeleteIcon />
-                              </IconButton>
-                            </Tooltip>
-                          </ListItemSecondaryAction>
-                        </ListItem>
-                        <Divider />
-                      </React.Fragment>
-                    ))}
-                  </List>
-                )}
+                                {task.audioUrl && <Chip size="small" label="Audio" color="secondary" />}
+                              </Stack>
+                              {task.targetWords && task.targetWords.length > 0 && (
+                                <Typography variant="caption" color="text.secondary">
+                                  Target words: {task.targetWords.join(', ')}
+                                </Typography>
+                              )}
+                            </Stack>
+                          }
+                        />
+                        <ListItemSecondaryAction>
+                          <Tooltip title="Edit">
+                            <IconButton onClick={() => openEditorForEdit(task)}>
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Delete">
+                            <IconButton onClick={() => handleDeleteClick(task.id)}>
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </ListItemSecondaryAction>
+                      </ListItem>
+                      <Divider component="li" />
+                    </React.Fragment>
+                  ))}
+                </List>
               </>
             )}
-          </>
+          </Stack>
         )}
       </DialogContent>
 
-      {!isAddingTask && !isEditingTask && (
-        <DialogActions>
-          <Button onClick={onClose}>Close</Button>
-        </DialogActions>
-      )}
+      <DialogActions>
+        <Button onClick={onClose}>Done</Button>
+      </DialogActions>
 
       {/* Delete Confirmation Dialog */}
       <Dialog
@@ -407,6 +206,14 @@ const ListeningTaskManager: React.FC<ListeningTaskManagerProps> = ({
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ListeningTaskEditor
+        material={material}
+        open={editorOpen}
+        task={editorTask}
+        onClose={handleEditorClose}
+        onSaved={handleEditorSaved}
+      />
     </Dialog>
   );
 };

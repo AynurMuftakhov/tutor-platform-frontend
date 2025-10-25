@@ -63,15 +63,16 @@ export interface ListeningAudioJobStatusResponse {
 export interface ListeningGeneratedAudioContentRef {
   sourceKind: 'GENERATED_AUDIO';
   generatorRequestId: string;
-  audioMaterialId: string;
   audioUrl: string;
-  transcript: string;
+  transcriptId: string;
   durationSec: number;
   wordIds: string[];
   theme?: string;
   cefr?: string;
   metadata?: ListeningTranscriptMetadata;
   voiceId?: string;
+  voiceSettings?: ListeningVoiceSettings;
+  audioMaterialId?: string;
 }
 
 export interface ListeningTranscriptResponse {
@@ -83,14 +84,23 @@ export interface ListeningTranscriptResponse {
 }
 
 export interface GenerateListeningTranscriptPayload {
-  wordIds: string[];
-  maxWords: number;
+  wordIds?: string[];
+  maxWords?: number;
   theme?: string;
   cefr?: string;
   language?: string;
   style?: string;
   seed?: number;
   constraints?: Record<string, unknown>;
+}
+
+export interface CreateManualListeningTranscriptPayload {
+  transcript: string;
+  wordIds?: string[];
+  language?: string;
+  theme?: string;
+  cefr?: string;
+  style?: string;
 }
 
 export interface UpdateListeningTranscriptPayload {

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Stack, Typography, Dialog, DialogContent, IconButton } from '@mui/material';
+import { Box, Chip, Stack, Typography, Dialog, DialogContent, IconButton } from '@mui/material';
 import ImageIcon from '@mui/icons-material/Image';
 import AudiotrackIcon from '@mui/icons-material/Audiotrack';
 import SmartDisplayIcon from '@mui/icons-material/SmartDisplay';
@@ -12,15 +12,18 @@ import type {
   AudioBlockPayload,
   VideoBlockPayload,
   GrammarMaterialBlockPayload,
+  ListeningTaskBlockPayload,
   Section,
   Row,
   Column,
 } from '../../../types/lessonContent';
 import { useQuery } from '@tanstack/react-query';
-import { getMaterial } from '../../../services/api';
+import { fetchListeningTasks, getMaterial, getListeningTranscript } from '../../../services/api';
 import type { Material } from '../../../types/material';
+import type { ListeningTask } from '../../../types';
 import GrammarPlayer from '../../../components/grammar/GrammarPlayer';
 import { resolveUrl } from '../../../services/assets';
+import { useAuth } from '../../../context/AuthContext';
 
 function useThrottled<T extends (...args: any[]) => void>(fn: T, ms: number): T {
     const lastArgs = React.useRef<any[] | null>(null);
@@ -246,6 +249,103 @@ const VideoBlockView: React.FC<{ payload: VideoBlockPayload; contentSync?: { roo
 
 import { useSyncedGrammarBlock } from '../../../hooks/useSyncedGrammarBlock';
 
+const normalizeListeningWord = (word: string) => word.replace(/[^\p{L}\p{N}'-]+/gu, '').toLowerCase();
+
+const ListeningTaskBlockView: React.FC<{ payload: ListeningTaskBlockPayload }> = ({ payload }) => {
+  const hasMaterial = Boolean(payload.materialId);
+  const { data: material, isLoading: materialLoading } = useQuery<Material>({
+    queryKey: ['material', payload.materialId],
+    queryFn: () => getMaterial(payload.materialId),
+    enabled: hasMaterial,
+  });
+  const { data: tasks = [], isLoading, isError } = useQuery<ListeningTask[]>({
+    queryKey: ['listening-block', payload.materialId],
+    queryFn: () => fetchListeningTasks(payload.materialId),
+    enabled: hasMaterial,
+  });
+
+  const { user } = useAuth();
+  const taskCandidate = tasks.find((item) => item.id === payload.taskId);
+  const { data: transcriptData } = useQuery({
+    queryKey: ['listening-transcript', taskCandidate?.transcriptId],
+    queryFn: () => getListeningTranscript(user!.id, taskCandidate!.transcriptId!),
+    enabled: hasMaterial && !!taskCandidate?.transcriptId && !!user?.id,
+  });
+
+  if (!payload.materialId) {
+    return <Typography variant="caption" color="text.secondary">Select a material to bind this block.</Typography>;
+  }
+  if (materialLoading || isLoading) {
+    return <Typography variant="caption" color="text.secondary">Loading listening task…</Typography>;
+  }
+  if (isError) {
+    return <Typography variant="caption" color="error">Failed to load listening task.</Typography>;
+  }
+
+  const task = taskCandidate;
+  if (!task) {
+    return <Typography variant="caption" color="text.secondary">Pick a task to show in this block.</Typography>;
+  }
+
+  const audioSrc = task.audioUrl || material?.sourceUrl || '';
+  const targetSet = new Set((task.targetWords || []).map(normalizeListeningWord));
+  const transcriptText = transcriptData?.transcript || '';
+    const transcriptTokens = transcriptText.split(/(\s+)/);
+
+  return (
+    <Stack spacing={1.5} sx={{ border: (t) => `1px solid ${t.palette.divider}`, borderRadius: 2, p: 2 }}>
+      {audioSrc ? (
+        <audio controls src={resolveUrl(audioSrc)} style={{ width: '100%' }} />
+      ) : (
+        <Typography variant="body2" color="text.secondary">Audio not available.</Typography>
+      )}
+      <Stack spacing={0.5}>
+        <Typography variant="subtitle2">Transcript</Typography>
+        {transcriptText ? (
+          <Typography component="div" sx={{ lineHeight: 1.8 }}>
+            {transcriptTokens.map((token, idx) => {
+              const normalized = normalizeListeningWord(token);
+              if (!normalized || !targetSet.has(normalized)) {
+                return <Box component="span" key={idx}>{token}</Box>;
+              }
+              return (
+                <Box
+                  component="span"
+                  key={`${normalized}-${idx}`}
+                  sx={{
+                    fontWeight: 600,
+                    color: payload.showTranscript ? 'primary.main' : 'transparent',
+                    display: 'inline-block',
+                    borderBottom: payload.showTranscript ? 'none' : '2px solid',
+                    borderColor: 'primary.main',
+                    minWidth: 32,
+                    textAlign: 'center',
+                    mx: 0.5,
+                  }}
+                >
+                  {payload.showTranscript ? token : '____'}
+                </Box>
+              );
+            })}
+          </Typography>
+        ) : (
+          <Typography variant="body2" color="text.secondary">Transcript coming soon.</Typography>
+        )}
+      </Stack>
+      {task.targetWords && task.targetWords.length > 0 && (
+        <Stack spacing={0.5}>
+          <Typography variant="subtitle2">Focus words</Typography>
+          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            {task.targetWords.map((word) => (
+              <Chip key={word} size="small" label={word} />
+            ))}
+          </Stack>
+        </Stack>
+      )}
+    </Stack>
+  );
+};
+
 const GrammarView: React.FC<{ payload: GrammarMaterialBlockPayload; contentSync?: { room: Room; isTutor: boolean; contentId: string } }> = ({ payload, contentSync }) => {
   if (!payload.materialId) {
     return <Typography variant="caption" color="text.secondary">No grammar material selected.</Typography>;
@@ -312,6 +412,8 @@ const BlockView: React.FC<{ refId: string; type: string; content: Record<string,
       inner = <VideoBlockView payload={payload as VideoBlockPayload} contentSync={contentSync} />; break;
     case 'grammarMaterial':
       inner = <GrammarView payload={payload as GrammarMaterialBlockPayload} contentSync={contentSync as any} />; break;
+    case 'listeningTask':
+      inner = <ListeningTaskBlockView payload={payload as ListeningTaskBlockPayload} />; break;
     default:
       inner = <Typography variant="caption" color="text.secondary">Unsupported block: {type}</Typography>;
   }

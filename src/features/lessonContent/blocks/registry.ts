@@ -4,6 +4,7 @@ import ImageIcon from '@mui/icons-material/Image';
 import AudiotrackIcon from '@mui/icons-material/Audiotrack';
 import SmartDisplayIcon from '@mui/icons-material/SmartDisplay';
 import QuizIcon from '@mui/icons-material/Quiz';
+import HeadphonesIcon from '@mui/icons-material/Headphones';
 import type {
   BlockContentPayload,
   TextBlockPayload,
@@ -11,9 +12,10 @@ import type {
   AudioBlockPayload,
   VideoBlockPayload,
   GrammarMaterialBlockPayload,
+  ListeningTaskBlockPayload,
 } from '../../../types/lessonContent';
 
-export type BlockType = 'text' | 'image' | 'audio' | 'video' | 'grammarMaterial';
+export type BlockType = 'text' | 'image' | 'audio' | 'video' | 'grammarMaterial' | 'listeningTask';
 
 export interface BlockDefinition<T extends BlockContentPayload = BlockContentPayload> {
   icon: React.ReactNode;
@@ -97,6 +99,15 @@ register<GrammarMaterialBlockPayload>('grammarMaterial', {
   defaultContent: () => ({ materialId: '', mode: 'all', shuffle: false }),
   EditorComponent: (props) => React.createElement(PlaceholderEditor, { ...props, label: 'Grammar (editor)' }),
   StudentComponent: (props) => React.createElement(PlaceholderStudent, { ...props, label: 'Grammar (student)' }),
+});
+
+register<ListeningTaskBlockPayload>('listeningTask', {
+  icon: React.createElement(HeadphonesIcon, { fontSize: 'small' }),
+  label: 'Listening task',
+  schemaId: 'listeningTask.v1.json',
+  defaultContent: () => ({ materialId: '', taskId: '', showTranscript: false }),
+  EditorComponent: (props) => React.createElement(PlaceholderEditor, { ...props, label: 'Listening task (editor)' }),
+  StudentComponent: (props) => React.createElement(PlaceholderStudent, { ...props, label: 'Listening task (student)' }),
 });
 
 export const BlockRegistry = { register, get, all };

@@ -8,6 +8,9 @@ import {
   Grid,
   useTheme,
   Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Stack,
   Divider,
   Select,
@@ -31,12 +34,15 @@ import { useFolderTree, useMaterials } from '../hooks/useMaterials';
 import StandaloneMediaPlayer from '../components/lessonDetail/StandaloneMediaPlayer';
 import GrammarViewerDialog from '../components/grammar/GrammarViewerDialog';
 import { extractVideoId } from '../utils/videoUtils';
-import { deleteMaterial, updateMaterialFolder, deleteMaterialFolder } from '../services/api';
+import { deleteMaterial, updateMaterialFolder, deleteMaterialFolder, fetchStudents } from '../services/api';
 import { resolveUrl } from '../services/assets';
+import { useAuth } from '../context/AuthContext';
+import ListeningMaterialViewer from '../components/materials/listening/ListeningMaterialViewer';
 
 const LearningMaterialsPage: React.FC = () => {
   const theme = useTheme();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   // URL params for state persistence
   const [searchParams, setSearchParams] = useSearchParams();
@@ -68,12 +74,38 @@ const LearningMaterialsPage: React.FC = () => {
   const [materialToMove, setMaterialToMove] = useState<Material | null>(null);
   const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
 
+  // Shared student search (for Assign from each MaterialCard)
+  const [studentQ, setStudentQ] = useState<string>("");
+  const [studentOptions, setStudentOptions] = useState<{ id: string; name: string; email?: string }[]>([]);
+  const [studentLoading, setStudentLoading] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const h = setTimeout(async () => {
+      setStudentLoading(true);
+      try {
+        const res = await fetchStudents(user.id, studentQ, 0, 10);
+        setStudentOptions(res.content.map((s: any) => ({ id: s.id, name: s.name, email: s.email })));
+      } finally {
+        setStudentLoading(false);
+      }
+    }, 300);
+    return () => clearTimeout(h);
+  }, [studentQ, user?.id]);
+
   // Fetch data using React Query
   const { data: folderTree = [], isLoading: foldersLoading } = useFolderTree();
   const { data: materialsData = { content: [] }, isLoading: materialsLoading } = useMaterials({
     folderId: selectedFolderId === ROOT_FOLDER_ID || selectedFolderId === 'all' ? undefined : selectedFolderId,
     search: searchTerm,
-    type: selectedType === 'all' ? undefined : selectedType === 'grammar' ? 'GRAMMAR' : selectedType,
+    type:
+      selectedType === 'all'
+        ? undefined
+        : selectedType === 'grammar'
+          ? 'GRAMMAR'
+          : selectedType === 'listening'
+            ? 'LISTENING'
+            : selectedType,
     tags: selectedTags.length > 0 ? selectedTags : undefined,
     page: page - 1,
     size,
@@ -257,7 +289,7 @@ const LearningMaterialsPage: React.FC = () => {
         ['materials', {
           folderId: selectedFolderId === ROOT_FOLDER_ID || selectedFolderId === 'all' ? undefined : selectedFolderId,
           search: searchTerm,
-          type: selectedType === 'all' ? undefined : selectedType,
+          type: selectedType === 'all' ? undefined : selectedType === 'listening' ? 'LISTENING' : selectedType,
           tags: selectedTags.length > 0 ? selectedTags : undefined,
         }],
         (old: any) => {
@@ -391,6 +423,9 @@ const LearningMaterialsPage: React.FC = () => {
                     onMove={handleMoveMaterial}
                     onDelete={handleDeleteMaterial}
                     onManageTasks={handleManageTasks}
+                    studentOptionsExternal={studentOptions}
+                    studentLoadingExternal={studentLoading}
+                    onStudentQueryChange={setStudentQ}
                   />
                 </Grid>
               ))}
@@ -442,26 +477,46 @@ const LearningMaterialsPage: React.FC = () => {
         maxWidth="md"
         fullWidth
       >
-        {currentMaterial && currentMaterial.sourceUrl && (
-          currentMaterial.type === 'AUDIO' ? (
-            <Box sx={{ p: 3 }}>
-              <audio
-                controls
-                src={resolveUrl(currentMaterial.sourceUrl)}
-                style={{ width: '100%' }}
-                aria-label={currentMaterial.title || 'Audio material'}
-              />
-            </Box>
-          ) : (
-            <Box sx={{ position: 'relative', height: 500 }}>
-              <StandaloneMediaPlayer
-                videoId={extractVideoId(currentMaterial.sourceUrl) || ''}
-                startTime={0}
-                endTime={0}
-                onClose={handleClosePlayer}
-              />
-            </Box>
-          )
+        {currentMaterial && (
+          <>
+            <DialogTitle>{currentMaterial.title || 'Material preview'}</DialogTitle>
+            <DialogContent dividers>
+              {currentMaterial.type === 'LISTENING' ? (
+                <ListeningMaterialViewer material={currentMaterial} open={!!currentMaterial} />
+              ) : currentMaterial.type === 'AUDIO' ? (
+                <Box>
+                  {currentMaterial.sourceUrl ? (
+                    <audio
+                      controls
+                      src={resolveUrl(currentMaterial.sourceUrl)}
+                      style={{ width: '100%' }}
+                      aria-label={currentMaterial.title || 'Audio material'}
+                    />
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">
+                      Audio source is unavailable.
+                    </Typography>
+                  )}
+                </Box>
+              ) : currentMaterial.sourceUrl ? (
+                <Box sx={{ position: 'relative', height: 500 }}>
+                  <StandaloneMediaPlayer
+                    videoId={extractVideoId(currentMaterial.sourceUrl) || ''}
+                    startTime={0}
+                    endTime={0}
+                    onClose={handleClosePlayer}
+                  />
+                </Box>
+              ) : (
+                <Typography variant="body2" color="text.secondary">
+                  Media source is unavailable.
+                </Typography>
+              )}
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={handleClosePlayer}>Close</Button>
+            </DialogActions>
+          </>
         )}
       </Dialog>
 

@@ -7,9 +7,13 @@ import {
     GenerateExerciseRequest,
     GenerateExerciseResponse,
     GenerateListeningTranscriptPayload,
-    ListeningTranscriptResponse,
+    CreateManualListeningTranscriptPayload,
     ListeningAudioJobStartResponse,
     ListeningAudioJobStatusResponse,
+    ListeningTask,
+    ListeningTaskCreatePayload,
+    ListeningTaskPayload,
+    ListeningTranscriptResponse,
     ListeningVoice,
     StartListeningAudioJobPayload,
     ValidateListeningTranscriptPayload,
@@ -345,29 +349,24 @@ export const deleteMaterial = async (id: string) => {
 };
 
 // New API functions for listening tasks
-export const fetchListeningTasks = async (materialId: string) => {
+export const fetchListeningTasks = async (materialId: string): Promise<ListeningTask[]> => {
   const response = await api.get(`/lessons-service/api/materials/${materialId}/tasks`);
   return response.data;
 };
 
-export const createListeningTask = async (materialId: string, taskData: {
-  title?: string;
-  startSec: number;
-  endSec: number;
-  wordLimit?: number;
-  timeLimitSec?: number;
-}) => {
+export const createListeningTask = async (
+  materialId: string,
+  taskData: ListeningTaskCreatePayload,
+): Promise<ListeningTask> => {
   const response = await api.post(`/lessons-service/api/materials/${materialId}/tasks`, taskData);
   return response.data;
 };
 
-export const updateListeningTask = async (materialId: string, taskId: string, taskData: {
-  title?: string;
-  startSec?: number;
-  endSec?: number;
-  wordLimit?: number;
-  timeLimitSec?: number;
-}) => {
+export const updateListeningTask = async (
+  materialId: string,
+  taskId: string,
+  taskData: ListeningTaskPayload,
+): Promise<ListeningTask> => {
   const response = await api.patch(`/lessons-service/api/materials/${materialId}/tasks/${taskId}`, taskData);
   return response.data;
 };
@@ -667,6 +666,18 @@ export const generateListeningTranscript = async (
 ): Promise<ListeningTranscriptResponse> => {
   const response = await api.post<ListeningTranscriptResponse>(
     `/lessons-service/api/listening/transcripts/generate`,
+    payload,
+    { params: { teacherId } },
+  );
+  return response.data;
+};
+
+export const createManualListeningTranscript = async (
+  teacherId: string,
+  payload: CreateManualListeningTranscriptPayload,
+): Promise<ListeningTranscriptResponse> => {
+  const response = await api.post<ListeningTranscriptResponse>(
+    `/lessons-service/api/listening/transcripts/manual`,
     payload,
     { params: { teacherId } },
   );

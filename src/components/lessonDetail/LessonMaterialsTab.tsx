@@ -11,6 +11,8 @@ import { Add as AddIcon } from '@mui/icons-material';
 import MaterialCard, {Material} from '../materials/MaterialCard';
 import MaterialPickerDialog from './MaterialPickerDialog';
 import ListeningTaskManager from '../materials/ListeningTaskManager';
+import { fetchStudents } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 import { useLessonMaterials, useUnlinkMaterialFromLesson } from '../../hooks/useLessonMaterials';
 import { useQueryClient } from '@tanstack/react-query';
 import StandaloneMediaPlayer from "./StandaloneMediaPlayer";
@@ -29,11 +31,30 @@ interface LessonMaterialsTabProps {
 
 const LessonMaterialsTab: React.FC<LessonMaterialsTabProps> = ({ lessonId, isTeacher, onPlay }) => {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [selectedMaterial, setSelectedMaterial] = useState<any>(null);
   const [isTaskManagerOpen, setIsTaskManagerOpen] = useState(false);
   const [currentMaterial, setCurrentMaterial] = useState<Material | null>(null);
   const [isGrammarDialogOpen, setIsGrammarDialogOpen] = useState(false);
+  // Shared student search state for all MaterialCards on this tab
+  const [studentQ, setStudentQ] = useState<string>("");
+  const [studentOptions, setStudentOptions] = useState<{ id: string; name: string; email?: string }[]>([]);
+  const [studentLoading, setStudentLoading] = useState<boolean>(false);
+
+  React.useEffect(() => {
+    if (!user?.id) return;
+    const h = setTimeout(async () => {
+      setStudentLoading(true);
+      try {
+        const res = await fetchStudents(user.id, studentQ, 0, 10);
+        setStudentOptions(res.content.map((s: any) => ({ id: s.id, name: s.name, email: s.email })));
+      } finally {
+        setStudentLoading(false);
+      }
+    }, 300);
+    return () => clearTimeout(h);
+  }, [studentQ, user?.id]);
 
   // Fetch lesson materials
   const { data: lessonMaterials = [], isLoading } = useLessonMaterials(lessonId);
@@ -193,6 +214,9 @@ const LessonMaterialsTab: React.FC<LessonMaterialsTabProps> = ({ lessonId, isTea
                 onManageTasks={isTeacher ? handleManageTasks : undefined}
                 onUnlink={isTeacher ? handleUnlink : undefined}
                 viewMode="grid"
+                studentOptionsExternal={studentOptions}
+                studentLoadingExternal={studentLoading}
+                onStudentQueryChange={setStudentQ}
               />
             </Grid>
           ))}
@@ -238,7 +262,7 @@ const LessonMaterialsTab: React.FC<LessonMaterialsTabProps> = ({ lessonId, isTea
       />
 
       {/* Listening Task Manager */}
-      {selectedMaterial && selectedMaterial.type === 'VIDEO' && (
+      {selectedMaterial && (selectedMaterial.type === 'VIDEO' || selectedMaterial.type === 'AUDIO') && (
         <ListeningTaskManager
           material={selectedMaterial}
           open={isTaskManagerOpen}

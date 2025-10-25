@@ -24,6 +24,7 @@ import { useFolderTree } from '../../hooks/useMaterials';
 import { createMaterial, updateMaterial, getMaterialTags, createGrammarItem } from '../../services/api';
 import { Material } from './MaterialCard';
 import GrammarEditor from '../grammar/GrammarEditor';
+import ListeningMaterialBuilder from './listening/ListeningMaterialBuilder';
 
 // Use the real API functions imported from services/api
 
@@ -126,8 +127,8 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
 
   // Validate URL based on material type
   const validateUrl = (url: string) => {
-    // Skip URL validation for GRAMMAR type
-    if (materialType === 'GRAMMAR') {
+    // Skip URL validation for GRAMMAR and LISTENING types
+    if (materialType === 'GRAMMAR' || materialType === 'LISTENING') {
       setUrlError('');
       return true;
     }
@@ -194,6 +195,10 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
 
   // Handle form submission
   const handleSubmit = async () => {
+    if (materialType === 'LISTENING') {
+      return;
+    }
+
     // Validate form
     const isUrlValid = materialType === 'GRAMMAR' ? true : validateUrl(sourceUrl);
     const isTitleValid = validateTitle(title);
@@ -277,25 +282,51 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
     }
   };
 
+  const typeSelector = (
+    <FormControl fullWidth sx={{ mb: 3 }}>
+      <InputLabel id="material-type-label">Material Type</InputLabel>
+      <Select
+        labelId="material-type-label"
+        value={materialType}
+        label="Material Type"
+        onChange={(e) => setMaterialType(e.target.value as MaterialType)}
+      >
+        <MenuItem value="VIDEO">VIDEO</MenuItem>
+        <MenuItem value="AUDIO">AUDIO</MenuItem>
+        <MenuItem value="DOCUMENT">Document</MenuItem>
+        <MenuItem value="GRAMMAR">Grammar Exercise</MenuItem>
+        <MenuItem value="LISTENING">Listening</MenuItem>
+      </Select>
+    </FormControl>
+  );
+
+  if (materialType === 'LISTENING') {
+    return (
+      <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+        <DialogTitle>{materialToEdit ? 'Edit Listening Material' : 'Add Listening Material'}</DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2 }}>{typeSelector}</Box>
+        </DialogContent>
+        <ListeningMaterialBuilder
+          onCancel={onClose}
+          onMaterialCreated={onMaterialCreated}
+          materialToEdit={materialToEdit}
+          currentFolderId={currentFolderId}
+          folderTree={folderTree}
+          foldersLoading={foldersLoading}
+          availableTags={availableTags}
+          tagsLoading={isLoadingTags}
+        />
+      </Dialog>
+    );
+  }
+
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle>{materialToEdit ? 'Edit Learning Material' : 'Add Learning Material'}</DialogTitle>
       <DialogContent>
         <Box sx={{ mt: 2 }}>
-          <FormControl fullWidth sx={{ mb: 3 }}>
-            <InputLabel id="material-type-label">Material Type</InputLabel>
-            <Select
-              labelId="material-type-label"
-              value={materialType}
-              label="Material Type"
-              onChange={(e) => setMaterialType(e.target.value as MaterialType)}
-            >
-              <MenuItem value="VIDEO">VIDEO</MenuItem>
-              <MenuItem value="AUDIO">AUDIO</MenuItem>
-              <MenuItem value="DOCUMENT">Document</MenuItem>
-              <MenuItem value="GRAMMAR">Grammar Exercise</MenuItem>
-            </Select>
-          </FormControl>
+          {typeSelector}
 
           <TextField
             fullWidth
@@ -328,7 +359,7 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
 
           {materialType === 'GRAMMAR' && (
             <Box sx={{ mb: 3 }}>
-              <GrammarEditor 
+              <GrammarEditor
                 initialContent={grammarContent}
                 onSave={(content, answer) => {
                   setGrammarContent(content);
@@ -365,7 +396,7 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
             freeSolo
             renderValue={(selected) => (
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                {selected.map((option, index) => (
+                {selected.map((option) => (
                   <Chip key={option} label={option} size="small" />
                 ))}
               </Box>
@@ -394,7 +425,6 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
             </Box>
           )}
 
-          {/* Only show the create task checkbox if the new API is enabled and we have a task manager */}
           {onOpenTaskManager && (materialType === 'VIDEO' || materialType === 'AUDIO') && (
             <FormControlLabel
               control={
@@ -411,9 +441,9 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} color="inherit">Cancel</Button>
-        <Button 
-          onClick={handleSubmit} 
-          color="primary" 
+        <Button
+          onClick={handleSubmit}
+          color="primary"
           variant="contained"
           disabled={
             materialType === 'GRAMMAR'

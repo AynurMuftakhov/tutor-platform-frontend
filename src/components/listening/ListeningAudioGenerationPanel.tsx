@@ -198,7 +198,7 @@ const ListeningAudioGenerationPanel: React.FC<ListeningAudioGenerationPanelProps
         getListeningAudioJobStatus(saved.jobId)
           .then((status) => {
             setJob(status);
-            if (status.status === 'SUCCEEDED' && status.audioUrl && status.audioMaterialId && status.transcript) {
+            if (status.status === 'SUCCEEDED' && status.audioUrl) {
               const durationSec = status.durationSec ?? null;
               if (durationSec != null) {
                 onDurationUpdate?.(durationSec);
@@ -208,16 +208,17 @@ const ListeningAudioGenerationPanel: React.FC<ListeningAudioGenerationPanelProps
                 generatorRequestId: status.jobId,
                 audioMaterialId: status.audioMaterialId,
                 audioUrl: status.audioUrl,
-                transcript: status.transcript,
+                transcriptId: transcriptId as string,
                 durationSec: status.durationSec ?? 0,
                 wordIds,
                 theme: theme ?? metadata?.theme,
                 cefr: cefr ?? metadata?.cefr,
                 metadata,
                 voiceId: saved.voiceId,
+                voiceSettings: saved.voiceSettings,
               };
               setAudioContent(content);
-              setTranscriptUsed(normalizeTranscript(status.transcript));
+              setTranscriptUsed(normalizeTranscript(saved.transcript || transcriptText));
               onAudioContentChange(content);
               persistJobState(null);
             } else if (status.status && !isTerminalStatus(status.status)) {
@@ -380,8 +381,8 @@ const ListeningAudioGenerationPanel: React.FC<ListeningAudioGenerationPanelProps
     }
 
     if (status === 'SUCCEEDED') {
-      if (job.audioMaterialId && job.audioUrl && job.transcript) {
-        const normalizedTranscript = normalizeTranscript(job.transcript);
+      if (job.audioUrl) {
+        const normalizedTranscript = normalizeTranscript(transcriptText);
         const durationSec = job.durationSec ?? null;
         if (durationSec != null) {
           onDurationUpdate?.(durationSec);
@@ -391,13 +392,14 @@ const ListeningAudioGenerationPanel: React.FC<ListeningAudioGenerationPanelProps
           generatorRequestId: job.jobId,
           audioMaterialId: job.audioMaterialId,
           audioUrl: job.audioUrl,
-          transcript: job.transcript,
+          transcriptId: transcriptId as string,
           durationSec: job.durationSec ?? 0,
           wordIds,
           theme: theme ?? metadata?.theme,
           cefr: cefr ?? metadata?.cefr,
           metadata,
           voiceId: selectedVoiceId || undefined,
+          voiceSettings: voiceSettings,
         };
         setAudioContent(content);
         setTranscriptUsed(normalizedTranscript);

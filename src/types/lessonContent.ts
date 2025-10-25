@@ -2,7 +2,7 @@ export type LessonContentStatus = 'DRAFT' | 'PUBLISHED';
 
 export interface BlockRef {
   id: string; // references content[id]
-  type: 'text' | 'image' | 'audio' | 'video' | 'grammarMaterial';
+  type: 'text' | 'image' | 'audio' | 'video' | 'grammarMaterial' | 'listeningTask';
 }
 
 export interface Column {
@@ -36,13 +36,15 @@ export interface ImageBlockPayload extends BaseBlockPayload { url?: string; alt?
 export interface AudioBlockPayload extends BaseBlockPayload { materialId: string; startSec?: number; endSec?: number; autoplay?: boolean; }
 export interface VideoBlockPayload extends BaseBlockPayload { materialId: string; startSec?: number; endSec?: number; }
 export interface GrammarMaterialBlockPayload extends BaseBlockPayload { materialId: string; itemIds?: string[]; mode?: 'all' | 'subset'; shuffle?: boolean; }
+export interface ListeningTaskBlockPayload extends BaseBlockPayload { materialId: string; taskId: string; showTranscript?: boolean; mode?: 'gap' | 'listen'; }
 
 export type BlockContentPayload =
   | TextBlockPayload
   | ImageBlockPayload
   | AudioBlockPayload
   | VideoBlockPayload
-  | GrammarMaterialBlockPayload;
+  | GrammarMaterialBlockPayload
+  | ListeningTaskBlockPayload;
 
 export interface LessonContent {
   id: string;

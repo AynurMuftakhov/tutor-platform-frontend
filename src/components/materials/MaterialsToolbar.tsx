@@ -126,6 +126,7 @@ const MaterialsToolbar: React.FC<MaterialsToolbarProps> = ({
           }}
         >
           <Tab label="All Materials" value="all" />
+          <Tab label="Listening" value="listening" />
           <Tab label="Grammar" value="grammar" />
         </Tabs>
       </Box>

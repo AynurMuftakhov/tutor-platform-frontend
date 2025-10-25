@@ -18,6 +18,8 @@ import { useMaterials, useFolderTree } from '../../hooks/useMaterials';
 import { useLinkMaterialToLesson, useLessonMaterials } from '../../hooks/useLessonMaterials';
 import FolderSidebar, { SIDEBAR_WIDTH } from '../folders/FolderSidebar';
 import { ROOT_FOLDER_ID } from '../folders/FolderTree';
+import { fetchStudents } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 
 interface MaterialPickerDialogProps {
   lessonId: string;
@@ -31,11 +33,30 @@ const MaterialPickerDialog: React.FC<MaterialPickerDialogProps> = ({
   onClose,
 }) => {
   const theme = useTheme();
+  const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedType, setSelectedType] = useState<MaterialType>('all');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [selectedFolderId, setSelectedFolderId] = useState<string>(ROOT_FOLDER_ID);
+  // Shared student search across cards in this dialog
+  const [studentQ, setStudentQ] = useState<string>("");
+  const [studentOptions, setStudentOptions] = useState<{ id: string; name: string; email?: string }[]>([]);
+  const [studentLoading, setStudentLoading] = useState<boolean>(false);
+
+  React.useEffect(() => {
+    if (!user?.id) return;
+    const h = setTimeout(async () => {
+      setStudentLoading(true);
+      try {
+        const res = await fetchStudents(user.id, studentQ, 0, 10);
+        setStudentOptions(res.content.map((s: any) => ({ id: s.id, name: s.name, email: s.email })));
+      } finally {
+        setStudentLoading(false);
+      }
+    }, 300);
+    return () => clearTimeout(h);
+  }, [studentQ, user?.id]);
 
   // Fetch folder tree
   const { data: folderTree = [], isLoading: foldersLoading } = useFolderTree();
@@ -44,7 +65,14 @@ const MaterialPickerDialog: React.FC<MaterialPickerDialogProps> = ({
   const { data: materialsData = { content: [] }, isLoading: materialsLoading } = useMaterials({
     folderId: selectedFolderId === ROOT_FOLDER_ID || selectedFolderId === 'all' ? undefined : selectedFolderId,
     search: searchTerm,
-    type: selectedType === 'all' ? undefined : selectedType,
+    type:
+      selectedType === 'all'
+        ? undefined
+        : selectedType === 'grammar'
+          ? 'GRAMMAR'
+          : selectedType === 'listening'
+            ? 'LISTENING'
+            : selectedType,
     tags: selectedTags.length > 0 ? selectedTags : undefined,
   });
 
@@ -199,6 +227,9 @@ const MaterialPickerDialog: React.FC<MaterialPickerDialogProps> = ({
                       <MaterialCard
                         material={material}
                         viewMode={viewMode}
+                        studentOptionsExternal={studentOptions}
+                        studentLoadingExternal={studentLoading}
+                        onStudentQueryChange={setStudentQ}
                       />
                       <Button
                         variant="contained"

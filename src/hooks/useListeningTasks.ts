@@ -5,6 +5,7 @@ import {
   updateListeningTask,
   deleteListeningTask
 } from '../services/api';
+import type { ListeningTaskCreatePayload, ListeningTaskPayload } from '../types';
 
 // Hook for fetching listening tasks for a specific material
 export const useListeningTasks = (materialId: string) => useQuery({
@@ -18,15 +19,9 @@ export const useCreateListeningTask = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: ({ materialId, taskData }: { 
-      materialId: string, 
-      taskData: {
-        title?: string;
-        startSec: number;
-        endSec: number;
-        wordLimit?: number;
-        timeLimitSec?: number;
-      }
+    mutationFn: ({ materialId, taskData }: {
+      materialId: string;
+      taskData: ListeningTaskCreatePayload;
     }) => createListeningTask(materialId, taskData),
     onSuccess: (_, variables) => {
       // Invalidate relevant queries to trigger refetch
@@ -40,16 +35,10 @@ export const useUpdateListeningTask = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: ({ materialId, taskId, taskData }: { 
-      materialId: string, 
-      taskId: string,
-      taskData: {
-        title?: string;
-        startSec?: number;
-        endSec?: number;
-        wordLimit?: number;
-        timeLimitSec?: number;
-      }
+    mutationFn: ({ materialId, taskId, taskData }: {
+      materialId: string;
+      taskId: string;
+      taskData: ListeningTaskPayload;
     }) => updateListeningTask(materialId, taskId, taskData),
     onSuccess: (_, variables) => {
       // Invalidate relevant queries to trigger refetch

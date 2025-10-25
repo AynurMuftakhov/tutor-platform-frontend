@@ -320,7 +320,6 @@ const TeacherHomeworkNewPage: React.FC = () => {
       cefr: listeningCefr || undefined,
       language: listeningLanguage || undefined,
       style: listeningStyle || undefined,
-      constraints: listeningMustIncludeAll ? { mustIncludeAllWords: true } : undefined,
     };
 
     if (listeningSeed.trim()) {
@@ -500,7 +499,6 @@ const TeacherHomeworkNewPage: React.FC = () => {
       };
 
       const durationSec = audioContentRef?.durationSec ?? estimatedDurationSec ?? listeningDurationSecTarget;
-      const transcriptText = audioContentRef?.transcript ?? transcriptDraft.trim();
 
       const vocabularySettings: any = { masteryStreak, shuffle };
       const vocabularyTimeLimit = parseInt(timeLimitMin, 10);
@@ -523,7 +521,6 @@ const TeacherHomeworkNewPage: React.FC = () => {
         audioMaterialId: audioContentRef.audioMaterialId,
         audioUrl: audioContentRef.audioUrl,
         transcriptId,
-        transcript: transcriptText,
         durationSec,
         wordIds: listeningWordIds,
         theme: audioContentRef.theme ?? (listeningTheme || undefined),
@@ -577,7 +574,6 @@ const TeacherHomeworkNewPage: React.FC = () => {
       };
 
       const durationSec = audioContentRef?.durationSec ?? estimatedDurationSec ?? listeningDurationSecTarget;
-      const transcriptText = audioContentRef?.transcript ?? transcriptDraft.trim();
 
       const vocabularySettings: any = { masteryStreak, shuffle };
       const vocabularyTimeLimit = parseInt(timeLimitMin, 10);
@@ -600,7 +596,6 @@ const TeacherHomeworkNewPage: React.FC = () => {
         audioMaterialId: audioContentRef.audioMaterialId,
         audioUrl: audioContentRef.audioUrl,
         transcriptId,
-        transcript: transcriptText,
         durationSec,
         wordIds: listeningWordIds,
         theme: audioContentRef.theme ?? (listeningTheme || undefined),

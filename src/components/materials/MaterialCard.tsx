@@ -31,7 +31,12 @@ import {
   Videocam as VideoIcon,
   Description as DocumentIcon,
   Code as GrammarIcon,
-  Assignment as TasksIcon, OpenInFull, Start, StartOutlined, School,
+  Assignment as TasksIcon,
+  Headphones as ListeningIcon,
+  OpenInFull,
+  Start,
+  StartOutlined,
+  School,
 } from '@mui/icons-material';
 import { useListeningTasks } from '../../hooks/useListeningTasks';
 import { useAuth } from '../../context/AuthContext';
@@ -42,7 +47,7 @@ import { fetchStudents } from '../../services/api';
 import { useNavigate } from 'react-router-dom';
 import { toOffsetDateTime } from '../../utils/datetime';
 
-export type MaterialType = 'AUDIO' | 'VIDEO' | 'DOCUMENT' | 'GRAMMAR';
+export type MaterialType = 'AUDIO' | 'VIDEO' | 'DOCUMENT' | 'GRAMMAR' | 'LISTENING';
 
 export interface Material {
   id: string;
@@ -64,6 +69,10 @@ interface MaterialCardProps {
   onUnlink?: (material: Material) => void;
   onManageTasks?: (material: Material) => void;
   viewMode?: 'list' | 'grid';
+  // Optional external student search props to avoid per-card fetching
+  studentOptionsExternal?: { id: string; name: string; email?: string }[];
+  studentLoadingExternal?: boolean;
+  onStudentQueryChange?: (query: string) => void;
 }
 
 const MaterialCard: React.FC<MaterialCardProps> = ({
@@ -75,6 +84,9 @@ const MaterialCard: React.FC<MaterialCardProps> = ({
   onUnlink,
   onManageTasks,
   viewMode = 'grid',
+  studentOptionsExternal,
+  studentLoadingExternal,
+  onStudentQueryChange,
 }) => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
@@ -101,12 +113,17 @@ const MaterialCard: React.FC<MaterialCardProps> = ({
     }
   };
 
+  const useExternalStudents = !!(onStudentQueryChange || studentOptionsExternal || studentLoadingExternal);
+
   React.useEffect(() => {
+    if (useExternalStudents) return; // parent handles fetching
     const h = setTimeout(() => searchStudents(studentQuery), 300);
     return () => clearTimeout(h);
-  }, [studentQuery]);
+  }, [studentQuery, useExternalStudents]);
   const isVideo = material.type === 'VIDEO';
-  const shouldFetchTasks = isVideo && !!material.id;
+  const isListening = material.type === 'LISTENING';
+  const isMedia = material.type === 'VIDEO' || material.type === 'AUDIO' || isListening;
+  const shouldFetchTasks = !isListening && (material.type === 'AUDIO' || material.type === 'VIDEO');
   const { data: tasks = [] } = useListeningTasks(shouldFetchTasks ? material.id : '');
 
   // Format duration if available
@@ -202,6 +219,8 @@ const MaterialCard: React.FC<MaterialCardProps> = ({
         return <VideoIcon fontSize="small" />;
       case 'GRAMMAR':
         return <GrammarIcon fontSize="small" />;
+      case 'LISTENING':
+        return <ListeningIcon fontSize="small" />;
       case 'DOCUMENT':
       default:
         return <DocumentIcon fontSize="small" />;
@@ -217,6 +236,8 @@ const MaterialCard: React.FC<MaterialCardProps> = ({
     // Default thumbnails based on type
     switch (material.type) {
       case 'AUDIO':
+        return '/assets/audio-placeholder.jpg';
+      case 'LISTENING':
         return '/assets/audio-placeholder.jpg';
       case 'VIDEO':
         // For YouTube videos, we can use their thumbnail API
@@ -362,8 +383,16 @@ const MaterialCard: React.FC<MaterialCardProps> = ({
 
               {/* Action buttons */}
               <Box sx={{ display: 'flex', gap: 1, ml: 'auto' }}>
-                {(material.type === 'AUDIO' || material.type === 'VIDEO' || material.type === 'GRAMMAR') && onPlay && (
-                  <Tooltip title= {isVideo ? "Play" : "Start Excercise"} >
+                {(material.type === 'AUDIO' || material.type === 'VIDEO' || material.type === 'GRAMMAR' || material.type === 'LISTENING') && onPlay && (
+                  <Tooltip
+                    title={
+                      isVideo
+                        ? 'Play'
+                        : material.type === 'GRAMMAR'
+                          ? 'Start exercise'
+                          : 'Play'
+                    }
+                  >
                     <IconButton
                       size="small"
                       onClick={() => onPlay(material)}
@@ -377,12 +406,14 @@ const MaterialCard: React.FC<MaterialCardProps> = ({
                         }
                       }}
                     >
-                      {isVideo ? ( <PlayIcon fontSize="small" />) : ( <School/>)}
+                      {material.type === 'GRAMMAR'
+                        ? <School />
+                        : <PlayIcon fontSize="small" />}
                     </IconButton>
                   </Tooltip>
                 )}
 
-                {(onEdit || onUnlink) && (<Tooltip title="More options">
+                {(onEdit || onUnlink || onManageTasks) && (<Tooltip title="More options">
                   <IconButton
                     size="small"
                     onClick={handleMenuOpen}
@@ -407,7 +438,7 @@ const MaterialCard: React.FC<MaterialCardProps> = ({
         open={Boolean(menuAnchorEl)}
         onClose={handleMenuClose}
       >
-        { onManageTasks && isVideo && (
+        { onManageTasks && isMedia && !isListening && (
           <MenuItem onClick={handleManageTasks}>
             <ListItemIcon>
               <TasksIcon fontSize="small" />
@@ -461,10 +492,13 @@ const MaterialCard: React.FC<MaterialCardProps> = ({
         <DialogContent sx={{ pt: 2 }}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <Autocomplete
-              options={studentOptions}
-              loading={studentLoading}
+              options={studentOptionsExternal ?? studentOptions}
+              loading={studentLoadingExternal ?? studentLoading}
               getOptionLabel={(opt) => `${opt.name}${opt.email ? ` (${opt.email})` : ''}`}
-              onInputChange={(_, v) => setStudentQuery(v)}
+              onInputChange={(_, v) => {
+                if (onStudentQueryChange) onStudentQueryChange(v);
+                else setStudentQuery(v);
+              }}
               onChange={(_, v) => setSelectedStudent(v as any)}
               renderInput={(params) => (
                 <TextField {...params} label="Student" placeholder="Search by name/email" />

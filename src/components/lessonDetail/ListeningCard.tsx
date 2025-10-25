@@ -48,11 +48,13 @@ export const ListeningCard: React.FC<ListeningCardProps> = ({
   const seconds = durationSec % 60;
   const formattedDuration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
   const theme = useTheme();
+  const sourceUrl = task.sourceUrl || '';
 
   // Use provided title or extract from URL as fallback
   const extractTitleFromUrl = () => {
-    const urlParts = task.sourceUrl.split('/');
-    return urlParts[urlParts.length - 1].replace(/\.[^/.]+$/, "").replace(/-|_/g, " ");
+    if (!sourceUrl) return 'Listening task';
+    const urlParts = sourceUrl.split('/');
+    return urlParts[urlParts.length - 1].replace(/\.[^/.]+$/, '').replace(/-|_/g, ' ');
   };
 
   const title = task.title || extractTitleFromUrl();
@@ -79,10 +81,10 @@ export const ListeningCard: React.FC<ListeningCardProps> = ({
   const getThumbnail = () => {
     if (task.assetType === AssetType.VIDEO) {
       // For YouTube videos, we can use their thumbnail API
-      if (task.sourceUrl.includes('youtube.com') || task.sourceUrl.includes('youtu.be')) {
-        const videoId = task.sourceUrl.includes('v=') 
-          ? task.sourceUrl.split('v=')[1].split('&')[0]
-          : task.sourceUrl.split('/').pop();
+      if (sourceUrl.includes('youtube.com') || sourceUrl.includes('youtu.be')) {
+        const videoId = sourceUrl.includes('v=')
+          ? sourceUrl.split('v=')[1].split('&')[0]
+          : sourceUrl.split('/').pop();
         return `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
       }
       return '/assets/video-placeholder.jpg';

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Chip,
@@ -20,13 +21,16 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import type { AutocompleteRenderInputParams } from '@mui/material/Autocomplete';
 import { useEditorStore } from '../editorStore';
-import type { BlockRef, Column, ImageBlockPayload, Row, Section } from '../../../types/lessonContent';
-import MaterialsPicker, { PickerMaterialType } from './MaterialsPicker';
+import type { BlockRef, Column, ImageBlockPayload, ListeningTaskBlockPayload, Row, Section } from '../../../types/lessonContent';
+import MaterialsPicker, { PickerMaterialType, PickedMaterial } from './MaterialsPicker';
 import GrammarTaskPicker from './GrammarTaskPicker';
 import { useQuery } from '@tanstack/react-query';
 import type { ImageAsset, ImageAssetPage } from '../../../types/assets';
 import { fetchImageAssets, uploadImageAsset, validateImageFile, resolveUrl } from '../../../services/assets';
+import type { ListeningTask } from '../../../types';
+import { fetchListeningTasks } from '../../../services/api';
 
 function sanitizeHtml(input: string): string {
   // Minimal sanitizer: remove <script>...</script> tags
@@ -47,6 +51,12 @@ const NumberField: React.FC<{ label: string; value?: number; onChange: (n?: numb
     sx={{ maxWidth: 160 }}
   />
 );
+
+const formatTime = (seconds: number) => {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+};
 
 const InspectorPanel: React.FC = () => {
   const { state, actions } = useEditorStore();
@@ -184,6 +194,17 @@ const BlockForm: React.FC<{ type: string; payloadId: string; value: AnyBlock; on
   const [pickerTypes, setPickerTypes] = useState<PickerMaterialType[]>([]);
   const [materialPreview, setMaterialPreview] = useState<{ title: string; type: string } | undefined>(undefined);
   const [tasksOpen, setTasksOpen] = useState(false);
+  const [listeningPickerOpen, setListeningPickerOpen] = useState(false);
+
+  const listeningPayload = type === 'listeningTask' ? (value as ListeningTaskBlockPayload) : undefined;
+  const {
+    data: listeningTasks = [],
+    isLoading: listeningTasksLoading,
+  } = useQuery({
+    queryKey: ['listening-block-tasks', listeningPayload?.materialId],
+    queryFn: () => fetchListeningTasks(listeningPayload!.materialId),
+    enabled: type === 'listeningTask' && Boolean(listeningPayload?.materialId),
+  });
 
   useEffect(() => { onErrorChange(error); }, [error]);
 
@@ -284,6 +305,71 @@ const BlockForm: React.FC<{ type: string; payloadId: string; value: AnyBlock; on
         <FormControlLabel control={<Switch checked={Boolean(value?.shuffle)} onChange={(e) => onChange({ shuffle: e.target.checked })} />} label="Shuffle" />
         <Divider />
         <Button variant="outlined" color="error" size="small" onClick={deleteThisBlock}>Delete block</Button>
+      </Stack>
+    );
+  }
+
+  if (type === 'listeningTask') {
+    const payload = value as ListeningTaskBlockPayload;
+    const selectedTask = listeningTasks.find((task) => task.id === payload.taskId);
+
+    const handleMaterialSelect = (material: PickedMaterial) => {
+      onChange({ materialId: material.id, taskId: '', showTranscript: payload.showTranscript });
+      setListeningPickerOpen(false);
+    };
+
+    const handleTaskSelect = (_: any, task: ListeningTask | null) => {
+      onChange({ taskId: task?.id || '' });
+    };
+
+    return (
+      <Stack spacing={1.5}>
+        <Typography variant="subtitle2">Listening task</Typography>
+        <Button variant="outlined" size="small" onClick={() => setListeningPickerOpen(true)}>
+          {payload.materialId ? 'Change material' : 'Choose material'}
+        </Button>
+        {payload.materialId && (
+          <Stack spacing={1}>
+            {listeningTasksLoading ? (
+              <Typography variant="body2" color="text.secondary">Loading tasks…</Typography>
+            ) : listeningTasks.length === 0 ? (
+              <Typography variant="body2" color="text.secondary">
+                No listening tasks found for this material.
+              </Typography>
+            ) : (
+              <Autocomplete<ListeningTask>
+                options={listeningTasks}
+                value={selectedTask ?? null}
+                getOptionLabel={(option: ListeningTask) => option.title || `${formatTime(option.startSec)} – ${formatTime(option.endSec)}`}
+                onChange={handleTaskSelect}
+                renderInput={(params: AutocompleteRenderInputParams) => (
+                  <TextField {...params} label="Task" placeholder="Pick a saved listening task" size="small" />
+                )}
+              />
+            )}
+            {selectedTask && (
+              <Typography variant="caption" color="text.secondary">
+                {formatTime(selectedTask.startSec)} – {formatTime(selectedTask.endSec)}
+              </Typography>
+            )}
+            <FormControlLabel
+              control={(
+                <Switch
+                  size="small"
+                  checked={Boolean(payload.showTranscript)}
+                  onChange={(e) => onChange({ showTranscript: e.target.checked })}
+                />
+              )}
+              label="Show transcript"
+            />
+          </Stack>
+        )}
+        <MaterialsPicker
+          open={listeningPickerOpen}
+          onClose={() => setListeningPickerOpen(false)}
+          allowedTypes={['AUDIO', 'VIDEO']}
+          onSelect={handleMaterialSelect}
+        />
       </Stack>
     );
   }

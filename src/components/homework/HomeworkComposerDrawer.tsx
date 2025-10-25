@@ -6,10 +6,6 @@ import {
   Button,
   Chip,
   CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   Divider,
   Drawer,
   FormControlLabel,
@@ -38,7 +34,7 @@ import {
   validateListeningTranscript,
 } from '../../services/api';
 import {vocabApi} from '../../services/vocabulary.api';
-import VocabularyList from '../vocabulary/VocabularyList';
+import VocabularyPickerDialog from '../vocabulary/VocabularyPickerDialog';
 import type {
   GenerateListeningTranscriptPayload,
   ListeningGeneratedAudioContentRef,
@@ -87,7 +83,6 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
   // VOCAB_LIST selection & settings
   const [pickerOpen, setPickerOpen] = React.useState(false);
   const [selectedWordIds, setSelectedWordIds] = React.useState<string[]>([]);
-  const [wordSearch, setWordSearch] = React.useState('');
   const [masteryStreak, setMasteryStreak] = React.useState<number>(2);
   const [masteryStreakInput, setMasteryStreakInput] = React.useState<string>('2');
   const [shuffle, setShuffle] = React.useState<boolean>(true);
@@ -126,15 +121,6 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
     queryFn: () => vocabApi.listWords(),
     staleTime: 60_000,
   });
-
-  const filteredWords = React.useMemo(() => {
-    const q = wordSearch.trim().toLowerCase();
-    if (!q) return allWords;
-    return allWords.filter(w =>
-      w.text.toLowerCase().includes(q) ||
-      (w.translation || '').toLowerCase().includes(q)
-    );
-  }, [allWords, wordSearch]);
 
   const selectedWordChips = React.useMemo(() => {
     const map = new Map(allWords.map(w => [w.id, w] as const));
@@ -201,7 +187,6 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
       setSourceUrl('');
       setPickerOpen(false);
       setSelectedWordIds([]);
-      setWordSearch('');
       setMasteryStreak(2);
       setMasteryStreakInput('2');
       setShuffle(true);
@@ -581,7 +566,7 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
       };
 
       const durationSec = audioContentRef?.durationSec ?? estimatedDurationSec ?? listeningDurationSecTarget;
-      const transcriptText = audioContentRef?.transcript ?? transcriptDraft.trim();
+      //const transcriptText = audioContentRef?.transcript ?? transcriptDraft.trim();
 
       const vocabularySettings: any = { masteryStreak, shuffle };
       const vocabularyTimeLimit = parseInt(timeLimitMin, 10);
@@ -604,7 +589,7 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
         audioMaterialId: audioContentRef.audioMaterialId,
         audioUrl: audioContentRef.audioUrl,
         transcriptId,
-        transcript: transcriptText,
+       // transcript: transcriptText,
         durationSec,
         wordIds: listeningWordIds,
         theme: audioContentRef.theme ?? (listeningTheme || undefined),
@@ -1019,27 +1004,14 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
         </Paper>
       </Box>
 
-      {/* Nested vocabulary selector dialog */}
-      <Dialog open={pickerOpen} onClose={() => setPickerOpen(false)} fullWidth maxWidth="md">
-        <DialogTitle>{isListeningTask ? 'Select focus words' : 'Select vocabulary words'}</DialogTitle>
-        <DialogContent>
-          <Stack gap={2} sx={{ mt: 1 }}>
-            <TextField label="Search" value={wordSearch} onChange={e => setWordSearch(e.target.value)} fullWidth />
-            <VocabularyList
-              data={filteredWords}
-              selectionMode
-              selectedWords={selectedWordIds}
-              onToggleSelection={(id: string) => {
-                setSelectedWordIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-              }}
-              readOnly={false}
-            />
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPickerOpen(false)}>Done</Button>
-        </DialogActions>
-      </Dialog>
+      <VocabularyPickerDialog
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        words={allWords}
+        selectedWordIds={selectedWordIds}
+        onChange={(ids) => setSelectedWordIds(ids)}
+        title={isListeningTask ? 'Select focus words' : 'Select vocabulary words'}
+      />
     </Drawer>
   );
 };

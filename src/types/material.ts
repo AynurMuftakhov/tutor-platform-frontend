@@ -8,6 +8,7 @@ export interface Material {
   duration?: number; // in seconds
   tags?: string[];
   sourceUrl?: string;
+  folderId?: string;
   // Add any new fields required by the backend
 }
 
