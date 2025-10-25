@@ -35,6 +35,7 @@ interface AddMaterialModalProps {
   currentFolderId?: string;
   onOpenTaskManager?: (material: any) => void;
   materialToEdit?: Material | null;
+  defaultType?: MaterialType;
 }
 
 const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
@@ -43,10 +44,11 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
   onMaterialCreated,
   currentFolderId,
   onOpenTaskManager,
-  materialToEdit
+  materialToEdit,
+  defaultType
 }) => {
   // Form state
-  const [materialType, setMaterialType] = useState<MaterialType>(materialToEdit?.type || 'VIDEO');
+  const [materialType, setMaterialType] = useState<MaterialType>(materialToEdit?.type || defaultType || 'VIDEO');
   const [sourceUrl, setSourceUrl] = useState(materialToEdit?.sourceUrl || '');
   const [title, setTitle] = useState(materialToEdit?.title || '');
   const [folderId, setFolderId] = useState(materialToEdit?.folderId || currentFolderId || '');
@@ -96,7 +98,7 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
     if (open) {
       if (materialToEdit) {
         // Initialize form with materialToEdit values
-        setMaterialType(materialToEdit.type || 'VIDEO');
+        setMaterialType(materialToEdit.type || defaultType || 'VIDEO');
         setSourceUrl(materialToEdit.sourceUrl || '');
         setTitle(materialToEdit.title || '');
         setFolderId(materialToEdit.folderId || currentFolderId || '');
@@ -110,7 +112,7 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
         }
       } else {
         // Reset form for new material
-        setMaterialType('VIDEO');
+        setMaterialType(defaultType || 'VIDEO');
         setSourceUrl('');
         setTitle('');
         setFolderId(currentFolderId || '');
@@ -123,7 +125,7 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
       setTitleError('');
       setCreateTask(false);
     }
-  }, [open, currentFolderId, materialToEdit]);
+  }, [open, currentFolderId, materialToEdit, defaultType]);
 
   // Validate URL based on material type
   const validateUrl = (url: string) => {

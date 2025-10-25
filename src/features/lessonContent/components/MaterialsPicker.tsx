@@ -1,9 +1,12 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Grid, IconButton, InputAdornment, MenuItem, Select, Stack, TextField, Typography } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import SearchIcon from '@mui/icons-material/Search';
-import { useQuery } from '@tanstack/react-query';
+import AddIcon from '@mui/icons-material/Add';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getMaterials } from '../../../services/api';
+import AddMaterialModal from '../../../components/materials/AddMaterialModal';
+import type { Material, MaterialType } from '../../../components/materials/MaterialCard';
 
 export type PickerMaterialType = 'AUDIO' | 'VIDEO' | 'DOCUMENT' | 'GRAMMAR';
 
@@ -27,6 +30,14 @@ const MaterialsPicker: React.FC<MaterialsPickerProps> = ({ open, onClose, allowe
   const [q, setQ] = useState('');
   const [type, setType] = useState<PickerMaterialType | 'ALL'>(allowedTypes && allowedTypes.length === 1 ? allowedTypes[0] : 'ALL');
   const [tags, setTags] = useState<string>('');
+  const [adding, setAdding] = useState(false);
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!open) {
+      setAdding(false);
+    }
+  }, [open]);
 
   const canType = useMemo(() => allowedTypes && allowedTypes.length ? allowedTypes : (['AUDIO','VIDEO','DOCUMENT','GRAMMAR'] as PickerMaterialType[]), [allowedTypes]);
 
@@ -55,6 +66,12 @@ const MaterialsPicker: React.FC<MaterialsPickerProps> = ({ open, onClose, allowe
     };
     onSelect(mapped);
     onClose();
+  };
+
+  const handleMaterialCreated = (material?: Material) => {
+    if (!material) return;
+    queryClient.invalidateQueries({ queryKey: ['materials-picker'] });
+    select(material);
   };
 
   return (
@@ -104,8 +121,17 @@ const MaterialsPicker: React.FC<MaterialsPickerProps> = ({ open, onClose, allowe
         )}
       </DialogContent>
       <DialogActions>
+        <Button onClick={() => setAdding(true)} startIcon={<AddIcon />}>
+          New Material
+        </Button>
         <Button onClick={onClose}>Close</Button>
       </DialogActions>
+      <AddMaterialModal
+        open={adding}
+        onClose={() => setAdding(false)}
+        onMaterialCreated={handleMaterialCreated}
+        defaultType={allowedTypes && allowedTypes.length === 1 ? allowedTypes[0] as MaterialType : undefined}
+      />
     </Dialog>
   );
 };
