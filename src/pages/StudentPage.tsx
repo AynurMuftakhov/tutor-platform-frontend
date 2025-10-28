@@ -19,7 +19,9 @@ import {
     Tab,
     Tabs,
     Tooltip,
-    Typography, Stack,
+    Typography,
+    Stack,
+    CircularProgress,
 } from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -28,7 +30,7 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import CloseIcon from "@mui/icons-material/Close";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import { ENGLISH_LEVELS, EnglishLevel } from "../types/ENGLISH_LEVELS";
-import { deleteUser, fetchUserById, resetPasswordEmail, updateCurrentUser, getUpcomingLessons } from "../services/api";
+import { deleteUser, fetchUserById, resetPasswordEmail, updateCurrentUser, getUpcomingLessons, getTeacherByStudentId } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import VocabularyList from "../components/vocabulary/VocabularyList";
 import { useDictionary } from "../hooks/useVocabulary";
@@ -46,6 +48,7 @@ import { getAssignmentById } from "../services/homework";
 
 import type { AssignmentListItemDto } from "../types/homework";
 import HomeworkComposerDrawer from "../components/homework/HomeworkComposerDrawer";
+import PreviousLessonNotesTab from "../features/notes/components/PreviousLessonNotesTab";
 
 const AssignmentCardSmall: React.FC<{ a: AssignmentListItemDto; onOpen: (id: string) => void }> = ({ a, onOpen }) => {
   const total = a.totalTasks;
@@ -300,6 +303,9 @@ const StudentPage: React.FC<StudentPageProps> = ({
   const [submitting, setSubmitting] = useState(false);
 
   const isTeacher = user?.role === "tutor";
+  const [notesTeacherId, setNotesTeacherId] = useState<string | null>(null);
+  const [notesTeacherLoading, setNotesTeacherLoading] = useState(false);
+  const [notesTeacherError, setNotesTeacherError] = useState<string | null>(null);
 
   // Dictionary data for this student (list view)
   const { data: allWords = [] } = useDictionary();
@@ -358,6 +364,51 @@ const StudentPage: React.FC<StudentPageProps> = ({
     };
     load();
   }, [resolvedStudentId]);
+
+  useEffect(() => {
+    if (!resolvedStudentId) {
+      setNotesTeacherId(null);
+      setNotesTeacherLoading(false);
+      setNotesTeacherError(null);
+      return;
+    }
+    if (isTeacher && user?.id) {
+      setNotesTeacherId(user.id);
+      setNotesTeacherLoading(false);
+      setNotesTeacherError(null);
+      return;
+    }
+    let cancelled = false;
+    const fetchTeacher = async () => {
+      try {
+        setNotesTeacherLoading(true);
+        setNotesTeacherError(null);
+        const response = await getTeacherByStudentId(resolvedStudentId);
+        if (cancelled) return;
+        const teacherId =
+          response?.id ??
+          response?.teacherId ??
+          response?.tutorId ??
+          response?.userId ??
+          null;
+        setNotesTeacherId(typeof teacherId === 'string' ? teacherId : null);
+      } catch (err) {
+        if (!cancelled) {
+          console.error('Failed to fetch teacher for notes', err);
+          setNotesTeacherId(null);
+          setNotesTeacherError('Unable to load teacher information.');
+        }
+      } finally {
+        if (!cancelled) {
+          setNotesTeacherLoading(false);
+        }
+      }
+    };
+    fetchTeacher();
+    return () => {
+      cancelled = true;
+    };
+  }, [resolvedStudentId, isTeacher, user?.id]);
 
   // Load upcoming lessons for this student
   useEffect(() => {
@@ -573,6 +624,30 @@ const StudentPage: React.FC<StudentPageProps> = ({
           </Box>
         ),
       },
+      {
+        label: "Notes",
+        hidden: false,
+        content: (
+          <Box sx={{ mt: 2, minHeight: 320, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {notesTeacherLoading ? (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'text.secondary' }}>
+                <CircularProgress size={18} />
+                <Typography variant="body2">Loading notes…</Typography>
+              </Box>
+            ) : !student || !notesTeacherId ? (
+              <Alert severity={notesTeacherError ? 'error' : 'info'}>
+                {notesTeacherError ?? 'Notes are unavailable for this student.'}
+              </Alert>
+            ) : (
+              <PreviousLessonNotesTab
+                studentId={student.id}
+                teacherId={notesTeacherId}
+                isActive
+              />
+            )}
+          </Box>
+        ),
+      },
 /*      {
         label: "Activity",
         hidden: false,
@@ -599,7 +674,10 @@ const StudentPage: React.FC<StudentPageProps> = ({
     onConsumeOpenWordCommand,
     autoOpenAssignmentId,
     autoOpenTaskId,
-    onConsumeOpenAssignmentCommand
+    onConsumeOpenAssignmentCommand,
+    notesTeacherId,
+    notesTeacherLoading,
+    notesTeacherError
   ]);
 
   const visibleTabs = tabDefinitions.filter((tab) => !tab.hidden);

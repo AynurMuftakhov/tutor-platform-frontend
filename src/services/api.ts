@@ -23,7 +23,7 @@ import {
 import { LESSON_CONTENTS_BASE } from '../constants/api';
 import type { PageModel, BlockContentPayload } from '../types/lessonContent';
 
-const api = axios.create({
+export const api = axios.create({
     baseURL: import.meta.env.VITE_API_URL,
     headers: {
         'Content-Type': 'application/json',
@@ -207,8 +207,10 @@ export const updateLesson = async (lessonId: string, lessonData: any) => {
     return response.data;
 }
 
-export const deleteLesson = async (lessonId: string) => {
-    const res = await api.delete(`lessons-service/api/lessons/${lessonId}`);
+export const deleteLesson = async (lessonId: string, deleteSeries: boolean = false) => {
+    const res = await api.delete(`lessons-service/api/lessons/${lessonId}`, {
+        params: { deleteSeries }
+    });
     return res.data;
 };
 
@@ -229,11 +231,6 @@ export const deleteUser = async (userId: string) => {
 
 export const resetPasswordEmail = async (email: string) => {
     const response = await api.post(`/users-service/api/students/email/resend?email=${email}`);
-    return response.data;
-}
-
-export const fetchLiveKitToken = async (identity: string, roomName: string, username: string) => {
-    const response = await api.get(`video-service/api/video/token?identity=${identity}&roomName=${roomName}&username=${username}`);
     return response.data;
 }
 
@@ -624,6 +621,119 @@ export const generateAiExercise = async (payload: GenerateExerciseRequest): Prom
 export const generateMagicLink = async (studentId: string): Promise<{ link: string }> => {
   const response = await api.post(`/users-service/api/onboarding/generate-link`, { studentId });
   return response.data;
+};
+
+/* ---------------- Activity tracking (teacher views) ---------------- */
+export interface ActivityRollupDay {
+  day: string; // YYYY-MM-DD (UTC)
+  activeMinutes: number; // non-lesson active minutes
+  homeworkMinutes: number;
+  vocabMinutes: number;
+  lastSeenTs?: string; // ISO timestamp of last seen in that day, optional
+}
+
+export interface ActivityRollupResponse {
+  days: ActivityRollupDay[];
+}
+
+export type ActivityIntervalType = 'active' | 'homework' | 'vocab' | 'lesson';
+export interface ActivityInterval {
+  start: string; // ISO UTC
+  end: string;   // ISO UTC
+  type: ActivityIntervalType;
+}
+
+export interface ActivityTimelineResponse {
+  day: string; // YYYY-MM-DD
+  intervals: ActivityInterval[];
+}
+
+export const fetchStudentActivityRollup = async (
+  teacherId: string,
+  studentId: string,
+  from: string, // YYYY-MM-DD (UTC)
+  to: string    // YYYY-MM-DD (UTC)
+): Promise<ActivityRollupResponse> => {
+  const params = new URLSearchParams({ from, to });
+  const { data } = await api.get(`users-service/api/teachers/${teacherId}/students/${studentId}/activity?${params}`);
+  // Map backend shape (DailyActivityResponse) to UI shape
+  const backend = data as {
+    tz: string;
+    from: string;
+    to: string;
+    days: { day: string; logins: number; active_seconds_nonlesson: number; homework_seconds: number; vocab_seconds: number; last_seen_ts?: string }[];
+  };
+  const days = Array.isArray(backend?.days)
+    ? backend.days.map(d => ({
+        day: d.day,
+        activeMinutes: Math.round((d.active_seconds_nonlesson || 0) / 60),
+        homeworkMinutes: Math.round((d.homework_seconds || 0) / 60),
+        vocabMinutes: Math.round((d.vocab_seconds || 0) / 60),
+        lastSeenTs: d.last_seen_ts,
+      }))
+    : [];
+  return { days };
+};
+
+export const fetchStudentActivityTimeline = async (
+  teacherId: string,
+  studentId: string,
+  day: string // YYYY-MM-DD (UTC)
+): Promise<ActivityTimelineResponse> => {
+  const params = new URLSearchParams({ day });
+  const { data } = await api.get(`users-service/api/teachers/${teacherId}/students/${studentId}/timeline?${params}`);
+  const backend = data as {
+    tz: string;
+    day: string;
+    non_lesson: { start: string; end: string }[];
+    homework: { start: string; end: string }[];
+    vocab: { start: string; end: string }[];
+    lesson?: { start: string; end: string }[];
+  };
+  const intervals: ActivityInterval[] = [];
+  const push = (items: { start: string; end: string }[] | undefined, type: ActivityIntervalType) => {
+    if (!Array.isArray(items)) return;
+    for (const it of items) {
+      if (!it?.start || !it?.end) continue;
+      intervals.push({ start: it.start, end: it.end, type });
+    }
+  };
+  push(backend?.non_lesson, 'active');
+  push(backend?.homework, 'homework');
+  push(backend?.vocab, 'vocab');
+  push(backend?.lesson, 'lesson');
+  // Sort by start for stable rendering
+  intervals.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+  return { day: backend?.day || day, intervals };
+};
+
+export interface SendStudentNudgePayload {
+  reason: string;
+  message?: string;
+}
+
+export interface SendStudentNudgeResponse {
+  queuedAt: string;
+  deliveryEtaSeconds?: number;
+  status?: string;
+}
+
+export const sendStudentNudge = async (
+  teacherId: string,
+  studentId: string,
+  payload: SendStudentNudgePayload
+): Promise<SendStudentNudgeResponse> => {
+  const { data } = await api.post(`/users-service/api/teachers/${teacherId}/students/${studentId}/nudge`, payload);
+  const backend = data as {
+    queued_at?: string;
+    delivery_eta_seconds?: number;
+    status?: string;
+  };
+  return {
+    queuedAt: backend?.queued_at ?? new Date().toISOString(),
+    deliveryEtaSeconds: backend?.delivery_eta_seconds,
+    status: backend?.status,
+  };
 };
 
 export const validateOnboardingToken = async (

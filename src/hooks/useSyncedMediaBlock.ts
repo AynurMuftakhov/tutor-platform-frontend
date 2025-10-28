@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import type { Room } from 'livekit-client';
+import type { DailyCall, DailyEventObjectAppMessage } from '@daily-co/daily-js';
 
 interface UseSyncedMediaBlockArgs {
-  room: Room | undefined;
+  call: DailyCall | null | undefined;
   isTutor: boolean;
   contentId: string;
   blockId: string;
@@ -18,27 +18,31 @@ interface MaterialSyncPacket {
   time?: number;
 }
 
-export function useSyncedMediaBlock({ room, isTutor, contentId, blockId, materialId }: UseSyncedMediaBlockArgs) {
+export function useSyncedMediaBlock({ call, isTutor, contentId, blockId, materialId }: UseSyncedMediaBlockArgs) {
   const [playing, setPlaying] = useState(false);
   const suppressLocal = useRef(false);
+  const lastSeekRef = useRef<number | null>(null);
 
-  const isRoomReady = () => {
+  const clampTime = useCallback((value: number | undefined | null) => {
+    if (!Number.isFinite(value ?? NaN)) return 0;
+    return Math.max(0, Number(value));
+  }, []);
+
+  const isCallReady = () => {
     try {
-      const anyRoom = room as any;
-      const state: any = anyRoom?.state ?? anyRoom?.connectionState;
-      return !!room && (state === 'connected' || state === 2);
+      const state = call?.meetingState?.();
+      return !!call && (state === 'joined-meeting' || state === 'joining-meeting');
     } catch {
       return false;
     }
   };
 
   const publish = useCallback((pkt: MaterialSyncPacket) => {
-    if (!isRoomReady()) return;
+    if (!isCallReady()) return;
     try {
-      const data = new TextEncoder().encode(JSON.stringify(pkt));
-      room!.localParticipant.publishData(data, { reliable: true });
+      call!.sendAppMessage(pkt);
     } catch (_) { /* ignore */ }
-  }, [room]);
+  }, [call]);
 
   const onPlay = useCallback(() => {
     setPlaying(true);
@@ -53,44 +57,80 @@ export function useSyncedMediaBlock({ room, isTutor, contentId, blockId, materia
   }, [isTutor, publish, contentId, blockId, materialId]);
 
   const onSeek = useCallback((sec: number) => {
-    if (suppressLocal.current) { suppressLocal.current = false; return; }
-    if (isTutor) publish({ type: 'MATERIAL_SYNC', contentId, blockId, materialId, action: 'seek', time: sec });
-  }, [isTutor, publish, contentId, blockId, materialId]);
+    const t = clampTime(sec);
+    if (suppressLocal.current) {
+      suppressLocal.current = false;
+      lastSeekRef.current = t;
+      return;
+    }
+    if (!isTutor) {
+      lastSeekRef.current = t;
+      return;
+    }
+    if (lastSeekRef.current !== null && Math.abs(lastSeekRef.current - t) < 0.05) return;
+    lastSeekRef.current = t;
+    publish({ type: 'MATERIAL_SYNC', contentId, blockId, materialId, action: 'seek', time: t });
+  }, [clampTime, isTutor, publish, contentId, blockId, materialId]);
 
   useEffect(() => {
-    if (!room) return;
-    const handler = (data: Uint8Array) => {
+    if (!call) return;
+
+    const localSessionId = (() => {
       try {
-        const msg = JSON.parse(new TextDecoder().decode(data));
-        if (msg?.type !== 'MATERIAL_SYNC') return;
-        const pkt = msg as MaterialSyncPacket;
-        if (pkt.contentId !== contentId || pkt.blockId !== blockId || pkt.materialId !== materialId) return;
-        switch (pkt.action) {
-          case 'play':
-            suppressLocal.current = true;
-            setPlaying(true);
-            // we don't have time here; rely on prior seek or current position
-            break;
-          case 'pause':
-            suppressLocal.current = true;
-            setPlaying(false);
-            break;
-          case 'seek': {
-            // dispatch a DOM event so the owner component can seek the player ref
-            const detail = { contentId, blockId, t: pkt.time ?? 0 };
-            window.dispatchEvent(new CustomEvent('MEDIA_BLOCK_SEEK', { detail }));
-            break;
-          }
-          case 'close':
-            suppressLocal.current = true;
-            setPlaying(false);
-            break;
+        return call.participants().local?.session_id;
+      } catch {
+        return undefined;
+      }
+    })();
+
+    const handler = (event: DailyEventObjectAppMessage) => {
+      if (event.fromId && event.fromId === localSessionId) return;
+
+      const payload = event.data;
+      if (!payload) return;
+      let msg: MaterialSyncPacket | null = null;
+      if (typeof payload === 'string') {
+        try {
+          const parsed = JSON.parse(payload);
+          if (parsed?.type === 'MATERIAL_SYNC') msg = parsed as MaterialSyncPacket;
+        } catch {
+          return;
         }
-      } catch (_) {/* ignore */}
+      } else if (typeof payload === 'object' && (payload as any)?.type === 'MATERIAL_SYNC') {
+        msg = payload as MaterialSyncPacket;
+      }
+      if (!msg) return;
+      if (msg.contentId !== contentId || msg.blockId !== blockId || msg.materialId !== materialId) return;
+
+      switch (msg.action) {
+        case 'play':
+          suppressLocal.current = true;
+          setPlaying(true);
+          if (msg.time != null) lastSeekRef.current = clampTime(msg.time);
+          break;
+        case 'pause':
+          suppressLocal.current = true;
+          setPlaying(false);
+          if (msg.time != null) lastSeekRef.current = clampTime(msg.time);
+          break;
+        case 'seek': {
+          const seekTime = clampTime(msg.time);
+          lastSeekRef.current = seekTime;
+          suppressLocal.current = true;
+          const detail = { contentId, blockId, t: seekTime };
+          window.dispatchEvent(new CustomEvent('MEDIA_BLOCK_SEEK', { detail }));
+          break;
+        }
+        case 'close':
+          suppressLocal.current = true;
+          setPlaying(false);
+          break;
+      }
     };
-    room.on('dataReceived', handler);
-    return () => { room.off('dataReceived', handler); };
-  }, [room, contentId, blockId, materialId]);
+
+    call.on('app-message', handler);
+    return () => { call.off('app-message', handler); };
+  }, [call, contentId, blockId, materialId, clampTime]);
 
   return { playing, onPlay, onPause, onSeek } as const;
 }

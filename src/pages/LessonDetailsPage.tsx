@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { useParams, useLocation, useNavigate } from "react-router-dom";
+import React, { useEffect, useMemo, useState } from "react";
+import { useParams, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
     Container,
     CircularProgress,
@@ -17,12 +17,14 @@ import {fetchUserById, getLessonById, updateLesson} from "../services/api";
 import LessonHero from "../components/lessonDetail/LessonHero";
 import LessonPlanSection from "../components/lessonDetail/LessonPlanSection";
 import HomeworkSection from "../components/lessonDetail/HomeworkSection";
-import PostLessonNotes from "../components/lessonDetail/PostLessonNotes";
 import LessonTracking from "../components/lessonDetail/LessonTracking";
 import LessonMaterialsTab from "../components/lessonDetail/LessonMaterialsTab";
 import {Lesson} from "../types/Lesson";
 import LessonActions from "../components/lessonDetail/LessonActions";
 import {useAuth} from "../context/AuthContext";
+import { LessonNotesPanel } from "../features/notes";
+import { useRtc } from "../context/RtcContext";
+import useNotesSoftSync, { SoftSyncPayload } from "../features/notes/hooks/useNotesSoftSync";
 
 // Tab panel component
 interface TabPanelProps {
@@ -54,13 +56,18 @@ const TabPanel = (props: TabPanelProps) => {
 const LessonDetailPage = () => {
     const { id } = useParams();
     const location = useLocation();
+    const [searchParams, setSearchParams] = useSearchParams();
     const navigate = useNavigate();
     const { user } = useAuth();
+    const { dailyCall, lessonId: rtcLessonId } = useRtc();
     const [lesson, setLesson] = useState<Lesson | null>(null);
     const [loading, setLoading] = useState(true);
     const [student, setStudent] = useState(location.state?.student || null);
     const [activeTab, setActiveTab] = useState(0);
     const isTeacher = user?.role === "tutor";
+    const notesViewParam = searchParams.get('notes');
+    const previousLessonParam = searchParams.get('lid');
+    const [selectedPreviousLessonId, setSelectedPreviousLessonId] = useState<string | null>(previousLessonParam);
 
     const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
         setActiveTab(newValue);
@@ -86,6 +93,63 @@ const LessonDetailPage = () => {
 
         fetchLesson();
     }, [id, student]);
+
+    useEffect(() => {
+        setSelectedPreviousLessonId(previousLessonParam);
+    }, [previousLessonParam]);
+
+    const notesTab = useMemo(() => (notesViewParam === 'previous' ? 'previous' : 'current'), [notesViewParam]);
+
+    const canEditNotes = useMemo(() => {
+        if (!lesson || !user) {
+            return false;
+        }
+        return user.id === lesson.tutorId || user.id === lesson.studentId;
+    }, [lesson, user]);
+
+    const softSync = useNotesSoftSync({
+        call: dailyCall,
+        lessonId: lesson?.id,
+        enabled: Boolean(dailyCall && lesson && rtcLessonId === lesson.id),
+        senderId: user?.id
+    });
+
+    const [incomingSoftSync, setIncomingSoftSync] = useState<SoftSyncPayload | null>(null);
+
+    useEffect(() => {
+        if (softSync.incoming) {
+            setIncomingSoftSync(softSync.incoming);
+            softSync.resetIncoming();
+        }
+    }, [softSync.incoming, softSync.resetIncoming]);
+
+    const applyNotesSearchParams = (tab: 'current' | 'previous', lessonId: string | null = null) => {
+        const params = new URLSearchParams(searchParams);
+        if (tab === 'previous') {
+            params.set('notes', 'previous');
+            if (lessonId) {
+                params.set('lid', lessonId);
+            } else {
+                params.delete('lid');
+            }
+        } else {
+            params.delete('notes');
+            params.delete('lid');
+        }
+        setSearchParams(params, { replace: true });
+    };
+
+    const handleNotesTabSwitch = (tab: 'current' | 'previous') => {
+        if (tab === 'current') {
+            setSelectedPreviousLessonId(null);
+        }
+        applyNotesSearchParams(tab, tab === 'previous' ? selectedPreviousLessonId : null);
+    };
+
+    const handlePreviousLessonSelect = (lessonId: string | null) => {
+        setSelectedPreviousLessonId(lessonId);
+        applyNotesSearchParams('previous', lessonId);
+    };
 
     if (loading) {
         return <CircularProgress />;
@@ -199,10 +263,26 @@ const LessonDetailPage = () => {
                     </Grid>
 
                     {/* Notes + Metrics */}
-                    <Grid size={{xs:12, md:6}}>
-                        <PostLessonNotes lesson={lesson} isTeacher={isTeacher}/>
+                    <Grid size={{xs:12, md:5}} sx={{ display: 'flex' }}>
+                        <Box sx={{ flex: 1 }}>
+                            <LessonNotesPanel
+                                lessonId={lesson.id}
+                                lessonTitle={lesson.title || 'Lesson Notes'}
+                                studentId={lesson.studentId}
+                                teacherId={lesson.tutorId}
+                                canEdit={canEditNotes}
+                                initialTab={notesTab}
+                                initialPreviousLessonId={selectedPreviousLessonId ?? undefined}
+                                onTabChange={handleNotesTabSwitch}
+                                onSelectPreviousLesson={handlePreviousLessonSelect}
+                                pollIntervalMs={15000}
+                                incomingSoftSync={incomingSoftSync ?? undefined}
+                                onBroadcastSoftSync={softSync.broadcast}
+                                showPreviousTab={false}
+                            />
+                        </Box>
                     </Grid>
-                    <Grid size={{xs:12, md:6}}>
+                    <Grid size={{xs:12, md:7}}>
                         <LessonTracking lesson={lesson}/>
                     </Grid>
                 </Grid>

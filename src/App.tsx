@@ -13,6 +13,7 @@ import LessonDetailPage from "./pages/LessonDetailsPage";
 import DictionaryPage from "./pages/DictionaryPage";
 import StudentVocabularyPage from "./pages/StudentVocabularyPage";
 import StudentPage from "./pages/StudentPage";
+import StudentNotesPage from "./pages/StudentNotesPage";
 import VideoCallPage from "./pages/VideoCallPage";
 import LandingPage from "./pages/landing/LandingPage";
 import LearningMaterialsPage from "./pages/LearningMaterialsPage";
@@ -28,6 +29,8 @@ import StudentHomeworkPage from './pages/homework/StudentHomeworkPage';
 import StudentAssignmentDetailPage from './pages/homework/StudentAssignmentDetailPage';
 import TeacherHomeworkPage from './pages/homework/TeacherHomeworkPage';
 import TeacherHomeworkNewPage from './pages/homework/TeacherHomeworkNewPage';
+import TeacherStudentActivityPage from './pages/TeacherStudentActivityPage';
+import StudentsActivityOverviewPage from './pages/StudentsActivityOverviewPage';
 import RoleGuard from './components/RoleGuard';
 
 const App: React.FC = () => {
@@ -98,6 +101,16 @@ const App: React.FC = () => {
                                 <PrivateRoute>
                                     <AppWrapper>
                                         <StudentPage />
+                                    </AppWrapper>
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/notes"
+                            element={
+                                <PrivateRoute>
+                                    <AppWrapper>
+                                        <StudentNotesPage />
                                     </AppWrapper>
                                 </PrivateRoute>
                             }
@@ -246,6 +259,30 @@ const App: React.FC = () => {
                                     <AppWrapper>
                                         <RoleGuard allow="TEACHER">
                                             <TeacherHomeworkNewPage />
+                                        </RoleGuard>
+                                    </AppWrapper>
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/teacher/students/activity"
+                            element={
+                                <PrivateRoute>
+                                    <AppWrapper>
+                                        <RoleGuard allow="TEACHER">
+                                            <StudentsActivityOverviewPage />
+                                        </RoleGuard>
+                                    </AppWrapper>
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/teacher/students/:id/activity"
+                            element={
+                                <PrivateRoute>
+                                    <AppWrapper>
+                                        <RoleGuard allow="TEACHER">
+                                            <TeacherStudentActivityPage />
                                         </RoleGuard>
                                     </AppWrapper>
                                 </PrivateRoute>

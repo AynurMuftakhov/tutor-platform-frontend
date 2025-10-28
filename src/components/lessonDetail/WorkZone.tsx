@@ -6,12 +6,11 @@ import {
   LibraryBooks as LibraryBooksIcon,
   Dashboard as DashboardIcon
 } from '@mui/icons-material';
-import SyncedVideoPlayer from './SyncedVideoPlayer';
+import SyncedVideoPlayer, { SyncedVideoControls } from './SyncedVideoPlayer';
 import SyncedGrammarPlayer from '../grammar/SyncedGrammarPlayer';
 import LessonMaterialsTab from './LessonMaterialsTab';
 import { useWorkspace, WorkspaceTool } from '../../context/WorkspaceContext';
 import { useAuth } from '../../context/AuthContext';
-import { UseSyncedVideoResult } from '../../hooks/useSyncedVideo';
 import { UseSyncedGrammarResult } from '../../hooks/useSyncedGrammar';
 import GridViewIcon from '@mui/icons-material/GridView';
 import PresenterBar from './PresenterBar';
@@ -19,25 +18,24 @@ import SyncedContentView from '../../features/lessonContent/student/SyncedConten
 import type { useSyncedContent } from '../../hooks/useSyncedContent';
 import { useQuery } from '@tanstack/react-query';
 import { getLessonContents } from '../../services/api';
+import type { DailyCall } from '@daily-co/daily-js';
 
 type UseSyncedContentResult = ReturnType<typeof useSyncedContent>;
 
-import type { Room } from 'livekit-client';
-
 interface WorkZoneProps {
-  useSyncedVideo: UseSyncedVideoResult;
+  useSyncedVideo: SyncedVideoControls;
   useSyncedGrammar?: UseSyncedGrammarResult;
   useSyncedContent?: UseSyncedContentResult;
   onClose: () => void;
   lessonId: string;
-  room: Room;
+  call: DailyCall | null;
 }
 
 /**
  * WorkZone component that houses the SyncedVideoPlayer and future components
  * like Whiteboard, Quiz, PDFViewer, etc.
  */
-const WorkZone: React.FC<WorkZoneProps> = ({useSyncedVideo, useSyncedGrammar, useSyncedContent, onClose, lessonId, room }) => {
+const WorkZone: React.FC<WorkZoneProps> = ({useSyncedVideo, useSyncedGrammar, useSyncedContent, onClose, lessonId, call }) => {
   const { state } = useSyncedVideo;
   const grammarState = useSyncedGrammar?.state;
   const { currentTool, setCurrentTool } = useWorkspace();
@@ -215,7 +213,7 @@ const WorkZone: React.FC<WorkZoneProps> = ({useSyncedVideo, useSyncedGrammar, us
                   contentId={useSyncedContent.state.contentId}
                   focusBlockId={useSyncedContent.state.focusBlockId}
                   locked={!!useSyncedContent.state.locked}
-                  contentSync={{ room, isTutor, contentId: useSyncedContent.state.contentId }}
+                  contentSync={{ call, isTutor, contentId: useSyncedContent.state.contentId, controller: useSyncedContent }}
                 />
               </Box>
             </Box>
@@ -243,7 +241,7 @@ const WorkZone: React.FC<WorkZoneProps> = ({useSyncedVideo, useSyncedGrammar, us
   );
 };
 
-const OpenCompositionButton: React.FC<{ onOpen: (c: { id: string; title?: string }) => void }> = ({ onOpen }) => {
+export const OpenCompositionButton: React.FC<{ onOpen: (c: { id: string; title?: string }) => void }> = ({ onOpen }) => {
   const [open, setOpen] = React.useState(false);
   const { user } = useAuth();
   const { data } = useQuery({

@@ -5,13 +5,13 @@ import { getLessonContent } from '../../../services/api';
 import StudentRenderer from './StudentRenderer';
 import type { PageModel, BlockContentPayload } from '../../../types/lessonContent';
 
-import type { Room } from 'livekit-client';
+import type { DailyCall } from '@daily-co/daily-js';
 
 interface Props {
   contentId: string;
   focusBlockId?: string;
   locked: boolean;
-  contentSync?: { room: Room; isTutor: boolean; contentId: string; controller?: any };
+  contentSync?: { call: DailyCall | null; isTutor: boolean; contentId: string; controller?: any };
 }
 
 const pulseCss = `
@@ -21,6 +21,8 @@ const pulseCss = `
 
 const SyncedContentView: React.FC<Props> = ({ contentId, focusBlockId, locked, contentSync }) => {
   const styleInjected = useRef(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const suppressScrollSync = useRef(false);
   const { data } = useQuery({
     queryKey: ['lesson-content', contentId],
     queryFn: () => getLessonContent(contentId),
@@ -41,6 +43,63 @@ const SyncedContentView: React.FC<Props> = ({ contentId, focusBlockId, locked, c
       window.removeEventListener('touchmove', prevent as any);
     };
   }, [locked]);
+
+  // Tutor scroll sync broadcaster
+  const layoutDependency = Array.isArray(layout?.sections) ? layout.sections.length : 0;
+
+  useEffect(() => {
+    const controller = contentSync?.controller;
+    if (!contentSync?.isTutor || !controller?.syncScroll) return;
+    const el = containerRef.current;
+    if (!el) return;
+    let frame: number | null = null;
+    const onScroll = () => {
+      if (suppressScrollSync.current) {
+        suppressScrollSync.current = false;
+        return;
+      }
+      if (frame != null) window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        const max = Math.max(1, el.scrollHeight - el.clientHeight);
+        const ratio = el.scrollTop / max;
+        controller.syncScroll(ratio);
+      });
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      if (frame != null) window.cancelAnimationFrame(frame);
+      el.removeEventListener('scroll', onScroll);
+    };
+  }, [contentSync?.controller?.syncScroll, contentSync?.isTutor, contentSync?.contentId, layoutDependency]);
+
+  // Student scroll sync listener
+  useEffect(() => {
+    if (!contentSync || contentSync.isTutor) return;
+    const el = containerRef.current;
+    if (!el) return;
+    const handler = (evt: Event) => {
+      const ratio = (evt as CustomEvent).detail?.ratio;
+      if (!Number.isFinite(ratio)) return;
+      const max = Math.max(1, el.scrollHeight - el.clientHeight);
+      suppressScrollSync.current = true;
+      el.scrollTo({ top: ratio * max, behavior: 'smooth' });
+    };
+    window.addEventListener('CONTENT_SCROLL', handler as EventListener);
+    return () => {
+      window.removeEventListener('CONTENT_SCROLL', handler as EventListener);
+    };
+  }, [contentSync?.isTutor, contentSync?.contentId, layoutDependency]);
+
+  // Mirror latest scroll ratio when snapshot arrives
+  useEffect(() => {
+    if (!contentSync || contentSync.isTutor) return;
+    const ratio = contentSync.controller?.state?.scrollRatio ?? 0;
+    const el = containerRef.current;
+    if (!el) return;
+    const max = Math.max(1, el.scrollHeight - el.clientHeight);
+    suppressScrollSync.current = true;
+    el.scrollTo({ top: ratio * max });
+  }, [contentSync?.controller?.state?.scrollRatio, contentSync?.isTutor, layoutDependency]);
 
   // Handle focus highlight
   useEffect(() => {
@@ -91,8 +150,16 @@ const SyncedContentView: React.FC<Props> = ({ contentId, focusBlockId, locked, c
 
   if (!layout || !content) return null;
   return (
-    <Box sx={{ p: 2, overflow: 'auto', height: '100%' }}>
-      <StudentRenderer layout={layout} content={content} contentSync={contentSync ? { room: contentSync.room, isTutor: contentSync.isTutor, contentId } : undefined} />
+    <Box ref={containerRef} sx={{ p: 2, overflow: 'auto', height: '100%' }}>
+      <StudentRenderer
+        layout={layout}
+        content={content}
+        contentSync={
+          contentSync
+            ? { call: contentSync.call, isTutor: contentSync.isTutor, contentId, controller: contentSync.controller }
+            : undefined
+        }
+      />
     </Box>
   );
 };

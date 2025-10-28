@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Room } from 'livekit-client';
+import type { DailyCall, DailyEventObjectAppMessage } from '@daily-co/daily-js';
 
 export type WorkspaceSyncPacket = {
   type: 'WORKSPACE_SYNC';
@@ -7,7 +7,7 @@ export type WorkspaceSyncPacket = {
 };
 
 export const useWorkspaceSync = (
-  room: Room | undefined,
+  call: DailyCall | null | undefined,
   isTutor: boolean,
   workspaceOpen: boolean,
   openWorkspace: () => void,
@@ -17,26 +17,45 @@ export const useWorkspaceSync = (
 
   /* 1. Publish state changes (tutor only) */
   useEffect(() => {
-    if (!room || !isTutor) return;
+    if (!call || !isTutor) return;
     if (suppress.current) { suppress.current = false; return; }
 
     const packet: WorkspaceSyncPacket = {
       type: 'WORKSPACE_SYNC',
       action: workspaceOpen ? 'open' : 'close',
     };
-    room.localParticipant.publishData(
-      new TextEncoder().encode(JSON.stringify(packet)),
-      { reliable: true }
-    );
-  }, [workspaceOpen, room, isTutor]);
+    try {
+      call.sendAppMessage(packet);
+    } catch (err) {
+      console.warn('Failed to send WORKSPACE_SYNC message via Daily', err);
+    }
+  }, [workspaceOpen, call, isTutor]);
 
   /* 2. Listen for remote state changes */
   useEffect(() => {
-    if (!room) return;
+    if (!call) return;
 
-    const handler = (data: Uint8Array) => {
+    const localSessionId = (() => {
       try {
-        const msg: WorkspaceSyncPacket = JSON.parse(new TextDecoder().decode(data));
+        return call.participants().local?.session_id;
+      } catch {
+        return undefined;
+      }
+    })();
+
+    const handler = (event: DailyEventObjectAppMessage) => {
+      if (event.fromId && event.fromId === localSessionId) return;
+      try {
+        const payload = event.data;
+        if (!payload) return;
+        let msg: WorkspaceSyncPacket | null = null;
+        if (typeof payload === 'string') {
+          const parsed = JSON.parse(payload);
+          if (parsed.type === 'WORKSPACE_SYNC') msg = parsed as WorkspaceSyncPacket;
+        } else if (typeof payload === 'object' && (payload as any)?.type === 'WORKSPACE_SYNC') {
+          msg = payload as WorkspaceSyncPacket;
+        }
+        if (!msg) return;
         if (msg.type !== 'WORKSPACE_SYNC') return;
 
         suppress.current = true;               // prevent echo
@@ -46,9 +65,9 @@ export const useWorkspaceSync = (
       }
     };
 
-    room.on('dataReceived', handler);
+    call.on('app-message', handler);
     return () => {
-      room.off('dataReceived', handler);
+      call.off('app-message', handler);
     };
-  }, [room, openWorkspace, closeWorkspace]);
+  }, [call, openWorkspace, closeWorkspace]);
 };

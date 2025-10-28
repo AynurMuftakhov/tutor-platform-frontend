@@ -1,6 +1,6 @@
 // Neutral RTC types used across the app after removing custom adapters
 
-export type RtcProviderId = 'livekit' | 'daily';
+export type RtcProviderId = 'daily';
 
 export interface RtcJoinInfo {
   url: string;

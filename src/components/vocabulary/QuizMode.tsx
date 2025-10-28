@@ -30,6 +30,7 @@ import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import VolumeUpIcon from '@mui/icons-material/VolumeUp';
 import { VocabularyWord } from '../../types';
 import { motion, AnimatePresence } from 'framer-motion';
+import { activityEmitter } from '../../services/tracking/activityEmitter';
 
 interface QuizModeProps {
     open: boolean;
@@ -92,6 +93,7 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords
     // Clear auto-advance timer on unmount
     useEffect(() => {
       return () => {
+        try { activityEmitter.emit('vocab_end', '/vocab', { reason: 'unmount' }); } catch {}
         clearAutoTimer();
       };
     }, []);
@@ -268,6 +270,9 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords
       if (!allowAnyCount && words.length < 4) return;
       const qWords = (questionWords && questionWords.length > 0) ? questionWords : words;
       if (qWords.length === 0) return;
+
+      // Emit vocab_start when quiz opens
+      try { activityEmitter.emit('vocab_start', '/vocab'); } catch {}
 
       setLoading(true);
       const defaultSize = Math.max(1, Math.min(10, qWords.length));

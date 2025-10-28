@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Room } from 'livekit-client';
+import type { DailyCall, DailyEventObjectAppMessage } from '@daily-co/daily-js';
 
 interface UseSyncedGrammarBlockArgs {
-  room: Room | undefined;
+  call: DailyCall | null | undefined;
   isTutor: boolean;
   contentId: string;
   blockId: string;
@@ -34,32 +34,29 @@ interface GrammarSyncPacket {
   };
 }
 
-export function useSyncedGrammarBlock({ room, isTutor, contentId, blockId, materialId }: UseSyncedGrammarBlockArgs) {
+export function useSyncedGrammarBlock({ call, isTutor, contentId, blockId, materialId }: UseSyncedGrammarBlockArgs) {
   const [isActive, setIsActive] = useState(false);
   const [isRevealed, setIsRevealed] = useState(false);
   const suppressLocal = useRef(false);
 
-  const isRoomReady = () => {
+  const isCallReady = () => {
     try {
-      // livekit Room has a state/connectionState; avoid publishing if not connected
-      const anyRoom = room as any;
-      const state: any = anyRoom?.state ?? anyRoom?.connectionState;
-      return !!room && (state === 'connected' || state === 2);
+      const state = call?.meetingState?.();
+      return !!call && (state === 'joined-meeting' || state === 'joining-meeting');
     } catch {
       return false;
     }
   };
 
   const publish = useCallback((pkt: GrammarSyncPacket) => {
-    if (!isRoomReady()) return;
+    if (!isCallReady()) return;
     try {
-      const data = new TextEncoder().encode(JSON.stringify(pkt));
-      room!.localParticipant.publishData(data, { reliable: true });
+      call!.sendAppMessage(pkt);
     } catch (e) {
       // swallow errors when room peer connection is already closed
       // avoids "PC manager is closed" exceptions surfacing to UI
     }
-  }, [room]);
+  }, [call]);
 
   const start = useCallback((timerSec?: number) => {
     setIsActive(true);
@@ -83,67 +80,83 @@ export function useSyncedGrammarBlock({ room, isTutor, contentId, blockId, mater
 
   const emitAttempt = useCallback((itemId: string, gapIndex: number, value: string) => {
     if (suppressLocal.current) { suppressLocal.current = false; return; }
-    if (!isRoomReady()) return;
+    if (!isCallReady()) return;
     publish({ type: 'GRAMMAR_SYNC', contentId, blockId, materialId, action: 'update', itemId, gapIndex, value });
-  }, [publish, contentId, blockId, materialId, room]);
+  }, [publish, contentId, blockId, materialId, call]);
 
   const emitScore = useCallback((score: GrammarSyncPacket['score']) => {
     if (!score) return;
     if (suppressLocal.current) { suppressLocal.current = false; return; }
-    if (!isRoomReady()) return;
+    if (!isCallReady()) return;
     publish({ type: 'GRAMMAR_SYNC', contentId, blockId, materialId, action: 'score', score });
-  }, [publish, contentId, blockId, materialId, room]);
+  }, [publish, contentId, blockId, materialId, call]);
 
   useEffect(() => {
-    if (!room) return;
-    const handler = (data: Uint8Array) => {
+    if (!call) return;
+
+    const localSessionId = (() => {
       try {
-        const msg = JSON.parse(new TextDecoder().decode(data));
-        if (msg?.type !== 'GRAMMAR_SYNC') return;
-        const pkt = msg as GrammarSyncPacket;
-        if (pkt.contentId !== contentId || pkt.blockId !== blockId || pkt.materialId !== materialId) return;
-        switch (pkt.action) {
-          case 'start':
-            suppressLocal.current = true;
-            setIsActive(true);
-            setIsRevealed(false);
-            // optional countdown can be handled by block UI via DOM event
-            window.dispatchEvent(new CustomEvent('GRAMMAR_BLOCK_START', { detail: { contentId, blockId, timerSec: pkt.timerSec } }));
-            break;
-          case 'reveal':
-            suppressLocal.current = true;
-            setIsRevealed(true);
-            window.dispatchEvent(new CustomEvent('GRAMMAR_BLOCK_REVEAL', { detail: { contentId, blockId } }));
-            break;
-          case 'reset':
-            suppressLocal.current = true;
-            setIsActive(false);
-            setIsRevealed(false);
-            window.dispatchEvent(new CustomEvent('GRAMMAR_BLOCK_RESET', { detail: { contentId, blockId } }));
-            break;
-          case 'update':
-            // Mirror live typing to any listeners (e.g., GrammarPlayer in tutor view)
-            window.dispatchEvent(new CustomEvent('GRAMMAR_BLOCK_ATTEMPT', {
-              detail: { contentId, blockId, materialId, itemId: pkt.itemId, gapIndex: pkt.gapIndex, value: pkt.value }
-            }));
-            break;
-          case 'score':
-            // Mirror score result so both sides can show red/green after Check
-            window.dispatchEvent(new CustomEvent('GRAMMAR_BLOCK_SCORE', {
-              detail: { contentId, blockId, materialId, score: pkt.score }
-            }));
-            break;
-          case 'close':
-            suppressLocal.current = true;
-            setIsActive(false);
-            setIsRevealed(false);
-            break;
+        return call.participants().local?.session_id;
+      } catch {
+        return undefined;
+      }
+    })();
+
+    const handler = (event: DailyEventObjectAppMessage) => {
+      if (event.fromId && event.fromId === localSessionId) return;
+      const payload = event.data;
+      if (!payload) return;
+      let pkt: GrammarSyncPacket | null = null;
+      if (typeof payload === 'string') {
+        try {
+          const parsed = JSON.parse(payload);
+          if (parsed?.type === 'GRAMMAR_SYNC') pkt = parsed as GrammarSyncPacket;
+        } catch {
+          return;
         }
-      } catch (_) {/* ignore */}
+      } else if (typeof payload === 'object' && (payload as any)?.type === 'GRAMMAR_SYNC') {
+        pkt = payload as GrammarSyncPacket;
+      }
+      if (!pkt) return;
+      if (pkt.contentId !== contentId || pkt.blockId !== blockId || pkt.materialId !== materialId) return;
+      switch (pkt.action) {
+        case 'start':
+          suppressLocal.current = true;
+          setIsActive(true);
+          setIsRevealed(false);
+          window.dispatchEvent(new CustomEvent('GRAMMAR_BLOCK_START', { detail: { contentId, blockId, timerSec: pkt.timerSec } }));
+          break;
+        case 'reveal':
+          suppressLocal.current = true;
+          setIsRevealed(true);
+          window.dispatchEvent(new CustomEvent('GRAMMAR_BLOCK_REVEAL', { detail: { contentId, blockId } }));
+          break;
+        case 'reset':
+          suppressLocal.current = true;
+          setIsActive(false);
+          setIsRevealed(false);
+          window.dispatchEvent(new CustomEvent('GRAMMAR_BLOCK_RESET', { detail: { contentId, blockId } }));
+          break;
+        case 'update':
+          window.dispatchEvent(new CustomEvent('GRAMMAR_BLOCK_ATTEMPT', {
+            detail: { contentId, blockId, materialId, itemId: pkt.itemId, gapIndex: pkt.gapIndex, value: pkt.value }
+          }));
+          break;
+        case 'score':
+          window.dispatchEvent(new CustomEvent('GRAMMAR_BLOCK_SCORE', {
+            detail: { contentId, blockId, materialId, score: pkt.score }
+          }));
+          break;
+        case 'close':
+          suppressLocal.current = true;
+          setIsActive(false);
+          setIsRevealed(false);
+          break;
+      }
     };
-    room.on('dataReceived', handler);
-    return () => { room.off('dataReceived', handler); };
-  }, [room, contentId, blockId, materialId]);
+    call.on('app-message', handler);
+    return () => { call.off('app-message', handler); };
+  }, [call, contentId, blockId, materialId]);
 
   return { start, reveal, reset, isActive, isRevealed, emitAttempt, emitScore } as const;
 }

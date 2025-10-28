@@ -24,6 +24,7 @@ import SchoolIcon from "@mui/icons-material/School";
 import BookIcon from "@mui/icons-material/Book";
 import GridViewIcon from "@mui/icons-material/GridView";
 import AssignmentIcon from "@mui/icons-material/Assignment";
+import NoteAltOutlinedIcon from "@mui/icons-material/NoteAltOutlined";
 import { motion } from "framer-motion";
 import useMediaQuery from '@mui/material/useMediaQuery';
 
@@ -58,12 +59,19 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const menuItems = [
         { label: "Dashboard", icon: <HomeIcon />, path: "/dashboard" },
         ...(user?.role === "tutor"
-            ? [{ label: "Students", icon: <PeopleIcon />, path: "/my-students" },
-            ]
-            : [ ]),
+            ? [
+                { label: "Students", icon: <PeopleIcon />, path: "/my-students" },
+                { label: "Students Activity", icon: <GridViewIcon />, path: "/teacher/students/activity" },
+              ]
+            : []),
         { label: "Homework", icon: <AssignmentIcon />, path: (user?.role === "tutor") ? "/t/homework" : "/homework" },
         { label: "Vocabulary", icon: <EventNoteIcon />, path: "/vocabulary" },
-        { label: "Lessons", icon: <EventNoteIcon />, path: "/lessons" }
+        { label: "Lessons", icon: <EventNoteIcon />, path: "/lessons" },
+        ...(user?.role === 'student'
+            ? [
+                { label: "Notes", icon: <NoteAltOutlinedIcon />, path: "/notes" }
+            ]
+            : [])
     ];
 
     const handleDrawerToggle = () => {

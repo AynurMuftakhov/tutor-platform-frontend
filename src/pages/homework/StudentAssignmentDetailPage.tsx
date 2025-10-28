@@ -5,6 +5,7 @@ import { useAssignmentById, useStartTask, useCompleteTask } from '../../hooks/us
 import { AssignmentDto, TaskDto } from '../../types/homework';
 import { useAuth } from '../../context/AuthContext';
 import HomeworkTaskFrame from '../../components/homework/HomeworkTaskFrame';
+import { activityEmitter } from '../../services/tracking/activityEmitter';
 
 const StudentAssignmentDetailPage: React.FC = () => {
   const { assignmentId } = useParams();
@@ -13,6 +14,23 @@ const StudentAssignmentDetailPage: React.FC = () => {
   const role = (user?.role || '').toLowerCase();
   const isTeacher = role === 'tutor' || role === 'teacher';
   const { data: assignment, isLoading, isError } = useAssignmentById(assignmentId, { studentId: !isTeacher ? (user?.id || undefined) : undefined });
+
+  // Activity emitter: homework_start/end lifecycle for students
+  React.useEffect(() => {
+    if (isTeacher) return;
+    activityEmitter.emit('homework_start', '/homework');
+
+    const onVis = () => {
+      if (document.hidden) activityEmitter.emit('homework_end', '/homework', { reason: 'hidden' });
+      else activityEmitter.emit('homework_start', '/homework', { reason: 'visible' });
+    };
+    document.addEventListener('visibilitychange', onVis);
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      activityEmitter.emit('homework_end', '/homework', { reason: 'unmount' });
+    };
+  }, [isTeacher]);
 
   const currentTaskId = useMemo(() => {
     const fromUrl = params.get('taskId');

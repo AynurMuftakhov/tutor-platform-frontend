@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Room } from 'livekit-client';
+import type { DailyCall, DailyEventObjectAppMessage } from '@daily-co/daily-js';
 import { Material } from '../components/materials/MaterialCard';
 
 export interface UseSyncedGrammarResult {
@@ -28,7 +28,7 @@ interface GrammarSyncPacket {
 }
 
 export const useSyncedGrammar = (
-  room: Room | undefined, 
+  call: DailyCall | null | undefined, 
   isTutor = false,
   workspaceOpen?: boolean,
   openWorkspace?: () => void
@@ -45,9 +45,12 @@ export const useSyncedGrammar = (
   /* Helper: publish data                                            */
   /* --------------------------------------------------------------- */
   const publishData = (packet: GrammarSyncPacket) => {
-    if (!room) return;
-    const data = new TextEncoder().encode(JSON.stringify(packet));
-    room.localParticipant.publishData(data, { reliable: true });
+    if (!call) return;
+    try {
+      call.sendAppMessage(packet);
+    } catch (e) {
+      console.warn('Failed to send GRAMMAR_SYNC packet via Daily', e);
+    }
   };
 
   /* --------------------------------------------------------------- */
@@ -61,7 +64,7 @@ export const useSyncedGrammar = (
     if (isTutor) {
       publishData({
         type: 'GRAMMAR_SYNC',
-        lessonId: room?.name ?? '',
+        lessonId: '',
         materialId: material.id,
         material,          // send the whole material so students get details
         action: 'open',
@@ -86,7 +89,7 @@ export const useSyncedGrammar = (
     if (!suppressLocalEvent.current) {
       publishData({
         type: 'GRAMMAR_SYNC',
-        lessonId: room?.name ?? '',
+        lessonId: '',
         materialId: state.material.id,
         action: 'update',
         itemId,
@@ -103,7 +106,7 @@ export const useSyncedGrammar = (
     if (!suppressLocalEvent.current) {
       publishData({
         type: 'GRAMMAR_SYNC',
-        lessonId: room?.name ?? '',
+        lessonId: '',
         materialId: state.material.id,
         action: 'close',
       });
@@ -117,53 +120,69 @@ export const useSyncedGrammar = (
   /* Subscribe to incoming data                                      */
   /* --------------------------------------------------------------- */
   useEffect(() => {
-    if (!room) return;
+    if (!call) return;
 
-    const handleData = (data: Uint8Array) => {
+    const localSessionId = (() => {
       try {
-        const msg = JSON.parse(new TextDecoder().decode(data));
-        if (msg.type !== 'GRAMMAR_SYNC') return;
+        return call.participants().local?.session_id;
+      } catch {
+        return undefined;
+      }
+    })();
 
-        switch (msg.action) {
-          case 'open':
-            setState({
-              open: true,
-              material: msg.material ?? ({ id: msg.materialId } as Material),
-              answers: {},
-            });
-            // ensure workspace is visible on students
-            if (!workspaceOpen && openWorkspace) openWorkspace();
-            break;
-          case 'update':
-            suppressLocalEvent.current = true;
-            if (msg.itemId && msg.gapIndex !== undefined && msg.value !== undefined) {
-              setState((prev) => ({
-                ...prev,
-                answers: {
-                  ...prev.answers,
-                  [msg.itemId!]: {
-                    ...(prev.answers[msg.itemId!] || {}),
-                    [msg.gapIndex!]: msg.value!
-                  }
-                }
-              }));
-            }
-            break;
-          case 'close':
-            suppressLocalEvent.current = true;
-            setState({ open: false, material: null, answers: {} });
-            break;
+    const handler = (event: DailyEventObjectAppMessage) => {
+      if (event.fromId && event.fromId === localSessionId) return;
+      const payload = event.data;
+      if (!payload) return;
+      let msg: GrammarSyncPacket | null = null;
+      if (typeof payload === 'string') {
+        try {
+          const parsed = JSON.parse(payload);
+          if (parsed.type === 'GRAMMAR_SYNC') msg = parsed as GrammarSyncPacket;
+        } catch (e) {
+          return;
         }
-      } catch (e) {
-        console.error('Failed to parse GRAMMAR_SYNC packet', e);
+      } else if (typeof payload === 'object' && (payload as any)?.type === 'GRAMMAR_SYNC') {
+        msg = payload as GrammarSyncPacket;
+      }
+      if (!msg) return;
+
+      switch (msg.action) {
+        case 'open':
+          setState({
+            open: true,
+            material: msg.material ?? ({ id: msg.materialId } as Material),
+            answers: {},
+          });
+          if (!workspaceOpen && openWorkspace) openWorkspace();
+          break;
+        case 'update':
+          suppressLocalEvent.current = true;
+          if (msg.itemId && msg.gapIndex !== undefined && msg.value !== undefined) {
+            setState((prev) => ({
+              ...prev,
+              answers: {
+                ...prev.answers,
+                [msg.itemId!]: {
+                  ...(prev.answers[msg.itemId!] || {}),
+                  [msg.gapIndex!]: msg.value!
+                }
+              }
+            }));
+          }
+          break;
+        case 'close':
+          suppressLocalEvent.current = true;
+          setState({ open: false, material: null, answers: {} });
+          break;
       }
     };
 
-    room.on('dataReceived', handleData);
+    call.on('app-message', handler);
     return () => {
-      room.off('dataReceived', handleData);
+      call.off('app-message', handler);
     };
-  }, [room, workspaceOpen, openWorkspace]);
+  }, [call, workspaceOpen, openWorkspace]);
 
   return {
     state,

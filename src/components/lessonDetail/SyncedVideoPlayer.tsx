@@ -1,12 +1,25 @@
 import React from 'react';
 import { Box } from '@mui/material';
 import ReactPlayer from 'react-player';
-import { Chat } from '@livekit/components-react';
-import { UseSyncedVideoResult } from '../../hooks/useSyncedVideo';
-import {StyledChat} from "./StyledChat";
+import type { Material } from '../../types/material';
+
+export interface SyncedVideoControls {
+  state: {
+    open: boolean;
+    material: Material | null;
+    isPlaying: boolean;
+  };
+  playerRef: React.RefObject<ReactPlayer | null>;
+  open: (material: Material) => void;
+  play: () => void;
+  pause: () => void;
+  seek: (time: number) => void;
+  close: () => void;
+  pauseLocally: () => void;
+}
 
 interface SyncedVideoPlayerProps {
-  useSyncedVideo: UseSyncedVideoResult;
+  useSyncedVideo: SyncedVideoControls;
 }
 
 const SyncedVideoPlayer: React.FC<SyncedVideoPlayerProps> = ({ useSyncedVideo }) => {
@@ -39,7 +52,7 @@ const SyncedVideoPlayer: React.FC<SyncedVideoPlayerProps> = ({ useSyncedVideo })
         playing={state.isPlaying}
         controls
         width="100%"
-        height="60%"   /* 60 % video, 40 % chat – tweak if needed */
+        height="100%"
         onPlay={play}
         onPause={pause}
         onSeek={handleSeek}
@@ -53,10 +66,6 @@ const SyncedVideoPlayer: React.FC<SyncedVideoPlayerProps> = ({ useSyncedVideo })
         }}
       />
 
-      {/* --- chat --- */}
-      <Box sx={{ flexGrow: 1, minHeight: 0, overflow: 'hidden' }}>
-        <StyledChat/>
-      </Box>
     </Box>
   );
 };

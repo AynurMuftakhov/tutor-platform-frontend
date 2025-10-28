@@ -8,6 +8,7 @@ import React, {
 } from 'react';
 import { initKeycloak, keycloak } from '../services/keycloak';
 import { fetchCurrentUser } from '../services/api';
+import { activityEmitter } from '../services/tracking/activityEmitter';
 
 interface User {
     id: string;
@@ -55,11 +56,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 sessionStorage.setItem('token', newToken);
                 setTokenState(newToken);
                 setAuthenticated(true);
+                try { activityEmitter.setToken(newToken); } catch {}
 
                 try {
                     const me = await fetchCurrentUser();
                     setUser(me);
                     sessionStorage.setItem('user', JSON.stringify(me));
+                    // Start activity tracking only for students
+                    try {
+                        const role = (me?.role || '').toLowerCase();
+                        if (role === 'student') {
+                            activityEmitter.start(me.id, newToken);
+                        } else {
+                            activityEmitter.stop();
+                        }
+                    } catch {}
                 } catch (err) {
                     console.error('fetchCurrentUser failed', err);
                 }
@@ -68,6 +79,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 setTokenState(null);
                 setUser(null);
                 setAuthenticated(false);
+                try { activityEmitter.stop(); } catch {}
             }
         },
         [setTokenState],

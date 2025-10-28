@@ -4,6 +4,7 @@ import './index.css';
 import App from './App';
 import { AuthProvider } from './context/AuthContext';
 import { createTheme, ThemeProvider, responsiveFontSizes, CssBaseline } from '@mui/material';
+import { SnackbarProvider } from 'notistack';
 
 // 2025 Modern Design System
 let theme = createTheme({
@@ -392,8 +393,14 @@ const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement)
 root.render(
         <ThemeProvider theme={theme}>
             <CssBaseline />
-            <AuthProvider>
-                <App />
-            </AuthProvider>
+            <SnackbarProvider
+                maxSnack={3}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                autoHideDuration={4000}
+            >
+                <AuthProvider>
+                    <App />
+                </AuthProvider>
+            </SnackbarProvider>
         </ThemeProvider>
 );

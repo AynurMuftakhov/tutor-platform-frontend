@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import MainLayout from "./MainLayout";
+import { activityEmitter } from '../services/tracking/activityEmitter';
 import { LocalizationProvider } from "@mui/x-date-pickers";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import {NotificationSocketProvider} from "../context/NotificationsSocketContext";
@@ -16,6 +17,13 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             navigate('/onboarding', { state: { from: location.pathname } });
         }
     }, [user, navigate, location.pathname]);
+
+    // Update activityEmitter with current route key (page)
+    useEffect(() => {
+        const path = location.pathname;
+        const routeKey = path.replace(/\d+/g, ':id'); // simple anonymization for ids
+        try { activityEmitter.setPage(routeKey); } catch {}
+    }, [location.pathname]);
 
     return (
         <LocalizationProvider dateAdapter={AdapterDayjs}>

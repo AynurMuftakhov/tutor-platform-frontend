@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Room } from 'livekit-client';
+import type { DailyCall, DailyEventObjectAppMessage } from '@daily-co/daily-js';
 
 export interface SyncedContentState {
   open: boolean;
@@ -7,6 +7,7 @@ export interface SyncedContentState {
   title?: string;
   focusBlockId?: string;
   locked: boolean;
+  scrollRatio: number;
   stateVersion: number;
 }
 
@@ -16,6 +17,7 @@ type ContentAction =
   | { kind: 'focus'; blockId: string }
   | { kind: 'navigate'; sectionId: string; rowId?: string }
   | { kind: 'lockScroll'; locked: boolean }
+  | { kind: 'scroll'; ratio: number }
   | { kind: 'stateRequest' }
   | { kind: 'stateSnapshot'; snapshot: SyncedContentState };
 
@@ -50,9 +52,6 @@ interface GrammarSyncPacket {
 // -----------------------------------------------
 // Utilities & Type Guards (kept outside component)
 // -----------------------------------------------
-const DECODER = new TextDecoder();
-const ENCODER = new TextEncoder();
-
 const isOpenAction = function (a: ContentAction): a is Extract<ContentAction, { kind: 'open' }> {
     return a.kind === 'open';
 };
@@ -68,6 +67,9 @@ const isNavigateAction = function (a: ContentAction): a is Extract<ContentAction
 const isLockScrollAction = function (a: ContentAction): a is Extract<ContentAction, { kind: 'lockScroll' }> {
     return a.kind === 'lockScroll';
 };
+const isScrollAction = function (a: ContentAction): a is Extract<ContentAction, { kind: 'scroll' }> {
+    return a.kind === 'scroll';
+};
 const isStateRequestAction = function (a: ContentAction): a is Extract<ContentAction, { kind: 'stateRequest' }> {
     return a.kind === 'stateRequest';
 };
@@ -79,37 +81,26 @@ const emitNavigate = (sectionId: string, rowId?: string) => {
   window.dispatchEvent(new CustomEvent('CONTENT_NAVIGATE', { detail: { sectionId, rowId } }));
 };
 
-export function useSyncedContent(room: Room | undefined, isTutor: boolean) {
+export function useSyncedContent(call: DailyCall | null | undefined, isTutor: boolean) {
   const [state, setState] = useState<SyncedContentState>({
     open: false,
     contentId: undefined,
     focusBlockId: undefined,
     locked: false,
+    scrollRatio: 0,
     stateVersion: 0,
   });
 
   const versionRef = useRef(0);
-  const suppressLocalEvent = useRef(false); // kept to avoid regression even if not used yet
-
-  const isRoomReady = () => {
-    try {
-      const anyRoom = room as any;
-      const connState: string | undefined = anyRoom?.state ?? anyRoom?.connectionState;
-      return !!room && connState === 'connected';
-    } catch {
-      return false;
-    }
-  };
 
   const publish = useCallback((packet: ContentSyncPacket) => {
-    if (!isRoomReady()) return;
+      if (!call) return;
     try {
-      const data = ENCODER.encode(JSON.stringify(packet));
-      room!.localParticipant.publishData(data, { reliable: true });
+        call.sendAppMessage(packet);
     } catch {
       // ignore errors when connection is closed/closing
     }
-  }, [room]);
+  }, [call]);
 
   const pushAction = useCallback((action: ContentAction) => {
     // Tutor is the source of truth for versioned actions/snapshots
@@ -125,11 +116,11 @@ export function useSyncedContent(room: Room | undefined, isTutor: boolean) {
   const api = useMemo(() => ({
     state,
     open: (content: { id: string; title?: string }) => {
-      setState((prev) => ({ ...prev, open: true, contentId: content.id, title: content.title }));
+      setState((prev) => ({ ...prev, open: true, contentId: content.id, title: content.title, scrollRatio: 0 }));
       pushAction({ kind: 'open', contentId: content.id, title: content.title });
     },
     close: () => {
-      setState((prev) => ({ ...prev, open: false, contentId: undefined, title: undefined, focusBlockId: undefined }));
+      setState((prev) => ({ ...prev, open: false, contentId: undefined, title: undefined, focusBlockId: undefined, scrollRatio: 0 }));
       pushAction({ kind: 'close' });
     },
     focus: (blockId: string) => {
@@ -143,68 +134,83 @@ export function useSyncedContent(room: Room | undefined, isTutor: boolean) {
       setState((prev) => ({ ...prev, locked }));
       pushAction({ kind: 'lockScroll', locked });
     },
+    syncScroll: (ratio: number) => {
+      if (!Number.isFinite(ratio)) return;
+      const clamped = Math.max(0, Math.min(1, ratio));
+      setState((prev) => ({ ...prev, scrollRatio: clamped }));
+      pushAction({ kind: 'scroll', ratio: clamped });
+    },
     getMediaBinder: ({ blockId, materialId }: { blockId: string; materialId: string }) => {
       return {
         play: (time?: number) => {
-          if (!room || !state.contentId) return;
-          if (!isRoomReady()) return;
+          if (!call || !state.contentId) return;
+          if (call.meetingState?.() !== 'joined-meeting') return;
           const pkt: MaterialSyncPacket = { type: 'MATERIAL_SYNC', contentId: state.contentId, blockId, materialId, action: 'play', time };
-          try { room.localParticipant.publishData(ENCODER.encode(JSON.stringify(pkt)), { reliable: true }); } catch { /* ignore */}
+          try { call.sendAppMessage(pkt); } catch { /* ignore */ }
         },
         pause: () => {
-          if (!room || !state.contentId) return;
-          if (!isRoomReady()) return;
+          if (!call || !state.contentId) return;
+          if (call.meetingState?.() !== 'joined-meeting') return;
           const pkt: MaterialSyncPacket = { type: 'MATERIAL_SYNC', contentId: state.contentId, blockId, materialId, action: 'pause' };
-          try { room.localParticipant.publishData(ENCODER.encode(JSON.stringify(pkt)), { reliable: true }); } catch { /* ignore */}
+          try { call.sendAppMessage(pkt); } catch { /* ignore */ }
         },
         seek: (t: number) => {
-          if (!room || !state.contentId) return;
-          if (!isRoomReady()) return;
+          if (!call || !state.contentId) return;
+          if (call.meetingState?.() !== 'joined-meeting') return;
           const pkt: MaterialSyncPacket = { type: 'MATERIAL_SYNC', contentId: state.contentId, blockId, materialId, action: 'seek', time: t };
-          try { room.localParticipant.publishData(ENCODER.encode(JSON.stringify(pkt)), { reliable: true }); } catch { /* ignore */}
+          try { call.sendAppMessage(pkt); } catch { /* ignore */ }
         },
       };
     },
     getGrammarBinder: ({ blockId, materialId }: { blockId: string; materialId: string }) => {
       return {
         start: (timerSec?: number) => {
-          if (!room || !state.contentId) return;
-          if (!isRoomReady()) return;
+          if (!call || !state.contentId) return;
+          if (call.meetingState?.() !== 'joined-meeting') return;
           const pkt: GrammarSyncPacket = { type: 'GRAMMAR_SYNC', contentId: state.contentId, blockId, materialId, action: 'start', timerSec };
-          try { room.localParticipant.publishData(ENCODER.encode(JSON.stringify(pkt)), { reliable: true }); } catch { /* ignore */}
+          try { call.sendAppMessage(pkt); } catch { /* ignore */ }
         },
         reveal: () => {
-          if (!room || !state.contentId) return;
-          if (!isRoomReady()) return;
+          if (!call || !state.contentId) return;
+          if (call.meetingState?.() !== 'joined-meeting') return;
           const pkt: GrammarSyncPacket = { type: 'GRAMMAR_SYNC', contentId: state.contentId, blockId, materialId, action: 'reveal' };
-          try { room.localParticipant.publishData(ENCODER.encode(JSON.stringify(pkt)), { reliable: true }); } catch { /* ignore */}
+          try { call.sendAppMessage(pkt); } catch { /* ignore */ }
         },
         reset: () => {
-          if (!room || !state.contentId) return;
-          if (!isRoomReady()) return;
+          if (!call || !state.contentId) return;
+          if (call.meetingState?.() !== 'joined-meeting') return;
           const pkt: GrammarSyncPacket = { type: 'GRAMMAR_SYNC', contentId: state.contentId, blockId, materialId, action: 'reset' };
-          try { room.localParticipant.publishData(ENCODER.encode(JSON.stringify(pkt)), { reliable: true }); } catch { /* ignore */}
+          try { call.sendAppMessage(pkt); } catch { /* ignore */ }
         },
       };
     },
-  }), [pushAction, room, state]);
+  }), [pushAction, call, state]);
 
   // -----------------------
   // Handle incoming data
   // -----------------------
   useEffect(() => {
-    if (!room) return;
+    if (!call) return;
 
-    const onData = (data: Uint8Array) => {
-      // 1) Decode + parse; ignore non-CONTENT_SYNC
+    const onAppMessage = (event: DailyEventObjectAppMessage) => {
+      const payload = event?.data;
+      if (!payload) return;
       let msg: ContentSyncPacket | null = null;
-      try {
-        const payload = JSON.parse(DECODER.decode(data));
-        if (payload?.type !== 'CONTENT_SYNC') return;
-        msg = payload as ContentSyncPacket;
-      } catch {
-        return; // ignore non-JSON / other channels
+      if (typeof payload === 'string') {
+        try {
+          const parsed = JSON.parse(payload);
+          if (parsed?.type === 'CONTENT_SYNC') {
+            msg = parsed as ContentSyncPacket;
+          }
+        } catch {
+          return;
+        }
+      } else if (typeof payload === 'object') {
+        if ((payload as any)?.type === 'CONTENT_SYNC') {
+          msg = payload as ContentSyncPacket;
+        }
       }
+      if (!msg) return;
 
       // 2) Version handling for non-snapshot actions (drop stale)
       if (!isStateSnapshotAction(msg.action)) {
@@ -216,12 +222,12 @@ export function useSyncedContent(room: Room | undefined, isTutor: boolean) {
 
       // 3) Dispatch by kind using type guards (no unsafe property access)
       if (isOpenAction(act)) {
-        setState((prev) => ({ ...prev, open: true, contentId: act.contentId, title: act.title }));
+        setState((prev) => ({ ...prev, open: true, contentId: act.contentId, title: act.title, scrollRatio: 0 }));
         return;
       }
 
       if (isCloseAction(act)) {
-        setState({ open: false, contentId: undefined, title: undefined, focusBlockId: undefined, locked: false, stateVersion: versionRef.current });
+        setState({ open: false, contentId: undefined, title: undefined, focusBlockId: undefined, locked: false, scrollRatio: 0, stateVersion: versionRef.current });
         return;
       }
 
@@ -242,6 +248,14 @@ export function useSyncedContent(room: Room | undefined, isTutor: boolean) {
         return;
       }
 
+      if (isScrollAction(act)) {
+        if (isTutor) return;
+        const ratio = Math.max(0, Math.min(1, Number(act.ratio ?? 0)));
+        setState((prev) => ({ ...prev, scrollRatio: ratio, stateVersion: versionRef.current }));
+        window.dispatchEvent(new CustomEvent('CONTENT_SCROLL', { detail: { ratio } }));
+        return;
+      }
+
       if (isStateRequestAction(act)) {
         // Only tutor answers with a snapshot
         if (!isTutor) return;
@@ -257,20 +271,38 @@ export function useSyncedContent(room: Room | undefined, isTutor: boolean) {
         const snap = act.snapshot;
         if (snap.stateVersion >= versionRef.current) {
           versionRef.current = snap.stateVersion;
-          setState(snap);
+          const normalizedSnap: SyncedContentState = {
+            ...snap,
+            scrollRatio: Math.max(0, Math.min(1, snap.scrollRatio ?? 0)),
+          };
+          setState(normalizedSnap);
+          window.dispatchEvent(new CustomEvent('CONTENT_SCROLL', { detail: { ratio: normalizedSnap.scrollRatio } }));
         }
         return;
       }
     };
 
-    room.on('dataReceived', onData);
+    const localSessionId = (() => {
+      try {
+        return call.participants()?.local?.session_id;
+      } catch {
+        return undefined;
+      }
+    })();
+
+    const handler = (event: DailyEventObjectAppMessage) => {
+      if (event.fromId && event.fromId === localSessionId) return;
+      onAppMessage(event);
+    };
+
+    call.on('app-message', handler);
     // Important: return a void destructor (not a function returning something)
-    return () => { room.off('dataReceived', onData); };
-  }, [room, isTutor, publish, state]);
+    return () => { call.off('app-message', handler); };
+  }, [call, isTutor, publish]);
 
   // On mount for students, request state snapshot
   useEffect(() => {
-    if (!room) return;
+    if (!call) return;
     if (isTutor) return;
     // ask for snapshot shortly after join
     const t = setTimeout(() => {
@@ -278,7 +310,7 @@ export function useSyncedContent(room: Room | undefined, isTutor: boolean) {
       publish(pkt);
     }, 400);
     return () => { clearTimeout(t); };
-  }, [room, isTutor, publish]);
+  }, [call, isTutor, publish]);
 
   return api;
 }

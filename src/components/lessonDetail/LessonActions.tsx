@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import {
     Button, Dialog, DialogActions, DialogContent, DialogTitle,
     Stack, TextField, IconButton, Tooltip, Box, Typography,
+    Checkbox, FormControlLabel,
 } from "@mui/material";
 import { LessonStatus } from "../../types/Lesson";
 import {
@@ -39,6 +40,7 @@ const LessonActions: React.FC<Props> = ({ currentStatus, onChangeStatus, current
     const [deleteOpen, setDeleteOpen] = useState(false);
     const [linkDialogOpen, setLinkDialogOpen] = useState(false);
     const [linkCopied, setLinkCopied] = useState(false);
+    const [deleteSeries, setDeleteSeries] = useState(false);
 
     // Generate direct video call link
     const generateDirectLink = () => {
@@ -59,7 +61,7 @@ const LessonActions: React.FC<Props> = ({ currentStatus, onChangeStatus, current
     };
 
     const handleDeleteLesson = () => {
-        deleteLesson(lessonId)
+        deleteLesson(lessonId, deleteSeries)
         setDeleteOpen(false)
         navigate(`/lessons`)
     };
@@ -182,7 +184,13 @@ const LessonActions: React.FC<Props> = ({ currentStatus, onChangeStatus, current
                     onClose={() => setDeleteOpen(false)}>
                 <DialogTitle>Delete Lesson</DialogTitle>
                 <DialogContent>
-                    Are you sure you want to delete the lesson ?
+                    <Typography variant="body1" sx={{ mb: 2 }}>
+                        Are you sure you want to delete the lesson?
+                    </Typography>
+                    <FormControlLabel
+                        control={<Checkbox checked={deleteSeries} onChange={(e) => setDeleteSeries(e.target.checked)} />}
+                        label="Also delete all lessons in this series"
+                    />
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={() => setDeleteOpen(false)}>Cancel</Button>

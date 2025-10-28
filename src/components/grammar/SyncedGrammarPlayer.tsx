@@ -7,7 +7,6 @@ import { gapTokensToNodes, GAP_REGEX } from '../../utils/grammarUtils';
 import { useGrammarItems, useScoreGrammar } from '../../hooks/useGrammarItems';
 import { GrammarScoreResponse } from '../../services/api';
 import { UseSyncedGrammarResult } from '../../hooks/useSyncedGrammar';
-import { StyledChat } from '../lessonDetail/StyledChat';
 
 interface SyncedGrammarPlayerProps {
   useSyncedGrammar: UseSyncedGrammarResult;
@@ -249,11 +248,6 @@ const SyncedGrammarPlayer: React.FC<SyncedGrammarPlayerProps> = ({ useSyncedGram
             </Button>
           </Box>
         </Box>
-      </Box>
-
-      {/* Chat */}
-      <Box sx={{ height: '40%', minHeight: 0, overflow: 'hidden', borderTop: '1px solid', borderColor: 'divider' }}>
-        <StyledChat />
       </Box>
 
       {/* snackbar */}
