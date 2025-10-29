@@ -1,54 +1,27 @@
-import React, {useState, useMemo, useEffect} from "react";
+import React, {useState, useEffect} from "react";
 import {
     Box,
     Button,
     Typography,
     TextField,
-    Avatar,
-    IconButton,
     Dialog,
     DialogTitle,
     DialogContent,
     DialogContentText,
     DialogActions,
-    Chip, Tooltip, Paper,
+    Paper,
 } from "@mui/material";
 import MenuItem from "@mui/material/MenuItem";
-import MenuBookIcon from "@mui/icons-material/MenuBook";
-
-import { DataGrid, GridColDef, GridRenderCellParams, GridToolbarContainer, GridToolbarColumnsButton, GridToolbarDensitySelector, GridToolbarExport } from "@mui/x-data-grid";
-import EditIcon from "@mui/icons-material/Edit";
-import DeleteIcon from "@mui/icons-material/Delete";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
-import LinkIcon from "@mui/icons-material/Link";
 import {createStudent, deleteUser, fetchStudents, resetPasswordEmail, updateCurrentUser, generateMagicLink} from "../services/api";
 import { useAuth } from '../context/AuthContext';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
 import {ENGLISH_LEVELS, EnglishLevel} from "../types/ENGLISH_LEVELS";
 import StudentVocabularyModal from "../components/vocabulary/StudentVocabularyModal";
-import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import { useNavigate } from "react-router-dom";
-
-// Custom DataGrid toolbar without Filters and Quick Filter — only Columns, Density, Export
-const CustomToolbar: React.FC = () => (
-    <GridToolbarContainer>
-        <GridToolbarColumnsButton />
-        <GridToolbarDensitySelector />
-        <GridToolbarExport />
-    </GridToolbarContainer>
-);
-
-// Extended Student type
-export interface Student {
-    id: string;
-    avatar?: string;
-    name: string;
-    email?: string;
-    level: EnglishLevel;
-    homeworkDone: boolean;
-    nextLesson?: string;
-}
+import StudentsTable from "../features/students/components/StudentsTable";
+import type { Student } from "../features/students/types";
 
 type NewStudentForm = { name: string; email?: string; level: EnglishLevel };
 const MyStudentsPage: React.FC = () => {
@@ -176,6 +149,19 @@ const MyStudentsPage: React.FC = () => {
         setVocabularyModalOpen(true);
     };
 
+    const handleInviteStudent = async (student: Student) => {
+        try {
+            const { link } = await generateMagicLink(student.id);
+            setInviteLink(link);
+            setInviteDialogOpen(true);
+        } catch (err) {
+            console.error('Failed to generate link', err);
+            setSnackbarMessage('Failed to generate link. Please try again.');
+            setSnackbarSeverity('error');
+            setSnackbarOpen(true);
+        }
+    };
+
     const handleCreateStudent = async () => {
         try {
             setAddLoading(true);
@@ -237,16 +223,6 @@ const MyStudentsPage: React.FC = () => {
         }
     };
 
-    useMemo(() => {
-        if (!searchText) return students;
-        const lower = searchText.toLowerCase();
-        return students.filter(
-            (s) =>
-                s.name.toLowerCase().includes(lower) ||
-                (s.email ? s.email.toLowerCase().includes(lower) : false)
-        );
-    }, [students, searchText]);
-
     useEffect(() => {
         if (!user){
             return
@@ -266,147 +242,6 @@ const MyStudentsPage: React.FC = () => {
 
         loadStudents();
     }, [user, searchText, page, pageSize]);
-
-    const columns: GridColDef<Student>[] = [
-        {
-            field: "name",
-            headerName: "Name",
-            flex: 1,
-            renderCell: (params: GridRenderCellParams<Student>) => (
-                <Tooltip title={params.row.email || ''}>
-                    <Box display="flex" alignItems="center">
-                        <Avatar
-                            src={params.row.avatar}
-                            alt={params.row.name}
-                            sx={{
-                                width: 32,
-                                height: 32,
-                                fontSize: 14,
-                                bgcolor: theme => theme.palette.primary.light,
-                                mr: 1
-                            }}
-                        />
-                        <Typography fontWeight={600}>{params.row.name}</Typography>
-                    </Box>
-                </Tooltip>
-            ),
-        },
-        {
-            field: "email",
-            headerName: "Email",
-            flex: 1,
-            renderCell: (params: GridRenderCellParams<Student>) => {
-                const email = params.row.email;
-                if (!email) {
-                    return (
-                        <Chip
-                            label="link-only"
-                            size="small"
-                            sx={{ bgcolor: (theme) => theme.palette.action.hover, color: (theme) => theme.palette.text.secondary }}
-                        />
-                    );
-                }
-                return <Typography variant="body2">{email}</Typography>;
-            }
-        },
-        {
-            field: "level",
-            headerName: "Level",
-            width: 140,
-            renderCell: (params: GridRenderCellParams<Student>) => {
-                const level = params.row.level;
-                const levelInfo = ENGLISH_LEVELS[level];
-
-                return (
-                    <Tooltip title={levelInfo?.description || ""}>
-                        <Chip
-                            label={`${level} (${levelInfo?.code})`}
-                            sx={{
-                                backgroundColor: "#f0f4ff",
-                                color: "#1e3a8a",
-                                fontWeight: 600,
-                                borderRadius: "8px",
-                                px: 1.5,
-                            }}
-                            size="small"
-                        />
-                    </Tooltip>
-                );
-            }
-        },
-        {
-            field: "actions",
-            headerName: "Actions",
-            width: 160,
-            sortable: false,
-            renderCell: (params) => {
-                const student = params.row;
-                return (
-                    <Box display="flex" gap={1}>
-                        <Tooltip title="Edit">
-                            <IconButton
-                                color="primary"
-                                onClick={(e) => { e.stopPropagation(); handleEditStudent(student); }}
-                                size="small"
-                            >
-                                <EditIcon fontSize="small" />
-                            </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Vocabulary">
-                            <IconButton
-                                color="info"
-                                onClick={(e) => { e.stopPropagation(); handleViewVocabulary(student); }}
-                                size="small"
-                            >
-                                <MenuBookIcon fontSize="small" />
-                            </IconButton>
-                        </Tooltip>
-                        {student.email && (
-                            <Tooltip title="Send password reset email">
-                                <IconButton
-                                    color="info"
-                                    onClick={(e) => { e.stopPropagation(); handleConfirmResetPassword(student); }}
-                                    size="small"
-                                >
-                                    <RestartAltIcon fontSize="small" />
-                                </IconButton>
-                            </Tooltip>
-                        )}
-                        <Tooltip title="Invite / Copy link (single-use)">
-                            <IconButton
-                                color="primary"
-                                onClick={async (e) => {
-                                    e.stopPropagation();
-                                    try {
-                                        const { link } = await generateMagicLink(student.id);
-                                        setInviteLink(link);
-                                        setInviteDialogOpen(true);
-                                    } catch (err) {
-                                        console.error('Failed to generate link', err);
-                                        setSnackbarMessage('Failed to generate link. Please try again.');
-                                        setSnackbarSeverity('error');
-                                        setSnackbarOpen(true);
-                                    }
-                                }}
-                                size="small"
-                            >
-                                <LinkIcon fontSize="small" />
-                            </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Delete">
-                            <IconButton
-                                color="error"
-                                onClick={(e) => { e.stopPropagation(); handleConfirmDelete(student); }}
-                                size="small"
-                            >
-                                <DeleteIcon fontSize="small" />
-                            </IconButton>
-                        </Tooltip>
-                    </Box>
-                );
-            },
-        },
-    ];
 
     return (
         <Box  sx={{
@@ -447,35 +282,22 @@ const MyStudentsPage: React.FC = () => {
                     />
                 </Box>
 
-                {/* DataGrid */}
-                <Box sx={{ width: '100%', overflowX: 'auto', overflowY: 'auto', maxHeight: { xs: 'calc(100dvh - 240px)', md: 'calc(100dvh - 260px)' }, backgroundColor: (theme) => theme.palette.background.paper }}>
-                  <Box sx={{ minWidth: 600 }}>
-                    <DataGrid<Student>
-                        rows={students}
-                        columns={columns}
-                        rowCount={totalStudents}
-                        loading={loading}
-                        paginationMode="server"
-                        paginationModel={{ pageSize, page }}
-                        onPaginationModelChange={(model) => {
-                            setPage(model.page);
-                            setPageSize(model.pageSize);
-                        }}
-                        onRowClick={(params) => navigate(`/students/${params.row.id}`)}
-                        pageSizeOptions={[5, 10, 25]}
-                        disableRowSelectionOnClick
-                        slots={{ toolbar: CustomToolbar }}
-                        autoHeight
-                        sx={{
-                            border: 'none',
-                            cursor: 'pointer',
-                            '& .MuiDataGrid-columnHeaders': {
-                                backgroundColor: (theme) => theme.palette.action.hover,
-                            },
-                        }}
-                    />
-                  </Box>
-                </Box>
+                <StudentsTable
+                    students={students}
+                    loading={loading}
+                    rowCount={totalStudents}
+                    paginationModel={{ page, pageSize }}
+                    onPaginationModelChange={(model) => {
+                        setPage(model.page);
+                        setPageSize(model.pageSize);
+                    }}
+                    onRowClick={(student) => navigate(`/students/${student.id}`)}
+                    onEditStudent={handleEditStudent}
+                    onViewVocabulary={handleViewVocabulary}
+                    onSendReset={handleConfirmResetPassword}
+                    onInvite={handleInviteStudent}
+                    onDelete={handleConfirmDelete}
+                />
                 </Paper>
 
                 {/* Confirm Delete Dialog */}

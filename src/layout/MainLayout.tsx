@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
     AppBar, Avatar, Badge, Box, Button, CssBaseline, Dialog, DialogActions, DialogContent,
     DialogTitle, Drawer, IconButton, List, ListItem, ListItemButton, Tooltip,
-    ListItemIcon, ListItemText, Menu, MenuItem, MenuList, Toolbar, Typography, useTheme, alpha, GlobalStyles
+    ListItemIcon, ListItemText, Menu, MenuItem, MenuList, Toolbar, Typography, useTheme, alpha, GlobalStyles, useMediaQuery
 } from "@mui/material";
 
 import {
@@ -26,7 +26,7 @@ import GridViewIcon from "@mui/icons-material/GridView";
 import AssignmentIcon from "@mui/icons-material/Assignment";
 import NoteAltOutlinedIcon from "@mui/icons-material/NoteAltOutlined";
 import { motion } from "framer-motion";
-import useMediaQuery from '@mui/material/useMediaQuery';
+import useScrollTrigger from "@mui/material/useScrollTrigger";
 
 import { useAuth } from "../context/AuthContext";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -34,8 +34,10 @@ import {useNotificationSocket} from "../context/NotificationsSocketContext";
 import NotificationToasterWrapper from "../components/NotificationToasterWrapper";
 import {DeleteOutline} from "@mui/icons-material";
 import MotionDivTransition from "../components/MotionDivTransition";
+import PageHeader from "../components/PageHeader/PageHeader";
+import FocusTrap from "focus-trap-react";
 
-export const drawerWidth = 280;
+export const drawerWidth = "clamp(72px, 18vw, 260px)";
 const BRAND_NAME = "SpeakShire";
 
 const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -74,9 +76,29 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             : [])
     ];
 
+    const menuButtonRef = useRef<HTMLButtonElement | null>(null);
+
+    const closeDrawer = useCallback(() => {
+        setMobileOpen((prev) => {
+            if (!prev) {
+                return prev;
+            }
+
+            setTimeout(() => {
+                menuButtonRef.current?.focus();
+            }, 0);
+
+            return false;
+        });
+    }, []);
+
     const handleDrawerToggle = () => {
         if (isVideoCallPage) return; // Don't toggle drawer on video call page
-        setMobileOpen(!mobileOpen);
+        if (mobileOpen) {
+            closeDrawer();
+        } else {
+            setMobileOpen(true);
+        }
     };
     const handleProfileMenuOpen = (e: React.MouseEvent<HTMLElement>) => setProfileAnchorEl(e.currentTarget);
     const handleProfileMenuClose = () => setProfileAnchorEl(null);
@@ -154,10 +176,38 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     }, []);
 
     const theme = useTheme();
-    const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+    const isLgDown = useMediaQuery(theme.breakpoints.down("lg"));
+
+    useEffect(() => {
+        if (!isLgDown && mobileOpen) {
+            setMobileOpen(false);
+        }
+    }, [isLgDown, mobileOpen]);
+    const scrolled = useScrollTrigger({
+        disableHysteresis: true,
+        threshold: 1,
+        target: typeof window !== "undefined" ? window : undefined,
+    });
+
+    const childrenArray = React.Children.toArray(children);
+    const pageHeaderElements: React.ReactNode[] = [];
+    const mainContentElements: React.ReactNode[] = [];
+
+    childrenArray.forEach((child) => {
+        if (
+            React.isValidElement(child) &&
+            (child.type === PageHeader || (child.type as any)?.displayName === PageHeader.displayName)
+        ) {
+            pageHeaderElements.push(child);
+        } else {
+            mainContentElements.push(child);
+        }
+    });
 
     const drawer = (
         <Box
+            component="nav"
+            id="primary-navigation"
             sx={{
                 height: "100%",
                 background: `linear-gradient(180deg, ${alpha(theme.palette.primary.light, 0.03)} 0%, ${alpha(theme.palette.background.default, 1)} 100%)`,
@@ -229,7 +279,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                                 whileHover={{ x: 5 }}
                                 onClick={() => {
                                     navigate(path);
-                                    setMobileOpen(false);
+                                    closeDrawer();
                                 }}
                                 selected={location.pathname === path}
                                 sx={{
@@ -295,7 +345,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                             whileHover={{ x: 5 }}
                             onClick={() => {
                                 navigate('/learning-materials');
-                                setMobileOpen(false);
+                                closeDrawer();
                             }}
                             selected={location.pathname === '/learning-materials'}
                             sx={{
@@ -345,7 +395,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                             whileHover={{ x: 5 }}
                             onClick={() => {
                                 navigate('/lesson-contents');
-                                setMobileOpen(false);
+                                closeDrawer();
                             }}
                             selected={location.pathname.startsWith('/lesson-contents')}
                             sx={{
@@ -403,32 +453,150 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
     return (
         <>
-            <NotificationToasterWrapper/>
-            <Box sx={{  display: 'flex', width: '100%', height: '100dvh', overflow: 'hidden' }}>
+            <GlobalStyles
+                styles={(theme) => ({
+                    ".skip-link": {
+                        position: "absolute",
+                        left: "50%",
+                        transform: "translate(-50%, -200%)",
+                        top: theme.spacing(2),
+                        padding: theme.spacing(1, 2),
+                        borderRadius: theme.shape.borderRadius,
+                        backgroundColor: theme.palette.primary.main,
+                        color: theme.palette.primary.contrastText,
+                        fontWeight: 600,
+                        textDecoration: "none",
+                        zIndex: theme.zIndex.modal + 1,
+                        transition: "transform 0.2s ease, box-shadow 0.2s ease",
+                        boxShadow: "none",
+                        outline: "none",
+                    },
+                    ".skip-link:focus, .skip-link:focus-visible": {
+                        transform: "translate(-50%, 0)",
+                        boxShadow: `0 8px 24px ${alpha(theme.palette.primary.main, 0.25)}`,
+                    },
+                })}
+            />
+            <a className="skip-link" href="#main-content">
+                Skip to content
+            </a>
+            <NotificationToasterWrapper />
+            <Box sx={{ display: 'flex', width: '100%', minHeight: '100vh' }}>
                 <CssBaseline />
-                {!isVideoCallPage && (<AppBar
-                    position="fixed"
-                    elevation={0}
+                {!isVideoCallPage && (
+                    <>
+                        <Drawer
+                            variant="temporary"
+                            open={mobileOpen}
+                            onClose={closeDrawer}
+                            ModalProps={{
+                                keepMounted: true,
+                                slotProps: {
+                                    backdrop: {
+                                        sx: {
+                                            backgroundColor: "rgba(15, 23, 42, 0.45)",
+                                        },
+                                    },
+                                },
+                            }}
+                            sx={{
+                                display: { xs: "block", lg: "none" },
+                                "& .MuiDrawer-paper": {
+                                    boxSizing: "border-box",
+                                    width: drawerWidth,
+                                    transform: mobileOpen ? "translateX(0)" : "translateX(-100%)",
+                                    transition: theme.transitions.create("transform", {
+                                        easing: mobileOpen
+                                            ? theme.transitions.easing.easeOut
+                                            : theme.transitions.easing.sharp,
+                                        duration: mobileOpen
+                                            ? theme.transitions.duration.enteringScreen
+                                            : theme.transitions.duration.leavingScreen,
+                                    }),
+                                },
+                            }}
+                        >
+                            <FocusTrap
+                                active={mobileOpen && isLgDown}
+                                focusTrapOptions={{
+                                    clickOutsideDeactivates: true,
+                                    escapeDeactivates: true,
+                                    returnFocusOnDeactivate: false,
+                                    onDeactivate: () => {
+                                        menuButtonRef.current?.focus();
+                                    },
+                                }}
+                            >
+                                <Box role="presentation" sx={{ height: "100%", outline: "none" }}>
+                                    {drawer}
+                                </Box>
+                            </FocusTrap>
+                        </Drawer>
+
+                        <Drawer
+                            variant="permanent"
+                            sx={{
+                                display: { xs: "none", lg: "block" },
+                                width: drawerWidth,
+                                flexShrink: 0,
+                                "& .MuiDrawer-paper": { boxSizing: "border-box", width: drawerWidth },
+                            }}
+                            open
+                        >
+                            {drawer}
+                        </Drawer>
+                    </>
+                )}
+
+                <Box
                     sx={{
-                        width: isVideoCallPage ? '100%' : { md: `calc(100% - ${drawerWidth}px)` },
-                        ml: isVideoCallPage ? 0 : { md: `${drawerWidth}px` },
-                        backgroundColor: "rgba(255, 255, 255, 0.95)",
-                        backdropFilter: "blur(10px)",
-                        color: "text.primary",
-                        borderBottom: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
-                        zIndex: 1201,
+                        flexGrow: 1,
+                        minWidth: 0,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        position: 'relative',
                     }}
                 >
-                    <Toolbar sx={{ display: "flex", justifyContent: "space-between", py: 1 }}>
+                    {!isVideoCallPage && (
+                        <Box
+                            component="header"
+                            sx={{
+                                position: 'sticky',
+                                top: 0,
+                                zIndex: theme.zIndex.drawer + 1,
+                                backgroundColor: scrolled ? alpha(theme.palette.background.paper, 0.85) : 'transparent',
+                                backdropFilter: scrolled ? 'blur(12px)' : 'none',
+                                borderBottom: scrolled ? `1px solid ${alpha(theme.palette.divider, 0.4)}` : '1px solid transparent',
+                                boxShadow: scrolled ? '0 12px 32px rgba(15, 23, 42, 0.08)' : 'none',
+                                transition: 'background-color 0.3s ease, box-shadow 0.3s ease, backdrop-filter 0.3s ease, border-color 0.3s ease',
+                            }}
+                        >
+                            <AppBar
+                                position="sticky"
+                                elevation={0}
+                                color="transparent"
+                                sx={{
+                                    boxShadow: 'none',
+                                    backgroundColor: 'transparent',
+                                    backgroundImage: 'none',
+                                    color: 'text.primary',
+                                    width: '100%',
+                                }}
+                            >
+                                <Toolbar sx={{ display: "flex", justifyContent: "space-between", py: 0.75, px: { xs: 2, sm: 3 } }}>
                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
                             {!isVideoCallPage && (
                                 <IconButton
+                                    ref={menuButtonRef}
                                     color="inherit"
                                     edge="start"
+                                    aria-controls="primary-navigation"
+                                    aria-label="Toggle navigation"
+                                    aria-expanded={mobileOpen}
                                     onClick={handleDrawerToggle}
                                     sx={{
                                         mr: 2,
-                                        display: { md: "none" },
+                                        display: { xs: 'inline-flex', lg: 'none' },
                                         color: 'primary.main'
                                     }}
                                 >
@@ -789,148 +957,128 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                             </Box>
                         </Box>
                     </Toolbar>
-                </AppBar>)}
+                </AppBar>
+            </Box>
+        )}
 
-                {!isVideoCallPage && (
-                    <>
-                        <Drawer
-                            variant="temporary"
-                            open={mobileOpen}
-                            onClose={handleDrawerToggle}
-                            ModalProps={{ keepMounted: true }}
-                            sx={{
-                                display: { xs: "block", md: "none" },
-                                "& .MuiDrawer-paper": {
-                                    boxSizing: "border-box",
-                                    width: drawerWidth,
-                                    top: (theme) => theme.mixins.toolbar.minHeight,
-                                    height: (theme) => `calc(100% - ${theme.mixins.toolbar.minHeight}px)`,
-                                    position: 'fixed'
-                                },
-                            }}
-                        >
-                            {drawer}
-                        </Drawer>
-
-                        <Drawer
-                            variant="permanent"
-                            sx={{
-                                display: { xs: "none", md: "block" },
-                                width: drawerWidth,
-                                flexShrink: 0,
-                                "& .MuiDrawer-paper": { boxSizing: "border-box", width: drawerWidth },
-                            }}
-                            open
-                        >
-                            {drawer}
-                        </Drawer>
-                    </>
-                )}
-
-                <Box
-                    component="main"
-                    sx={{
-                        flexGrow: 1,
-                        display: "flex",
-                        flexDirection: "column",
-                        minWidth: 0,
-                        minHeight: 0,
-                        pt: isMobile ? `${theme.mixins.toolbar.minHeight}px` : isVideoCallPage ? '0' : '64px',
-                        background: `linear-gradient(180deg, ${alpha(theme.palette.background.default, 0.8)} 0%, ${alpha(theme.palette.background.default, 1)} 100%)`,
-                        position: 'relative',
-                        width: isVideoCallPage ? '100%' : 'auto',
-                        overflowY: 'auto',
-                        overflowX: 'hidden',
-                        overscrollBehaviorY: 'contain',
-                        '&::before': {
-                            content: '""',
-                            position: 'absolute',
-                            top: -100,
-                            right: -100,
-                            width: 300,
-                            height: 300,
-                            borderRadius: '50%',
-                            background: `radial-gradient(circle, ${alpha(theme.palette.primary.light, 0.08)} 0%, ${alpha(theme.palette.primary.light, 0)} 70%)`,
-                            zIndex: 0,
-                        },
-                        '&::after': {
-                            content: '""',
-                            position: 'absolute',
-                            bottom: -100,
-                            left: -100,
-                            width: 300,
-                            height: 300,
-                            borderRadius: '50%',
-                            background: `radial-gradient(circle, ${alpha(theme.palette.secondary.light, 0.08)} 0%, ${alpha(theme.palette.secondary.light, 0)} 70%)`,
-                            zIndex: 0,
-                        },
-                    }}
-                >
-                    {/* Logout Confirmation Dialog */}
-                    <Dialog
-                        open={isDialogOpen}
-                        onClose={closeDialog}
-                        PaperProps={{
-                            elevation: 3,
-                            sx: {
-                                borderRadius: 3,
-                                overflow: 'hidden'
-                            }
-                        }}
-                    >
-                        <DialogTitle sx={{
-                            py: 2.5,
-                            px: 3,
-                            bgcolor: alpha(theme.palette.error.main, 0.05),
-                            borderBottom: `1px solid ${theme.palette.divider}`
-                        }}>
-                            <Typography variant="h6" fontWeight={600}>Confirm Logout</Typography>
-                        </DialogTitle>
-                        <DialogContent sx={{ py: 3, px: 3 }}>
-                            <Typography variant="body1">
-                                Are you sure you want to log out of your account?
-                            </Typography>
-                        </DialogContent>
-                        <DialogActions sx={{ px: 3, py: 2, borderTop: `1px solid ${theme.palette.divider}` }}>
-                            <Button
-                                onClick={closeDialog}
-                                variant="outlined"
-                                sx={{
-                                    borderRadius: 2,
-                                    px: 3
-                                }}
-                            >
-                                Cancel
-                            </Button>
-                            <Button
-                                onClick={handleLogout}
-                                variant="contained"
-                                color="error"
-                                sx={{
-                                    borderRadius: 2,
-                                    px: 3
-                                }}
-                            >
-                                Logout
-                            </Button>
-                        </DialogActions>
-                    </Dialog>
-
-                    {/* Main Content Wrapper */}
-                    <Box
-                        component={motion.div}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ duration: 0.5 }}
+                    <Box component="main"
+                        id="main-content"
+                        tabIndex={-1}
                         sx={{
-                            position: 'relative',
-                            zIndex: 1,
                             flexGrow: 1,
-                            minHeight: 0,
+                            display: "flex",
+                            flexDirection: "column",
+                            minWidth: 0,
+                            minHeight: '100vh',
+                            background: `linear-gradient(180deg, ${alpha(theme.palette.background.default, 0.8)} 0%, ${alpha(theme.palette.background.default, 1)} 100%)`,
+                            position: 'relative',
+                            width: '100%',
                             overflow: 'visible',
+                            px: { xs: 2, sm: 3, md: 4, lg: 5 },
+                            pb: { xs: 8, md: 10 },
+                            scrollMarginTop: theme.spacing(12),
+                            '&::before': {
+                                content: '""',
+                                position: 'absolute',
+                                top: -100,
+                                right: -100,
+                                width: 300,
+                                height: 300,
+                                borderRadius: '50%',
+                                background: `radial-gradient(circle, ${alpha(theme.palette.primary.light, 0.08)} 0%, ${alpha(theme.palette.primary.light, 0)} 70%)`,
+                                zIndex: 0,
+                            },
+                            '&::after': {
+                                content: '""',
+                                position: 'absolute',
+                                bottom: -100,
+                                left: -100,
+                                width: 300,
+                                height: 300,
+                                borderRadius: '50%',
+                                background: `radial-gradient(circle, ${alpha(theme.palette.secondary.light, 0.08)} 0%, ${alpha(theme.palette.secondary.light, 0)} 70%)`,
+                                zIndex: 0,
+                            },
                         }}
                     >
-                        {children}
+                        {/* Logout Confirmation Dialog */}
+                        <Dialog
+                            open={isDialogOpen}
+                            onClose={closeDialog}
+                            PaperProps={{
+                                elevation: 3,
+                                sx: {
+                                    borderRadius: 3,
+                                    overflow: 'hidden'
+                                }
+                            }}
+                        >
+                            <DialogTitle sx={{
+                                py: 2.5,
+                                px: 3,
+                                bgcolor: alpha(theme.palette.error.main, 0.05),
+                                borderBottom: `1px solid ${theme.palette.divider}`
+                            }}>
+                                <Typography variant="h6" fontWeight={600}>Confirm Logout</Typography>
+                            </DialogTitle>
+                            <DialogContent sx={{ py: 3, px: 3 }}>
+                                <Typography variant="body1">
+                                    Are you sure you want to log out of your account?
+                                </Typography>
+                            </DialogContent>
+                            <DialogActions sx={{ px: 3, py: 2, borderTop: `1px solid ${theme.palette.divider}` }}>
+                                <Button
+                                    onClick={closeDialog}
+                                    variant="outlined"
+                                    sx={{
+                                        borderRadius: 2,
+                                        px: 3
+                                    }}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    onClick={handleLogout}
+                                    variant="contained"
+                                    color="error"
+                                    sx={{
+                                        borderRadius: 2,
+                                        px: 3
+                                    }}
+                                >
+                                    Logout
+                                </Button>
+                            </DialogActions>
+                        </Dialog>
+
+                        {/* Main Content Wrapper */}
+                        {pageHeaderElements.length > 0 && (
+                            <Box
+                                sx={{
+                                    position: 'relative',
+                                    zIndex: 1,
+                                    width: '100%',
+                                }}
+                            >
+                                {pageHeaderElements}
+                            </Box>
+                        )}
+
+                        <Box
+                            component={motion.div}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ duration: 0.5 }}
+                            sx={{
+                                position: 'relative',
+                                zIndex: 1,
+                                flexGrow: 1,
+                                minHeight: 0,
+                                overflow: 'visible',
+                            }}
+                        >
+                            {mainContentElements}
+                        </Box>
                     </Box>
                 </Box>
             </Box>

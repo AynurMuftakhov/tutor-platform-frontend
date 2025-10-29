@@ -45,6 +45,7 @@ import type {
 } from '../../types';
 import ListeningAudioGenerationPanel from '../listening/ListeningAudioGenerationPanel';
 import { ENGLISH_LEVELS } from '../../types/ENGLISH_LEVELS';
+import StickyActionBar from '../StickyActionBar/StickyActionBar';
 
 export interface HomeworkComposerDrawerProps {
   open: boolean;
@@ -691,7 +692,7 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
         </Box>
 
         {/* Content */}
-        <Box sx={{ flex: 1, overflowY: 'auto', px: 2, pb: 10 /* space for sticky bar */ }}>
+        <Box sx={{ flex: 1, overflowY: 'auto', px: 2, pb: 'var(--space-64, 64px)' }}>
           {/* Assignment card */}
           <Paper variant="outlined" sx={{ p: 2.5, mb: 2 }}>
             <Typography variant="h6" sx={{ mb: 2 }}>Assignment</Typography>
@@ -995,13 +996,13 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
         </Box>
 
         {/* Sticky action bar */}
-        <Paper variant="outlined" square sx={{ position: 'sticky', bottom: 0, p: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: 0 }}>
+        <StickyActionBar sx={{ justifyContent: 'space-between' }}>
           <Stack direction="row" gap={1}>
             <Button onClick={onClose} color="inherit">Cancel</Button>
             <Button onClick={() => submit(true)} disabled={!isValid || create.isPending}>Create & open</Button>
           </Stack>
           <Button variant="contained" onClick={() => submit(false)} disabled={!isValid || create.isPending}>Create</Button>
-        </Paper>
+        </StickyActionBar>
       </Box>
 
       <VocabularyPickerDialog

@@ -28,8 +28,9 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import ScheduleIcon from '@mui/icons-material/Schedule';
 import dayjs from 'dayjs';
-import { Student } from '../pages/MyStudentsPage';
+import { Student } from '../features/students/types';
 import { useAuth } from '../context/AuthContext';
+import StickyActionBar from './StickyActionBar/StickyActionBar';
 
 // Slide transition for mobile dialog
 const Transition = React.forwardRef(function Transition(
@@ -148,7 +149,7 @@ const LessonDetailPanel: React.FC<LessonDetailPanelProps> = ({
                 />
             </Box>
 
-            <Stack spacing={3}>
+            <Stack spacing={3} sx={{ pb: 'var(--space-64, 64px)' }}>
                 {/* Student Info */}
                 <Paper 
                     elevation={0} 
@@ -310,44 +311,33 @@ const LessonDetailPanel: React.FC<LessonDetailPanelProps> = ({
 
             {/* Action Buttons */}
             {user?.role === 'tutor' && (
-                <Box sx={{ 
-                    display: 'flex', 
-                    justifyContent: 'flex-end', 
-                    gap: 2, 
-                    mt: 4,
-                    position: 'sticky',
-                    bottom: 0,
-                    pb: 2,
-                    pt: 2,
-                    backgroundColor: theme.palette.background.paper,
-                    borderTop: `1px solid ${theme.palette.divider}`,
-                    zIndex: 1,
-                }}
-                component={motion.div}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: 0.4 }}
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, delay: 0.4 }}
                 >
-                    <Tooltip title="Delete Lesson">
-                        <Button 
-                            variant="outlined" 
-                            color="error" 
-                            startIcon={<DeleteIcon />}
-                            onClick={onDelete}
-                        >
-                            Delete
-                        </Button>
-                    </Tooltip>
-                    <Tooltip title="Edit Lesson">
-                        <Button 
-                            variant="contained" 
-                            startIcon={<EditIcon />}
-                            onClick={onEdit}
-                        >
-                            Edit
-                        </Button>
-                    </Tooltip>
-                </Box>
+                    <StickyActionBar sx={{ gap: 2, mt: 4 }}>
+                        <Tooltip title="Delete Lesson">
+                            <Button
+                                variant="outlined"
+                                color="error"
+                                startIcon={<DeleteIcon />}
+                                onClick={onDelete}
+                            >
+                                Delete
+                            </Button>
+                        </Tooltip>
+                        <Tooltip title="Edit Lesson">
+                            <Button
+                                variant="contained"
+                                startIcon={<EditIcon />}
+                                onClick={onEdit}
+                            >
+                                Edit
+                            </Button>
+                        </Tooltip>
+                    </StickyActionBar>
+                </motion.div>
             )}
         </Box>
     );

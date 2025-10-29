@@ -1,3 +1,25 @@
+html,
+body,
+#root {
+  min-height: 100%;
+  background-color: var(--color-surface-alt);
+  scroll-behavior: smooth;
+}
+
+.skip-link {
+  position: absolute;
+  left: 50%;
+  transform: translate(-50%, -200%);
+  top: 1rem;
+  z-index: 999;
+  display: inline-block;
+}
+
+.skip-link:focus,
+.skip-link:focus-visible {
+  transform: translate(-50%, 0);
+}
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
