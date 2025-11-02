@@ -1,20 +1,20 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
     Box,
-    Button,
     Divider,
-    Drawer,
+    IconButton,
     Paper,
     Tab,
     Tabs,
-    Typography,
-    useMediaQuery,
-    useTheme
+    Typography
 } from '@mui/material';
 import NoteAltOutlinedIcon from '@mui/icons-material/NoteAltOutlined';
+import CloseIcon from '@mui/icons-material/Close';
+import type { DailyCall } from '@daily-co/daily-js';
 import type { LessonNoteFormat } from '../../../types/lessonNotes';
 import CurrentLessonNote, { LessonNoteStatus } from './CurrentLessonNote';
 import PreviousLessonNotesTab from './PreviousLessonNotesTab';
+import type { NotesDataMode, NotesUIMode } from '../utils/modeSelectors';
 
 type NotesTab = 'current' | 'previous';
 
@@ -24,14 +24,15 @@ interface LessonNotesPanelProps {
     studentId?: string;
     teacherId?: string;
     canEdit: boolean;
+    uiMode?: NotesUIMode;
+    dataMode?: NotesDataMode;
+    call?: DailyCall | null;
+    senderId?: string;
     initialTab?: NotesTab;
     initialPreviousLessonId?: string;
     onTabChange?: (tab: NotesTab) => void;
     onSelectPreviousLesson?: (lessonId: string | null) => void;
     pollIntervalMs?: number;
-    incomingSoftSync?: { content: string; format: LessonNoteFormat; updatedAt?: string };
-    onBroadcastSoftSync?: (payload: { content: string; format: LessonNoteFormat }) => void;
-    forceInline?: boolean;
     hideContainerChrome?: boolean;
     controlledFormat?: {
         value: LessonNoteFormat;
@@ -42,9 +43,7 @@ interface LessonNotesPanelProps {
     onStatusChange?: (status: LessonNoteStatus) => void;
     activeTabOverride?: NotesTab;
     showPreviousTab?: boolean;
-    mobileOpen?: boolean;
-    onMobileOpen?: () => void;
-    onMobileClose?: () => void;
+    onClose?: () => void;
 }
 
 const tabIndex = (tab: NotesTab) => (tab === 'current' ? 0 : 1);
@@ -55,14 +54,15 @@ const LessonNotesPanel: React.FC<LessonNotesPanelProps> = ({
     studentId,
     teacherId,
     canEdit,
+    uiMode = 'docked-side',
+    dataMode = 'offline',
+    call,
+    senderId,
     initialTab = 'current',
     initialPreviousLessonId,
     onTabChange,
     onSelectPreviousLesson,
     pollIntervalMs,
-    incomingSoftSync,
-    onBroadcastSoftSync,
-    forceInline = false,
     hideContainerChrome = false,
     controlledFormat,
     hideFormatControl = false,
@@ -70,17 +70,9 @@ const LessonNotesPanel: React.FC<LessonNotesPanelProps> = ({
     onStatusChange,
     activeTabOverride,
     showPreviousTab = true,
-    mobileOpen: mobileOpenProp,
-    onMobileOpen,
-    onMobileClose
+    onClose
 }) => {
-    const theme = useTheme();
-    const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-    const useSheet = !forceInline && isMobile;
     const [activeTab, setActiveTab] = useState<NotesTab>(initialTab);
-    const isMobileControlled = typeof mobileOpenProp === 'boolean';
-    const [internalMobileOpen, setInternalMobileOpen] = useState<boolean>(() => (useSheet ? initialTab !== 'current' : true));
-    const mobileOpen = isMobileControlled ? (mobileOpenProp as boolean) : internalMobileOpen;
 
     useEffect(() => {
         setActiveTab(showPreviousTab ? initialTab : 'current');
@@ -99,12 +91,6 @@ const LessonNotesPanel: React.FC<LessonNotesPanelProps> = ({
         }
     }, [showPreviousTab]);
 
-    useEffect(() => {
-        if (!useSheet && !isMobileControlled) {
-            setInternalMobileOpen(true);
-        }
-    }, [useSheet, isMobileControlled]);
-
     const handleTabChange = (_event: React.SyntheticEvent, value: number) => {
         const nextTab: NotesTab = value === 0 ? 'current' : 'previous';
         if (!showPreviousTab && nextTab !== 'current') {
@@ -112,23 +98,6 @@ const LessonNotesPanel: React.FC<LessonNotesPanelProps> = ({
         }
         setActiveTab(nextTab);
         onTabChange?.(nextTab);
-    };
-
-    const openMobilePanel = () => {
-        if (isMobileControlled) {
-            onMobileOpen?.();
-        } else {
-            setInternalMobileOpen(true);
-        }
-    };
-
-    const closeMobilePanel = () => {
-        if (!useSheet) return;
-        if (isMobileControlled) {
-            onMobileClose?.();
-        } else {
-            setInternalMobileOpen(false);
-        }
     };
 
     const panelContent = useMemo(() => {
@@ -157,7 +126,7 @@ const LessonNotesPanel: React.FC<LessonNotesPanelProps> = ({
                     sx={{
                         flex: 1,
                         minHeight: 0,
-                        overflow: 'hidden',
+                        overflow: 'auto',
                         display: activeTab === 'current' ? 'flex' : 'none',
                         width: '100%'
                     }}
@@ -165,11 +134,13 @@ const LessonNotesPanel: React.FC<LessonNotesPanelProps> = ({
                     <CurrentLessonNote
                         lessonId={lessonId}
                         lessonTitle={lessonTitle}
-                        isActive={activeTab === 'current' && (useSheet ? mobileOpen : true)}
+                        isActive={activeTab === 'current'}
+                        dataMode={dataMode}
+                        uiMode={uiMode}
+                        call={call}
+                        senderId={senderId}
                         canEdit={canEdit}
                         pollIntervalMs={pollIntervalMs}
-                        incomingSoftSync={incomingSoftSync}
-                        onBroadcastSoftSync={onBroadcastSoftSync}
                         controlledFormat={controlledFormat}
                         hideFormatControl={hideFormatControl}
                         hideStatusChip={hideStatusChip}
@@ -188,7 +159,7 @@ const LessonNotesPanel: React.FC<LessonNotesPanelProps> = ({
                         <PreviousLessonNotesTab
                             studentId={studentId}
                             teacherId={teacherId}
-                            isActive={activeTab === 'previous' && (useSheet ? mobileOpen : true)}
+                            isActive={activeTab === 'previous'}
                             initialLessonId={initialPreviousLessonId}
                             onSelectLesson={onSelectPreviousLesson}
                         />
@@ -202,80 +173,61 @@ const LessonNotesPanel: React.FC<LessonNotesPanelProps> = ({
         lessonTitle,
         canEdit,
         pollIntervalMs,
-        incomingSoftSync,
-        onBroadcastSoftSync,
         studentId,
         teacherId,
         initialPreviousLessonId,
         onSelectPreviousLesson,
-        mobileOpen,
         controlledFormat,
         hideFormatControl,
         hideStatusChip,
         onStatusChange,
         showPreviousTab,
-        useSheet
+        dataMode,
+        uiMode,
+        call,
+        senderId
     ]);
 
-    if (!forceInline && useSheet) {
-        return (
-            <>
-                {!isMobileControlled && (
-                    <Button
-                        variant="contained"
-                        startIcon={<NoteAltOutlinedIcon />}
-                        onClick={openMobilePanel}
-                        fullWidth
-                        sx={{ mt: 2 }}
-                    >
-                        Open notes
-                    </Button>
-                )}
-                <Drawer
-                    anchor="bottom"
-                    open={mobileOpen}
-                    onClose={closeMobilePanel}
-                    PaperProps={{
-                        sx: {
-                            borderTopLeftRadius: 3,
-                            borderTopRightRadius: 3,
-                            height: '80vh',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            boxShadow: theme.shadows[8]
-                        }
-                    }}
-                >
-                    <Box sx={{ py: 1.5 }}>
-                        <Box
-                            sx={{
-                                width: 40,
-                                height: 4,
-                                borderRadius: 999,
-                                backgroundColor: 'divider',
-                                mx: 'auto'
-                            }}
-                            aria-hidden
-                        />
-                    </Box>
-                    <Box sx={{ px: 2, pb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <Typography variant="subtitle1">Lesson Notes</Typography>
-                        <Button onClick={closeMobilePanel} size="small">
-                            Close
-                        </Button>
-                    </Box>
-                    <Divider />
-                    <Box sx={{ flex: 1, overflow: 'hidden' }}>
-                        {panelContent}
-                    </Box>
-                </Drawer>
-            </>
-        );
-    }
+    const containerStyles = useMemo(() => {
+        switch (uiMode) {
+            case 'docked-bottom':
+                return {
+                    borderTop: (theme: any) => `1px solid ${theme.palette.divider}`,
+                    width: '100%',
+                    minHeight: '32vh',
+                    maxHeight: '45vh',
+                    overflow: 'hidden'
+                };
+            case 'docked-side':
+                return {
+                    width: '100%',
+                    maxWidth: 480,
+                    borderLeft: (theme: any) => `1px solid ${theme.palette.divider}`
+                };
+            case 'floating':
+            default:
+                return {
+                    width: '100%'
+                };
+        }
+    }, [uiMode]);
 
     if (hideContainerChrome) {
         return (
-            <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            <Box
+                sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    height: '100%',
+                    width: '100%',
+                    flex: 1,
+                    '& > *': {
+                        flex: 1,
+                        minHeight: 0,
+                        width: '100%'
+                    }
+                }}
+            >
                 {panelContent}
             </Box>
         );
@@ -286,15 +238,26 @@ const LessonNotesPanel: React.FC<LessonNotesPanelProps> = ({
             elevation={1}
             sx={{
                 height: '100%',
-                minHeight: 480,
-                maxWidth: 480,
+                minHeight: 0,
+                borderRadius: 0,
                 display: 'flex',
-                flexDirection: 'column'
+                flexDirection: 'column',
+                border: (theme) => `1px solid ${theme.palette.divider}`,
+                boxShadow: 'none',
+                flex: 1,
+                ...containerStyles
             }}
         >
-            <Box sx={{ px: 2, py: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
-                <NoteAltOutlinedIcon fontSize="small" color="primary" />
-                <Typography variant="subtitle1">Lesson Notes</Typography>
+            <Box sx={{ px: 2, py: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <NoteAltOutlinedIcon fontSize="small" color="primary" />
+                    <Typography variant="subtitle1">Lesson Notes</Typography>
+                </Box>
+                {onClose ? (
+                    <IconButton size="small" aria-label="Close notes panel" onClick={onClose}>
+                        <CloseIcon fontSize="small" />
+                    </IconButton>
+                ) : null}
             </Box>
             <Divider />
             <Box sx={{ flex: 1, overflow: 'hidden' }}>

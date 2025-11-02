@@ -9,8 +9,6 @@ import {
     FormControlLabel,
     Switch,
     Chip,
-    Select,
-    MenuItem,
 } from '@mui/material';
 import type { DailyEventObjectAppMessage } from '@daily-co/daily-js';
 import { useAuth } from '../context/AuthContext';
@@ -39,9 +37,9 @@ import { useQuery } from '@tanstack/react-query';
 import { getLessonById, getLessonContent } from '../services/api';
 import type { PageModel } from '../types/lessonContent';
 import NoteAltOutlinedIcon from '@mui/icons-material/NoteAltOutlined';
-import { FloatingNotesWindow, LessonNotesPanel, useFloatingWindow } from '../features/notes';
+import { FloatingNotesPanel, LessonNotesPanel } from '../features/notes';
 import useNotesOverlaySync from '../features/notes/hooks/useNotesOverlaySync';
-import useNotesSoftSync, { SoftSyncPayload } from '../features/notes/hooks/useNotesSoftSync';
+import { getNotesUIMode } from '../features/notes/utils/modeSelectors';
 import type { LessonNoteFormat } from '../types/lessonNotes';
 import type { LessonNoteStatus } from '../features/notes/components/CurrentLessonNote';
 
@@ -89,17 +87,17 @@ const VideoCallPage: React.FC<VideoCallPageProps> = (props) => {
     // Activity tracking for lessons: join on mount, leave on unmount/hidden
     useEffect(() => {
         if (!roomName) return;
-        try { activityEmitter.emit('lesson_join', '/lesson', { roomName, lessonId }); } catch {}
+        try { activityEmitter.emit('lesson_join', '/lesson', { roomName, lessonId }); } catch {/* no op*/}
         const onVis = () => {
             try {
                 if (document.hidden) activityEmitter.emit('lesson_leave', '/lesson', { reason: 'hidden' });
                 else activityEmitter.emit('lesson_join', '/lesson', { reason: 'visible' });
-            } catch {}
+            } catch {/* no op*/}
         };
         document.addEventListener('visibilitychange', onVis);
         return () => {
             document.removeEventListener('visibilitychange', onVis);
-            try { activityEmitter.emit('lesson_leave', '/lesson', { reason: 'unmount' }); } catch {}
+            try { activityEmitter.emit('lesson_leave', '/lesson', { reason: 'unmount' }); } catch {/* no op*/}
         };
     }, [roomName, lessonId]);
 
@@ -161,34 +159,54 @@ const DailyCallLayout: React.FC<{
     const [workspaceOpen, openWorkspace, closeWorkspace, splitRatio, setSplitRatio] = useWorkspaceToggle();
 
     const theme = useTheme();
-    const isSmallScreen = useMediaQuery(theme.breakpoints.down('md'));
+    const isPhone = useMediaQuery(theme.breakpoints.down('sm'));
+    const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'lg'));
+    const isSmallScreen = isPhone || isTablet;
 
     const notesButtonRef = useRef<HTMLButtonElement | null>(null);
-    const { state: floatingWindowState, setOpen: setFloatingOpen, setMinimized: setFloatingMinimized, setPinned: setFloatingPinned, updateBounds: updateFloatingBounds } = useFloatingWindow(lessonId);
-    const notesOverlayOpen = !isSmallScreen && floatingWindowState.open;
-    const notesOverlayMinimized = floatingWindowState.minimized;
-    const [mobileNotesOpen, setMobileNotesOpen] = useState(false);
+    const [notesVisible, setNotesVisible] = useState(false);
     const [noteStatus, setNoteStatus] = useState<LessonNoteStatus | null>(null);
     const [noteFormat, setNoteFormat] = useState<LessonNoteFormat>('md');
 
+    const notesUIMode = useMemo(() => getNotesUIMode({ isPhone, isTablet }), [isPhone, isTablet]);
+    const [callActive, setCallActive] = useState<boolean>(false);
+    const notesDataMode = callActive ? 'realtime' : 'offline';
+
     const [studentSessionIdForDaily, setStudentSessionIdForDaily] = useState<string | undefined>(undefined);
-    const notesSoftSync = useNotesSoftSync({
-        call: dailyCall,
-        lessonId,
-        enabled: Boolean(dailyCall && lessonId),
-        senderId: user?.id
-    });
-    const [incomingNoteSoftSync, setIncomingNoteSoftSync] = useState<SoftSyncPayload | null>(null);
+
+    useEffect(() => {
+        if (!dailyCall) {
+            setCallActive(false);
+            return;
+        }
+
+        const computeState = () => {
+            try {
+                const state = dailyCall.meetingState?.();
+                setCallActive(state === 'joined-meeting');
+            } catch {
+                setCallActive(false);
+            }
+        };
+
+        const handleJoined = () => setCallActive(true);
+        const handleLeft = () => setCallActive(false);
+
+        computeState();
+
+        dailyCall.on('joined-meeting', handleJoined);
+        dailyCall.on('left-meeting', handleLeft);
+
+        return () => {
+            dailyCall.off('joined-meeting', handleJoined);
+            dailyCall.off('left-meeting', handleLeft);
+        };
+    }, [dailyCall]);
 
     const handleRemoteOverlay = useCallback((open: boolean) => {
         if (isTutor) return;
-        if (isSmallScreen) {
-            setMobileNotesOpen(open);
-        } else {
-            setFloatingOpen(open);
-            if (open) setFloatingMinimized(false);
-        }
-    }, [isTutor, isSmallScreen, setFloatingOpen, setFloatingMinimized]);
+        setNotesVisible(open);
+    }, [isTutor]);
 
     const { broadcastOverlayState } = useNotesOverlaySync({
         call: dailyCall,
@@ -199,60 +217,28 @@ const DailyCallLayout: React.FC<{
     });
 
     useEffect(() => {
-        if (!isSmallScreen) return;
-        if (floatingWindowState.open) {
-            setFloatingOpen(false);
-        }
-        if (floatingWindowState.minimized) {
-            setFloatingMinimized(false);
-        }
-    }, [isSmallScreen, floatingWindowState.open, floatingWindowState.minimized, setFloatingOpen, setFloatingMinimized]);
-
-    const notesActive = isSmallScreen ? mobileNotesOpen : (floatingWindowState.open && !floatingWindowState.minimized);
+        if (!isTutor || !callActive) return;
+        broadcastOverlayState(notesVisible);
+    }, [isTutor, callActive, notesVisible, broadcastOverlayState]);
 
     const handleNotesToggle = useCallback(() => {
-        if (isSmallScreen) {
-            setMobileNotesOpen((prev) => {
-                const next = !prev;
-                if (isTutor) {
-                    broadcastOverlayState(next);
-                }
-                return next;
-            });
-        } else {
-            if (floatingWindowState.open) {
-                if (floatingWindowState.minimized) {
-                    setFloatingMinimized(false);
-                } else {
-                    setFloatingOpen(false);
-                    notesButtonRef.current?.focus();
-                }
-            } else {
-                setFloatingOpen(true);
-                setFloatingMinimized(false);
+        setNotesVisible((prev) => {
+            const next = !prev;
+            if (isTutor) {
+                broadcastOverlayState(next);
             }
-        }
-    }, [isSmallScreen, isTutor, broadcastOverlayState, floatingWindowState.open, floatingWindowState.minimized, setFloatingOpen, setFloatingMinimized]);
+            return next;
+        });
+    }, [broadcastOverlayState, isTutor]);
 
-    const handleNotesShortcut = useCallback(() => {
-        if (isSmallScreen) {
-            setMobileNotesOpen((prev) => {
-                const next = !prev;
-                if (isTutor) {
-                    broadcastOverlayState(next);
-                }
-                return next;
-            });
-        } else {
-            if (floatingWindowState.open && !floatingWindowState.minimized) {
-                setFloatingOpen(false);
-                notesButtonRef.current?.focus();
-            } else {
-                setFloatingOpen(true);
-                setFloatingMinimized(false);
-            }
+    const handleNotesClose = useCallback(() => {
+        setNotesVisible(false);
+        if (isTutor) {
+            broadcastOverlayState(false);
         }
-    }, [isSmallScreen, isTutor, broadcastOverlayState, floatingWindowState.open, floatingWindowState.minimized, setFloatingOpen, setFloatingMinimized]);
+    }, [broadcastOverlayState, isTutor]);
+
+    const notesActive = Boolean(lessonId && notesVisible);
 
     useEffect(() => {
         const handler = (event: KeyboardEvent) => {
@@ -262,23 +248,11 @@ const DailyCallLayout: React.FC<{
                 return;
             }
             event.preventDefault();
-            handleNotesShortcut();
+            handleNotesToggle();
         };
         window.addEventListener('keydown', handler);
         return () => window.removeEventListener('keydown', handler);
-    }, [handleNotesShortcut]);
-
-    useEffect(() => {
-        if (notesSoftSync.incoming) {
-            setIncomingNoteSoftSync(notesSoftSync.incoming);
-            notesSoftSync.resetIncoming();
-        }
-    }, [notesSoftSync.incoming, notesSoftSync.resetIncoming]);
-
-    useEffect(() => {
-        if (!lessonId || !isTutor || isSmallScreen) return;
-        broadcastOverlayState(floatingWindowState.open);
-    }, [broadcastOverlayState, floatingWindowState.open, lessonId, isTutor, isSmallScreen]);
+    }, [handleNotesToggle]);
 
     const workspaceHeader = useMemo(() => {
         if (workspaceView === 'transcription') return 'Live Transcript';
@@ -307,34 +281,6 @@ const DailyCallLayout: React.FC<{
                 : (user?.role === 'tutor' || user?.role === 'student')
         )
     );
-
-    const statusLabel = useMemo(() => {
-        if (!noteStatus) return undefined;
-        if (noteStatus.label) return noteStatus.label;
-        if (noteStatus.isSaving) return 'Saving...';
-        if (noteStatus.offline) return 'Offline';
-        return 'Saved';
-    }, [noteStatus]);
-
-    const statusTone = noteStatus?.tone ?? 'default';
-
-    const formatControl = useMemo(() => {
-        if (isSmallScreen) return null;
-        return (
-            <Select
-                size="small"
-                value={noteFormat}
-                onChange={(event) => setNoteFormat(event.target.value as LessonNoteFormat)}
-                disabled={!canEditNotes}
-                onPointerDown={(e) => e.stopPropagation()}
-                data-fw-action="true"
-                sx={{ minWidth: 120 }}
-            >
-                <MenuItem value="md">Markdown</MenuItem>
-                <MenuItem value="plain">Plain</MenuItem>
-            </Select>
-        );
-    }, [isSmallScreen, noteFormat, canEditNotes]);
 
     const { data: presenterContent, isFetching: isPresenterContentFetching } = useQuery({
         queryKey: ['lesson-content', contentId],
@@ -452,54 +398,80 @@ const DailyCallLayout: React.FC<{
         setTimeout(() => setCopiedDaily(false), 3000);
     }, [generateDirectLinkDaily]);
 
+    // Safe sender: waits for Daily to be joined before sending, to avoid "sendAppMessage() only supported after join" errors
+    const sendDailyMessage = useCallback(async (payload: any) => {
+        if (!dailyCall) return;
+        const state = (dailyCall as any).meetingState?.() ?? undefined;
+        // if already joined — send immediately
+        if (state === 'joined') {
+            try {
+                (dailyCall as any).sendAppMessage?.(payload);
+            } catch (err) {
+                console.warn('Failed to send Daily appMessage (joined path)', err, payload);
+            }
+            return;
+        }
+        // otherwise, wait for a one-time joined event with a timeout
+        await new Promise<void>((resolve) => {
+            let done = false;
+            const onJoined = () => {
+                if (done) return;
+                done = true;
+                try { (dailyCall as any).off?.('joined-meeting', onJoined); } catch {/* no op*/}
+                resolve();
+            };
+            try { (dailyCall as any).on?.('joined-meeting', onJoined); } catch {/* no op*/}
+            // timeout safety (3s)
+            setTimeout(() => {
+                if (done) return;
+                done = true;
+                try { (dailyCall as any).off?.('joined-meeting', onJoined); } catch {/* no op*/}
+                resolve();
+            }, 3000);
+        });
+        try {
+            (dailyCall as any).sendAppMessage?.(payload);
+        } catch (err) {
+            console.warn('Failed to send Daily appMessage after waiting for join', err, payload);
+        }
+    }, [dailyCall]);
+
     const sendStudentPanelState = useCallback(
         (open: boolean, tabOverride?: number) => {
             if (!dailyCall || !isTutor) return;
-            try {
-                dailyCall.sendAppMessage({
-                    t: 'STUDENT_PANEL',
-                    open,
-                    tab: tabOverride ?? studentProfileTab,
-                    from: user?.name || 'Teacher',
-                });
-            } catch (err) {
-                console.warn('Failed to share student profile via Daily', err);
-            }
+            sendDailyMessage({
+                t: 'STUDENT_PANEL',
+                open,
+                tab: tabOverride ?? studentProfileTab,
+                from: user?.name || 'Teacher',
+            });
         },
-        [dailyCall, isTutor, studentProfileTab, user?.name],
+        [dailyCall, isTutor, studentProfileTab, user?.name, sendDailyMessage],
     );
 
     const sendContentPanelState = useCallback(
         (open: boolean) => {
             if (!dailyCall || !isTutor) return;
-            try {
-                dailyCall.sendAppMessage({
-                    t: 'CONTENT_PANEL',
-                    open,
-                    from: user?.name || 'Teacher',
-                });
-            } catch (err) {
-                console.warn('Failed to share lesson content via Daily', err);
-            }
+            sendDailyMessage({
+                t: 'CONTENT_PANEL',
+                open,
+                from: user?.name || 'Teacher',
+            });
         },
-        [dailyCall, isTutor, user?.name],
+        [dailyCall, isTutor, user?.name, sendDailyMessage],
     );
 
     // Tutor → Student sync for Live Transcription panel
     const sendTranscriptionPanelState = useCallback(
         (open: boolean) => {
             if (!dailyCall || !isTutor) return;
-            try {
-                dailyCall.sendAppMessage({
-                    t: 'TRANSCRIPTION_PANEL',
-                    open,
-                    from: user?.name || 'Teacher',
-                });
-            } catch (err) {
-                console.warn('Failed to share transcription panel via Daily', err);
-            }
+            sendDailyMessage({
+                t: 'TRANSCRIPTION_PANEL',
+                open,
+                from: user?.name || 'Teacher',
+            });
         },
-        [dailyCall, isTutor, user?.name],
+        [dailyCall, isTutor, user?.name, sendDailyMessage],
     );
 
     const transcriptionShareRef = useRef(false);
@@ -566,7 +538,7 @@ const DailyCallLayout: React.FC<{
             try {
                 // ensure panel opens on Dictionary tab on student first (ordering)
                 sendStudentPanelState(true, TAB_DICTIONARY);
-                dailyCall.sendAppMessage({ t: 'WORD_OPEN', wordId, from: user?.name || 'Teacher' });
+                sendDailyMessage({ t: 'WORD_OPEN', wordId, from: user?.name || 'Teacher' });
             } catch (err) {
                 console.warn('Failed to send WORD_OPEN via Daily', err);
             }
@@ -582,7 +554,7 @@ const DailyCallLayout: React.FC<{
             try {
                 // ensure Homework tab visible on student first (ordering)
                 sendStudentPanelState(true, TAB_HOMEWORK);
-                dailyCall.sendAppMessage({
+                sendDailyMessage({
                     t: 'ASSIGNMENT_OPEN',
                     assignmentId: assignment?.id,
                     taskId: preselectTaskId ?? null,
@@ -599,7 +571,7 @@ const DailyCallLayout: React.FC<{
         if (!dailyCall || !isTutor || !shareStudentProfile) return;
         try {
             sendStudentPanelState(true, TAB_HOMEWORK);
-            dailyCall.sendAppMessage({
+            sendDailyMessage({
                 t: 'ASSIGNMENT_CLOSE',
                 from: user?.name || 'Teacher',
             });
@@ -621,7 +593,7 @@ const DailyCallLayout: React.FC<{
         if (!dailyCall || !isTutor) return;
         if (!shareStudentProfile) return; // keep behavior consistent with sharing toggle
         try {
-            dailyCall.sendAppMessage({ t: 'WORD_CLOSE', from: user?.name || 'Teacher' });
+            sendDailyMessage({ t: 'WORD_CLOSE', from: user?.name || 'Teacher' });
         } catch (err) {
             console.warn('Failed to send WORD_CLOSE via Daily', err);
         }
@@ -631,11 +603,37 @@ const DailyCallLayout: React.FC<{
         if (!dailyCall || !isTutor) return;
         if (!shareStudentProfile) return; // keep behavior consistent with sharing toggle
         try {
-            dailyCall.sendAppMessage({ t: 'WORD_PRONOUNCE', wordId, audioUrl, from: user?.name || 'Teacher' });
+            sendDailyMessage({ t: 'WORD_PRONOUNCE', wordId, audioUrl, from: user?.name || 'Teacher' });
         } catch (err) {
             console.warn('Failed to send WORD_PRONOUNCE via Daily', err);
         }
     }, [dailyCall, isTutor, shareStudentProfile, user?.name]);
+
+    useEffect(() => {
+        if (!lessonId) return;
+        setNotesVisible(false);
+        setShareStudentProfile(false);
+        setShareLessonContent(false);
+        setWorkspaceView('student');
+        closeWorkspace();
+        setSharedProfileOpen(false);
+        setSharedProfileTab(0);
+        setSharedProfileBy(undefined);
+        setSharedContentOpen(false);
+        setSharedContentBy(undefined);
+        if (isTutor) {
+            sendStudentPanelState(false);
+            sendContentPanelState(false);
+            shareTranscriptionPanel(false);
+        }
+    }, [
+        lessonId,
+        closeWorkspace,
+        isTutor,
+        sendStudentPanelState,
+        sendContentPanelState,
+        shareTranscriptionPanel
+    ]);
 
     useEffect(() => {
         if (!dailyCall) return;
@@ -836,6 +834,271 @@ const DailyCallLayout: React.FC<{
         };
     }, [shareTranscriptionPanel]);
 
+    const mySenderId = useMemo(() => {
+        try { return dailyCall?.participants().local?.session_id || user?.id; } catch { return user?.id; }
+    }, [dailyCall, user?.id]);
+
+    const showNotes = Boolean(lessonId && notesVisible);
+    const notesPanelElement = showNotes && lessonId ? (
+        <LessonNotesPanel
+            lessonId={lessonId}
+            lessonTitle={notesLessonTitle}
+            studentId={notesStudentId}
+            teacherId={notesTeacherId}
+            canEdit={canEditNotes}
+            uiMode={notesUIMode}
+            dataMode={notesDataMode}
+            call={notesDataMode === 'realtime' ? dailyCall : null}
+            senderId={mySenderId}
+            initialTab="current"
+            controlledFormat={{ value: noteFormat, onChange: setNoteFormat }}
+            hideStatusChip
+            hideFormatControl
+            hideContainerChrome={notesUIMode === 'floating'}
+            onStatusChange={setNoteStatus}
+            onClose={handleNotesClose}
+        />
+    ) : null;
+
+    const mainStage = (
+        <Box
+            sx={{
+                display: 'grid',
+                gridTemplateColumns: !workspaceOpen || isSmallScreen ? '100%' : `${splitRatio}% 6px 1fr`,
+                gridTemplateRows: '100%',
+                height: '100%'
+            }}
+        >
+            <Box sx={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
+                <RtcHost onLeft={onLeave} />
+            </Box>
+            {workspaceOpen && !isSmallScreen && (
+                <DraggableDivider onDrag={setSplitRatio} />
+            )}
+            {workspaceOpen && (
+                <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', borderLeft: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
+                        <Box>
+                            <Typography variant="overline" sx={{ letterSpacing: 1, color: 'primary.main' }}>{workspaceTagline}</Typography>
+                            <Typography variant="h6" sx={{ fontWeight: 700 }}>{workspaceHeader}</Typography>
+                            {workspaceView === 'student' && !isTutor && sharedProfileBy && (
+                                <Typography variant="caption" color="text.secondary">Shared by {sharedProfileBy}</Typography>
+                            )}
+                            {workspaceView === 'content' && !isTutor && sharedContentBy && (
+                                <Typography variant="caption" color="text.secondary">Shared by {sharedContentBy}</Typography>
+                            )}
+                            {workspaceView === 'content' && isContentOpen && (
+                                <Typography variant="caption" color="text.secondary">
+                                    Section {contentSectionIndex + 1}{contentSections.length ? ` of ${contentSections.length}` : ''}
+                                </Typography>
+                            )}
+                        </Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            {workspaceView === 'student' && (
+                                isTutor ? (
+                                    <>
+                                        <FormControlLabel
+                                            control={<Switch size="small" checked={shareStudentProfile} onChange={(e) => handleStudentShareToggle(e.target.checked)} />}
+                                            label="Show to student"
+                                            sx={{ m: 0, '& .MuiFormControlLabel-label': { fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.6 } }}
+                                        />
+                                        {shareStudentProfile && (<Chip size="small" color="success" label="Sharing" sx={{ fontWeight: 600 }} />)}
+                                    </>
+                                ) : (
+                                    sharedProfileBy ? <Chip size="small" color="primary" variant="outlined" label={`Shared by ${sharedProfileBy}`} sx={{ fontWeight: 600 }} /> : null
+                                )
+                            )}
+                            {workspaceView === 'content' && (
+                                isTutor ? (
+                                    <>
+                                        <FormControlLabel
+                                            control={
+                                                <Switch
+                                                    size="small"
+                                                    checked={shareLessonContent}
+                                                    onChange={(e) => handleContentShareToggle(e.target.checked)}
+                                                    disabled={!isContentOpen}
+                                                />
+                                            }
+                                            label="Show to student"
+                                            sx={{ m: 0, '& .MuiFormControlLabel-label': { fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.6 } }}
+                                        />
+                                        {shareLessonContent && (<Chip size="small" color="success" label="Sharing" sx={{ fontWeight: 600 }} />)}
+                                    </>
+                                ) : (
+                                    sharedContentBy ? <Chip size="small" color="primary" variant="outlined" label={`Shared by ${sharedContentBy}`} sx={{ fontWeight: 600 }} /> : null
+                                )
+                            )}
+                            {workspaceView === 'content' && isContentOpen && (
+                                <Chip size="small" color="primary" variant="outlined" label={`Section ${contentSectionIndex + 1}/${Math.max(contentSections.length, 1)}`} sx={{ fontWeight: 600 }} />
+                            )}
+                            <IconButton
+                                onClick={() => {
+                                    if (workspaceView === 'student') {
+                                        handleStudentDrawerClose();
+                                    }
+                                    if (workspaceView === 'transcription' && isTutor) {
+                                        shareTranscriptionPanel(false);
+                                    }
+                                    if (workspaceView === 'content') {
+                                        if (isTutor && shareLessonContent) {
+                                            handleContentShareToggle(false);
+                                        }
+                                        setWorkspaceView('student');
+                                    } else if (workspaceView === 'transcription') {
+                                        setWorkspaceView('student');
+                                    } else {
+                                        closeWorkspace();
+                                    }
+                                }}
+                                data-fw-action="true"
+                                size="small"
+                            >
+                                <CloseIcon fontSize="small" />
+                            </IconButton>
+                        </Box>
+                    </Box>
+                    <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+                        {workspaceView === 'transcription' && (
+                            <Box sx={{ flex: 1, position: 'relative' }}>
+                                <TranscriptionPanel
+                                    embedded
+                                    call={dailyCall}
+                                    studentSessionId={studentSessionIdForDaily}
+                                    studentId={(isTutor ? studentId : resolvedStudentId) as string | undefined}
+                                    homeworkWords={homeworkWords}
+                                    lessonId={lessonId || undefined}
+                                />
+                            </Box>
+                        )}
+
+                        {workspaceView === 'student' && (
+                            <Box sx={{ flex: 1, overflow: 'auto', p: 1.5 }}>
+                                {(isTutor ? !!studentId : !!resolvedStudentId) ? (
+                                    <StudentPage
+                                        studentIdOverride={(isTutor ? studentId : resolvedStudentId) as string}
+                                        embedded
+                                        hideOverviewTab
+                                        activeTabOverride={isTutor ? studentProfileTab : sharedProfileTab}
+                                        onTabChange={isTutor ? handleStudentProfileTabChange : undefined}
+                                        onWordPronounce={isTutor ? sendWordPronounceToStudent : undefined}
+                                        openWordId={isTutor ? undefined : openWordIdCmd}
+                                        onConsumeOpenWordCommand={isTutor ? sendWordCloseToStudent : consumeWordCommand}
+                                        autoOpenAssignmentId={isTutor ? undefined : openAssignmentIdCmd}
+                                        autoOpenTaskId={isTutor ? undefined : openTaskIdCmd}
+                                        onConsumeOpenAssignmentCommand={isTutor ? undefined : consumeAssignmentCommand}
+                                        onWordOpen={isTutor ? sendWordOpenToStudent : undefined}
+                                        onEmbeddedAssignmentOpen={isTutor ? sendAssignmentOpenToStudent : undefined}
+                                        onEmbeddedAssignmentClose={isTutor ? sendAssignmentCloseToStudent : undefined}
+                                        closeEmbeddedAssignment={isTutor ? undefined : closeAssignmentCmd}
+                                        onConsumeCloseEmbeddedAssignment={isTutor ? undefined : consumeCloseAssignmentCommand}
+                                    />
+                                ) : (
+                                    <Box sx={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <Typography color="text.secondary">No student selected.</Typography>
+                                    </Box>
+                                )}
+                            </Box>
+                        )}
+
+                        {workspaceView === 'content' && (
+                            <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                                {isTutor && (
+                                    <Box sx={{ p: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
+                                        <OpenCompositionButton onOpen={handleContentSelection} />
+                                    </Box>
+                                )}
+                                {isTutor && isContentOpen && (
+                                    <PresenterBar
+                                        content={{ id: contentSync.state.contentId as string, title: contentSync.state.title }}
+                                        onPrevSection={handlePrevSection}
+                                        onNextSection={handleNextSection}
+                                        onLockToggle={handleContentLockToggle}
+                                        locked={!!contentSync.state.locked}
+                                        onEnd={handleContentEnd}
+                                        onFocus={handleContentFocus}
+                                    />
+                                )}
+                                <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+                                    {isPresenterContentFetching && (
+                                        <Box sx={{ p: 2 }}>
+                                            <Typography variant="body2" color="text.secondary">Loading content…</Typography>
+                                        </Box>
+                                    )}
+                                    {isContentOpen ? (
+                                        <SyncedContentView
+                                            contentId={contentSync.state.contentId as string}
+                                            focusBlockId={contentSync.state.focusBlockId}
+                                            locked={!!contentSync.state.locked && !isTutor}
+                                            contentSync={{ call: dailyCall, isTutor, contentId: contentSync.state.contentId as string, controller: contentSync }}
+                                        />
+                                    ) : (!isTutor && contentSync.state.open ? null : (
+                                        <Box sx={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', p: 3 }}>
+                                            <Typography color="text.secondary">
+                                                {isTutor ? 'Select lesson materials to present.' : 'Waiting for the teacher to start the presentation.'}
+                                            </Typography>
+                                        </Box>
+                                    ))}
+                                </Box>
+                            </Box>
+                        )}
+                    </Box>
+                </Box>
+            )}
+        </Box>
+    );
+
+    let callAndNotesLayout: React.ReactNode;
+    if (!lessonId) {
+        callAndNotesLayout = mainStage;
+    } else if (notesUIMode === 'docked-bottom') {
+        callAndNotesLayout = (
+            <Box sx={{ display: 'grid', gridTemplateRows: '1fr minmax(32vh, 45vh)', height: '100%' }}>
+                <Box sx={{ minHeight: 0, overflow: 'hidden' }}>{mainStage}</Box>
+                {notesPanelElement ? (
+                    <Box
+                        sx={{
+                            minHeight: 0,
+                            borderTop: (theme) => `1px solid ${theme.palette.divider}`,
+                            backgroundColor: 'background.paper',
+                            paddingBottom: 'env(safe-area-inset-bottom)'
+                        }}
+                    >
+                        {notesPanelElement}
+                    </Box>
+                ) : null}
+            </Box>
+        );
+    } else if (notesUIMode === 'docked-side') {
+        callAndNotesLayout = (
+            <Box
+                sx={{
+                    display: 'grid',
+                    gridTemplateColumns: notesPanelElement ? '1fr minmax(420px, 480px)' : '1fr',
+                    height: '100%'
+                }}
+            >
+                <Box sx={{ minWidth: 0, minHeight: 0, overflow: 'hidden' }}>{mainStage}</Box>
+                {notesPanelElement ? (
+                    <Box sx={{ minHeight: 0, backgroundColor: 'background.paper', borderLeft: (theme) => `1px solid ${theme.palette.divider}` }}>
+                        {notesPanelElement}
+                    </Box>
+                ) : null}
+            </Box>
+        );
+    } else {
+        callAndNotesLayout = (
+            <>
+                {mainStage}
+                {notesPanelElement && lessonId ? (
+                    <FloatingNotesPanel lessonId={lessonId} onClose={handleNotesClose}>
+                        {notesPanelElement}
+                    </FloatingNotesPanel>
+                ) : null}
+            </>
+        );
+    }
+
     return (
         <Box sx={{ width: '100%', height: '100vh', overflow: 'hidden', position: 'relative' }}>
             {!!failureMessage && (
@@ -993,240 +1256,7 @@ const DailyCallLayout: React.FC<{
                 </IconButton>
             </Tooltip>
 
-
-            <Box sx={{ display: 'grid', gridTemplateColumns: !workspaceOpen || isSmallScreen ? '100%' : `${splitRatio}% 6px 1fr`, gridTemplateRows: '100%', height: '100%' }}>
-                            <Box sx={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
-                                <RtcHost onLeft={onLeave} />
-                            </Box>
-                            {workspaceOpen && !isSmallScreen && (
-                                <DraggableDivider onDrag={setSplitRatio} />
-                            )}
-                            {workspaceOpen && (
-                                <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', borderLeft: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
-                                        <Box>
-                                            <Typography variant="overline" sx={{ letterSpacing: 1, color: 'primary.main' }}>{workspaceTagline}</Typography>
-                                            <Typography variant="h6" sx={{ fontWeight: 700 }}>{workspaceHeader}</Typography>
-                                            {workspaceView === 'student' && !isTutor && sharedProfileBy && (
-                                                <Typography variant="caption" color="text.secondary">Shared by {sharedProfileBy}</Typography>
-                                            )}
-                                            {workspaceView === 'content' && !isTutor && sharedContentBy && (
-                                                <Typography variant="caption" color="text.secondary">Shared by {sharedContentBy}</Typography>
-                                            )}
-                                            {workspaceView === 'content' && isContentOpen && (
-                                                <Typography variant="caption" color="text.secondary">
-                                                    Section {contentSectionIndex + 1}{contentSections.length ? ` of ${contentSections.length}` : ''}
-                                                </Typography>
-                                            )}
-                                        </Box>
-                                        <Box sx={{ display:'flex', alignItems:'center', gap:1 }}>
-                                            {workspaceView === 'student' && (
-                                                isTutor ? (
-                                                    <>
-                                                        <FormControlLabel
-                                                            control={<Switch size="small" checked={shareStudentProfile} onChange={(e)=>handleStudentShareToggle(e.target.checked)} />}
-                                                            label="Show to student"
-                                                            sx={{ m:0, '& .MuiFormControlLabel-label': { fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.6 } }}
-                                                        />
-                                                        {shareStudentProfile && (<Chip size="small" color="success" label="Sharing" sx={{ fontWeight: 600 }} />)}
-                                                    </>
-                                                ) : (
-                                                    sharedProfileBy ? <Chip size="small" color="primary" variant="outlined" label={`Shared by ${sharedProfileBy}`} sx={{ fontWeight: 600 }} /> : null
-                                                )
-                                            )}
-                                            {workspaceView === 'content' && (
-                                                isTutor ? (
-                                                    <>
-                                                        <FormControlLabel
-                                                            control={
-                                                                <Switch
-                                                                    size="small"
-                                                                    checked={shareLessonContent}
-                                                                    onChange={(e) => handleContentShareToggle(e.target.checked)}
-                                                                    disabled={!isContentOpen}
-                                                                />
-                                                            }
-                                                            label="Show to student"
-                                                            sx={{ m:0, '& .MuiFormControlLabel-label': { fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.6 } }}
-                                                        />
-                                                        {shareLessonContent && (<Chip size="small" color="success" label="Sharing" sx={{ fontWeight: 600 }} />)}
-                                                    </>
-                                                ) : (
-                                                    sharedContentBy ? <Chip size="small" color="primary" variant="outlined" label={`Shared by ${sharedContentBy}`} sx={{ fontWeight: 600 }} /> : null
-                                                )
-                                            )}
-                                            {workspaceView === 'content' && isContentOpen && (
-                                                <Chip size="small" color="primary" variant="outlined" label={`Section ${contentSectionIndex + 1}/${Math.max(contentSections.length, 1)}`} sx={{ fontWeight: 600 }} />
-                                            )}
-                                            <IconButton
-                                                onClick={() => {
-                                                    if (workspaceView === 'student') {
-                                                        handleStudentDrawerClose();
-                                                    }
-                                                    if (workspaceView === 'transcription' && isTutor) {
-                                                        shareTranscriptionPanel(false);
-                                                    }
-                                                    if (workspaceView === 'content') {
-                                                        if (isTutor && shareLessonContent) {
-                                                            handleContentShareToggle(false);
-                                                        }
-                                                        if (!isTutor && sharedContentOpen) {
-                                                            return;
-                                                        }
-                                                    }
-                                                    closeWorkspace();
-                                                }}
-                                                size="small"
-                                                disabled={workspaceView === 'content' && !isTutor && sharedContentOpen}
-                                            >
-                                                <CloseIcon />
-                                            </IconButton>
-                                        </Box>
-                                    </Box>
-
-                                    {workspaceView === 'transcription' && (
-                                        <Box sx={{ flex:1, overflow:'auto' }}>
-                                            <TranscriptionPanel
-                                                embedded
-                                                call={dailyCall}
-                                                studentSessionId={studentSessionIdForDaily}
-                                                studentId={(isTutor ? studentId : resolvedStudentId) as string | undefined}
-                                                homeworkWords={homeworkWords}
-                                                lessonId={lessonId || undefined}
-                                            />
-                                        </Box>
-                                    )}
-
-                                    {workspaceView === 'student' && (
-                                        <Box sx={{ flex:1, overflow:'auto', p: 1.5 }}>
-                                            {(isTutor ? !!studentId : !!resolvedStudentId) ? (
-                                                <StudentPage
-                                                    studentIdOverride={(isTutor ? studentId : resolvedStudentId) as string}
-                                                    embedded
-                                                    hideOverviewTab
-                                                    activeTabOverride={isTutor ? studentProfileTab : sharedProfileTab}
-                                                    onTabChange={isTutor ? handleStudentProfileTabChange : undefined}
-                                                    onWordPronounce={isTutor ? sendWordPronounceToStudent : undefined}
-                                                    openWordId={isTutor ? undefined : openWordIdCmd}
-                                                    onConsumeOpenWordCommand={isTutor ? sendWordCloseToStudent : consumeWordCommand}
-                                                    autoOpenAssignmentId={isTutor ? undefined : openAssignmentIdCmd}
-                                                    autoOpenTaskId={isTutor ? undefined : openTaskIdCmd}
-                                                    onConsumeOpenAssignmentCommand={isTutor ? undefined : consumeAssignmentCommand}
-                                                    onWordOpen={isTutor ? sendWordOpenToStudent : undefined}
-                                                    onEmbeddedAssignmentOpen={isTutor ? sendAssignmentOpenToStudent : undefined}
-                                                    onEmbeddedAssignmentClose={isTutor ? sendAssignmentCloseToStudent : undefined}
-                                                    closeEmbeddedAssignment={isTutor ? undefined : closeAssignmentCmd}
-                                                    onConsumeCloseEmbeddedAssignment={isTutor ? undefined : consumeCloseAssignmentCommand}
-                                                />
-                                            ) : (
-                                                <Box sx={{ height:'100%', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                                                    <Typography color="text.secondary">No student selected.</Typography>
-                                                </Box>
-                                            )}
-                                        </Box>
-                                    )}
-
-                                    {workspaceView === 'content' && (
-                                        <Box sx={{ flex:1, minHeight:0, display:'flex', flexDirection:'column' }}>
-                                            {isTutor && (
-                                                <Box sx={{ p: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
-                                                    <OpenCompositionButton onOpen={handleContentSelection} />
-                                                </Box>
-                                            )}
-                                            {isTutor && isContentOpen && (
-                                                <PresenterBar
-                                                    content={{ id: contentSync.state.contentId as string, title: contentSync.state.title }}
-                                                    onPrevSection={handlePrevSection}
-                                                    onNextSection={handleNextSection}
-                                                    onLockToggle={handleContentLockToggle}
-                                                    locked={!!contentSync.state.locked}
-                                                    onEnd={handleContentEnd}
-                                                    onFocus={handleContentFocus}
-                                                />
-                                            )}
-                                            <Box sx={{ flex:1, minHeight: 0, overflow:'auto' }}>
-                                                {isPresenterContentFetching && (
-                                                    <Box sx={{ p: 2 }}>
-                                                        <Typography variant="body2" color="text.secondary">Loading content…</Typography>
-                                                    </Box>
-                                                )}
-                                                {isContentOpen ? (
-                                                    <SyncedContentView
-                                                        contentId={contentSync.state.contentId as string}
-                                                        focusBlockId={contentSync.state.focusBlockId}
-                                                        locked={!!contentSync.state.locked && !isTutor}
-                                                        contentSync={{ call: dailyCall, isTutor, contentId: contentSync.state.contentId as string, controller: contentSync }}
-                                                    />
-                                                ) : (!isTutor && contentSync.state.open ? null : (
-                                                    <Box sx={{ height:'100%', display:'flex', alignItems:'center', justifyContent:'center', p:3 }}>
-                                                        <Typography color="text.secondary">
-                                                            {isTutor ? 'Select lesson materials to present.' : 'Waiting for the teacher to start the presentation.'}
-                                                        </Typography>
-                                                    </Box>
-                                                ))}
-                                            </Box>
-                                        </Box>
-                                    )}
-                                </Box>
-                            )}
-                        </Box>
-
-                        {!isSmallScreen && lessonId && (
-                            <FloatingNotesWindow
-                                open={floatingWindowState.open}
-                                minimized={floatingWindowState.minimized}
-                                pinned={floatingWindowState.pinned}
-                                bounds={floatingWindowState.bounds}
-                                minWidth={360}
-                                minHeight={260}
-                                title="Lesson Notes"
-                                statusLabel={statusLabel}
-                                statusTone={statusTone}
-                                onClose={() => {
-                                    setFloatingOpen(false);
-                                    setFloatingMinimized(false);
-                                    notesButtonRef.current?.focus();
-                                }}
-                                onToggleMinimize={() => setFloatingMinimized(!floatingWindowState.minimized)}
-                                onTogglePin={() => setFloatingPinned(!floatingWindowState.pinned)}
-                                onBoundsChange={updateFloatingBounds}
-                            >
-                                <LessonNotesPanel
-                                    lessonId={lessonId}
-                                    lessonTitle={notesLessonTitle}
-                                    studentId={notesStudentId}
-                                    teacherId={notesTeacherId}
-                                    canEdit={canEditNotes}
-                                    initialTab="current"
-                                    incomingSoftSync={incomingNoteSoftSync ?? undefined}
-                                    onBroadcastSoftSync={notesSoftSync.broadcast}
-                                    forceInline
-                                    hideContainerChrome
-                                    controlledFormat={{ value: noteFormat, onChange: setNoteFormat }}
-                                    hideFormatControl
-                                    hideStatusChip
-                                    onStatusChange={setNoteStatus}
-                                />
-                            </FloatingNotesWindow>
-                        )}
-
-                        {isSmallScreen && lessonId && (
-                            <LessonNotesPanel
-                                lessonId={lessonId}
-                                lessonTitle={notesLessonTitle}
-                                studentId={notesStudentId}
-                                teacherId={notesTeacherId}
-                                canEdit={canEditNotes}
-                                initialTab="current"
-                                incomingSoftSync={incomingNoteSoftSync ?? undefined}
-                                onBroadcastSoftSync={notesSoftSync.broadcast}
-                                controlledFormat={{ value: noteFormat, onChange: setNoteFormat }}
-                                onStatusChange={setNoteStatus}
-                                mobileOpen={mobileNotesOpen}
-                                onMobileOpen={() => setMobileNotesOpen(true)}
-                                onMobileClose={() => setMobileNotesOpen(false)}
-                            />
-                        )}
+            {callAndNotesLayout}
 
         </Box>
     );

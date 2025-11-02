@@ -125,6 +125,8 @@ const ListeningAudioGenerationPanel: React.FC<ListeningAudioGenerationPanelProps
   const lastProgressStatus = useRef<ListeningAudioJobStatus | null>(null);
   const lastTranscriptProp = useRef<string>('');
   const previousStorageKeyRef = useRef<string | null>(null);
+  // Track which jobId has already had success side-effects applied
+  const processedSuccessJobIdRef = useRef<string | null>(null);
 
   const storageKey = useMemo(() => (transcriptId ? `listeningAudioJob:${transcriptId}` : null), [transcriptId]);
 
@@ -381,6 +383,11 @@ const ListeningAudioGenerationPanel: React.FC<ListeningAudioGenerationPanelProps
     }
 
     if (status === 'SUCCEEDED') {
+      // Guard to avoid re-running success side-effects on re-renders or StrictMode double-invoke
+      if (processedSuccessJobIdRef.current === job.jobId) {
+        return;
+      }
+      processedSuccessJobIdRef.current = job.jobId;
       if (job.audioUrl) {
         const normalizedTranscript = normalizeTranscript(transcriptText);
         const durationSec = job.durationSec ?? null;

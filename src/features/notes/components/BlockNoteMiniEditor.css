@@ -1,0 +1,48 @@
+.bn-mini-editor__paper {
+  background-image:
+    linear-gradient(to right, rgba(0,0,0,0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0,0,0,0.03) 1px, transparent 1px);
+  background-size: 8px 8px, 8px 8px;
+  background-position: 0 0, 0 0;
+}
+
+/* Compact toolbar tweaks */
+.bn-editor .bn-toolbar,
+.bn-container .bn-toolbar {
+  padding: 4px 6px !important;
+  gap: 4px !important;
+  border-radius: 0 !important;
+}
+
+.bn-toolbar button {
+  min-width: 36px;
+  min-height: 32px;
+}
+
+@media (max-width: 640px) {
+  .bn-editor .bn-toolbar,
+  .bn-container .bn-toolbar {
+    flex-wrap: wrap;
+  }
+}
+/* Outer panel is already a flex column via wrapperSx */
+.bn-mini-editor__paper .bn-container,
+.bn-mini-editor__paper .bn-editor {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;                /* <- allow shrinking (enables scroll) */
+}
+
+/* Make the actual content region flex and scroll */
+.bn-mini-editor__paper .bn-editor .bn-content {
+    flex: 1 1 auto;
+    min-height: 0;                /* <- critical for flex children to scroll */
+    overflow: auto;               /* <- the scrollbar lives here */
+}
+
+/* Optional: keep PM filling the space; not required for scrolling */
+.bn-mini-editor__paper .bn-editor .bn-content .ProseMirror {
+    height: 100%;
+    box-sizing: border-box;
+}

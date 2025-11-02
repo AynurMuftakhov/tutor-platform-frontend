@@ -49,8 +49,6 @@ interface NotesOverlayProps {
     canEdit: boolean;
     initialTab?: NotesTab;
     initialPreviousLessonId?: string;
-    incomingSoftSync?: { content: string; format: LessonNoteFormat; updatedAt?: string };
-    onBroadcastSoftSync?: (payload: { content: string; format: LessonNoteFormat }) => void;
 }
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
@@ -82,13 +80,12 @@ const NotesOverlay: React.FC<NotesOverlayProps> = ({
     teacherId,
     canEdit,
     initialTab = 'current',
-    initialPreviousLessonId,
-    incomingSoftSync,
-    onBroadcastSoftSync
+    initialPreviousLessonId
 }) => {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
     const cardRef = useRef<HTMLDivElement | null>(null);
+    const [isInteracting, setIsInteracting] = useState(false);
     const dragInfoRef = useRef<{
         pointerId: number;
         startX: number;
@@ -225,6 +222,33 @@ const NotesOverlay: React.FC<NotesOverlayProps> = ({
         startHeight: number;
     } | null>(null);
 
+    const handleDragMoveWindow = useCallback((event: PointerEvent) => {
+        if (isMobile) return;
+        const info = dragInfoRef.current;
+        if (!info || info.pointerId !== event.pointerId) return;
+        const deltaX = event.clientX - info.startX;
+        const deltaY = event.clientY - info.startY;
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        setOverlayState((prev) => {
+            const width = prev.size.width;
+            const height = prev.size.height;
+            const nextTop = clamp(info.startTop + deltaY, 8, vh - height - 8);
+            const nextLeft = clamp(info.startLeft + deltaX, 8, vw - width - 8);
+            return { ...prev, position: { top: nextTop, left: nextLeft } };
+        });
+    }, [isMobile]);
+
+    const handleDragUpWindow = useCallback((event: PointerEvent) => {
+        if (isMobile) return;
+        const info = dragInfoRef.current;
+        if (!info || info.pointerId !== event.pointerId) return;
+        dragInfoRef.current = null;
+        window.removeEventListener('pointermove', handleDragMoveWindow, true);
+        window.removeEventListener('pointerup', handleDragUpWindow, true);
+        setIsInteracting(false);
+    }, [isMobile, handleDragMoveWindow]);
+
     const handlePointerDown = useCallback((event: React.PointerEvent) => {
         if (isMobile) return;
         if (!cardRef.current) return;
@@ -240,9 +264,12 @@ const NotesOverlay: React.FC<NotesOverlayProps> = ({
             startTop: rect.top,
             startLeft: rect.left
         };
+        setIsInteracting(true);
+        window.addEventListener('pointermove', handleDragMoveWindow, true);
+        window.addEventListener('pointerup', handleDragUpWindow, true);
         (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
         event.preventDefault();
-    }, [isMobile]);
+    }, [isMobile, handleDragMoveWindow, handleDragUpWindow]);
 
     const handlePointerMove = useCallback((event: React.PointerEvent) => {
         if (isMobile) return;
@@ -296,8 +323,9 @@ const NotesOverlay: React.FC<NotesOverlayProps> = ({
         const info = resizeInfoRef.current;
         if (!info || info.pointerId !== event.pointerId) return;
         resizeInfoRef.current = null;
-        window.removeEventListener('pointermove', handleResizePointerMove);
-        window.removeEventListener('pointerup', handleResizePointerUp);
+        window.removeEventListener('pointermove', handleResizePointerMove, true);
+        window.removeEventListener('pointerup', handleResizePointerUp, true);
+        setIsInteracting(false);
     }, [isMobile, handleResizePointerMove]);
 
     const handleResizePointerDown = useCallback((event: React.PointerEvent) => {
@@ -311,16 +339,17 @@ const NotesOverlay: React.FC<NotesOverlayProps> = ({
             startWidth: rect.width,
             startHeight: rect.height
         };
-        window.addEventListener('pointermove', handleResizePointerMove);
-        window.addEventListener('pointerup', handleResizePointerUp);
+        setIsInteracting(true);
+        window.addEventListener('pointermove', handleResizePointerMove, true);
+        window.addEventListener('pointerup', handleResizePointerUp, true);
         event.stopPropagation();
         event.preventDefault();
     }, [isMobile, handleResizePointerMove, handleResizePointerUp]);
 
     useEffect(() => {
         return () => {
-            window.removeEventListener('pointermove', handleResizePointerMove);
-            window.removeEventListener('pointerup', handleResizePointerUp);
+            window.removeEventListener('pointermove', handleResizePointerMove, true);
+            window.removeEventListener('pointerup', handleResizePointerUp, true);
         };
     }, [handleResizePointerMove, handleResizePointerUp]);
 
@@ -386,7 +415,7 @@ const NotesOverlay: React.FC<NotesOverlayProps> = ({
                 sx={{
                     position: 'fixed',
                     inset: 0,
-                    pointerEvents: 'none',
+                    pointerEvents: isInteracting ? 'auto' : 'none',
                     zIndex: (theme.zIndex.modal || 1300) + (overlayState.pinned ? 4 : 2)
                 }}
             >
@@ -427,8 +456,6 @@ const NotesOverlay: React.FC<NotesOverlayProps> = ({
                         <Box
                             sx={{ display: 'flex', alignItems: 'center', gap: 1, cursor: 'move' }}
                             onPointerDown={handlePointerDown}
-                            onPointerMove={handlePointerMove}
-                            onPointerUp={handlePointerUp}
                         >
                             <Typography variant="subtitle1" fontWeight={600}>
                                 Lesson Notes
@@ -472,14 +499,13 @@ const NotesOverlay: React.FC<NotesOverlayProps> = ({
                             studentId={studentId}
                             teacherId={teacherId}
                             canEdit={canEdit}
+                            uiMode="floating"
+                            dataMode="offline"
                             initialTab={overlayState.activeTab}
                             activeTabOverride={overlayState.activeTab}
                             initialPreviousLessonId={initialPreviousLessonId}
                             onTabChange={(tab) => setOverlayState((prev) => ({ ...prev, activeTab: tab }))}
                             pollIntervalMs={15000}
-                            incomingSoftSync={incomingSoftSync}
-                            onBroadcastSoftSync={onBroadcastSoftSync}
-                            forceInline
                             hideContainerChrome
                             controlledFormat={{ value: format, onChange: setFormat }}
                             hideFormatControl
@@ -620,14 +646,13 @@ const NotesOverlay: React.FC<NotesOverlayProps> = ({
                         studentId={studentId}
                         teacherId={teacherId}
                         canEdit={canEdit}
+                        uiMode="docked-bottom"
+                        dataMode="offline"
                         initialTab={overlayState.activeTab}
                         activeTabOverride={overlayState.activeTab}
                         initialPreviousLessonId={initialPreviousLessonId}
                         onTabChange={(tab) => setOverlayState((prev) => ({ ...prev, activeTab: tab }))}
                         pollIntervalMs={15000}
-                        incomingSoftSync={incomingSoftSync}
-                        onBroadcastSoftSync={onBroadcastSoftSync}
-                        forceInline
                         hideContainerChrome
                         controlledFormat={{ value: format, onChange: setFormat }}
                         hideFormatControl

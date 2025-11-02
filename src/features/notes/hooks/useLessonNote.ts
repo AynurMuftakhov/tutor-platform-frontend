@@ -14,6 +14,7 @@ export interface UseLessonNoteOptions {
     lessonId?: string;
     enabled?: boolean;
     refetchInterval?: number | false;
+    mode?: 'realtime' | 'offline';
 }
 
 export type LessonNoteSource = 'network' | 'cache' | 'none';
@@ -33,7 +34,13 @@ export interface UseLessonNoteResult {
 const DEFAULT_REFETCH_INTERVAL = false;
 
 export const useLessonNote = (options: UseLessonNoteOptions): UseLessonNoteResult => {
-    const { lessonId, enabled = true, refetchInterval = DEFAULT_REFETCH_INTERVAL } = options;
+    const {
+        lessonId,
+        enabled = true,
+        refetchInterval = DEFAULT_REFETCH_INTERVAL,
+        mode = 'offline'
+    } = options;
+    const isRealtime = mode === 'realtime';
     const queryClient = useQueryClient();
     const [cachedNote, setCachedNote] = useState<CachedLessonNote | null>(null);
 
@@ -59,7 +66,11 @@ export const useLessonNote = (options: UseLessonNoteOptions): UseLessonNoteResul
         queryKey: lessonNotesKey(lessonId),
         queryFn: () => getLessonNote(lessonId!),
         enabled: Boolean(lessonId) && enabled,
-        refetchInterval
+        refetchInterval: isRealtime ? false : refetchInterval,
+        refetchIntervalInBackground: !isRealtime,
+        refetchOnWindowFocus: !isRealtime,
+        refetchOnReconnect: !isRealtime,
+        staleTime: isRealtime ? Number.POSITIVE_INFINITY : undefined
     });
 
     useEffect(() => {

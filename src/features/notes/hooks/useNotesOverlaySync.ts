@@ -42,6 +42,10 @@ export const useNotesOverlaySync = ({
 }: UseNotesOverlaySyncParams) => {
     const sendState = useCallback((open: boolean) => {
         if (!call || !lessonId || !enabled || !isTeacher) return;
+        const meetingState = typeof call.meetingState === 'function' ? call.meetingState() : undefined;
+        if (meetingState !== 'joined-meeting') {
+            return;
+        }
         try {
             call.sendAppMessage({
                 type: MESSAGE_TYPE,

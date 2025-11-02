@@ -1,6 +1,23 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DailyCall, DailyEventObjectAppMessage } from '@daily-co/daily-js';
 import type { LessonNoteFormat } from '../../../types/lessonNotes';
+import { canonicalizeContent, fingerprintContent, normalizeFormat } from '../utils/contentCanonicalization';
+
+const nowIso = () => new Date().toISOString();
+const nowMs = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+
+// soft-sync pacing
+const DEBOUNCE_MS = 200;   // wait for a short pause in typing
+const MIN_IDLE_GATE_MS = 300; // if changes are tiny (<=2 chars), require at least this idle time
+const MAX_WAIT_MS = 1200;  // but never wait longer than this while user is continuously typing
+const DEBUG_SOFT_SYNC = ((import.meta as any)?.env?.DEV ?? false) ||
+  (typeof window !== 'undefined' && !!window.localStorage?.getItem('NOTES_SOFT_SYNC_DEBUG'));
+
+const debugLog = (phase: string, payload: Record<string, unknown>) => {
+    if (!DEBUG_SOFT_SYNC) return;
+    // eslint-disable-next-line no-console
+    console.info('[NotesSoftSync]', phase, payload);
+};
 
 export interface SoftSyncPayload {
     content: string;
@@ -38,137 +55,250 @@ export const useNotesSoftSync = ({
 }: UseNotesSoftSyncParams) => {
     const [incoming, setIncoming] = useState<SoftSyncPayload | null>(null);
 
+    const senderIdRef = useRef<string | undefined>(senderId);
+    useEffect(() => {
+        senderIdRef.current = senderId;
+    }, [senderId]);
+
+    const localSessionIdRef = useRef<string | undefined>(undefined);
+    const updateLocalSessionId = useCallback(() => {
+        if (!call) {
+            localSessionIdRef.current = undefined;
+            return;
+        }
+        try {
+            localSessionIdRef.current = call.participants().local?.session_id ?? undefined;
+        } catch {
+            localSessionIdRef.current = undefined;
+        }
+    }, [call]);
+
+    useEffect(() => {
+        updateLocalSessionId();
+    }, [updateLocalSessionId]);
+
+    useEffect(() => {
+        if (!call) return;
+        const update = () => updateLocalSessionId();
+        const events: string[] = ['joined-meeting', 'left-meeting', 'participant-updated', 'participant-joined', 'participant-left'];
+        events.forEach((event) => {
+            try {
+                (call as any).on(event, update);
+            } catch {
+                /* noop */
+            }
+        });
+        return () => {
+            events.forEach((event) => {
+                try {
+                    (call as any).off(event, update);
+                } catch {
+                    /* noop */
+                }
+            });
+        };
+    }, [call, updateLocalSessionId]);
+
+    const lastSentRef = useRef(0);
+    const latestPayloadRef = useRef<{ content: string; format: LessonNoteFormat; updatedAt?: string } | null>(null);
+    const lastSentSnapshotRef = useRef<{ content: string; format: LessonNoteFormat } | null>(null);
+    const lastFingerprintRef = useRef<string | null>(null);
+
+    const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const maxWaitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const gateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const clearTimer = (ref: { current: ReturnType<typeof setTimeout> | null }) => {
+        if (ref.current) {
+            clearTimeout(ref.current);
+            ref.current = null;
+        }
+    };
+
     const sendPacket = useCallback((payload: SoftSyncPayload) => {
         if (!call || !lessonId || !enabled) {
             return;
         }
+        const format = normalizeFormat(payload.format);
+        const canonical = canonicalizeContent(payload.content ?? '', format);
         try {
+            const sentAtMs = nowMs();
+            const sentAtIso = nowIso();
             const message = {
                 type: 'note:soft-sync',
                 lessonId,
-                content: payload.content,
-                format: payload.format,
-                updatedAt: payload.updatedAt ?? new Date().toISOString(),
-                senderId
+                content: canonical,
+                format,
+                updatedAt: payload.updatedAt ?? sentAtIso,
+                senderId: localSessionIdRef.current ?? senderIdRef.current,
+                sentAtMs,
+                sentAtIso,
+                contentLength: canonical.length
             };
             call.sendAppMessage(message, '*');
-        } catch (error) {
-            console.warn('Failed to send note soft-sync payload', error);
+            debugLog('broadcast-sent', { lessonId, contentLength: canonical.length, format, sentAtIso });
+        } catch (err) {
+            debugLog('broadcast-send-error', { message: (err as Error)?.message ?? 'unknown' });
         }
-    }, [call, lessonId, enabled, senderId]);
-
-    const lastSentRef = useRef(0);
-    const pendingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const latestPayloadRef = useRef<SoftSyncPayload | null>(null);
+    }, [call, enabled, lessonId]);
 
     const flushPending = useCallback(() => {
-        if (!latestPayloadRef.current) return;
-        sendPacket(latestPayloadRef.current);
-        lastSentRef.current = Date.now();
+        const pending = latestPayloadRef.current;
+        if (!pending) return;
+
+        const fingerprint = fingerprintContent(pending.content, pending.format);
+        if (lastFingerprintRef.current && lastFingerprintRef.current === fingerprint) {
+            debugLog('broadcast-skip-duplicate', { lessonId, format: pending.format, length: pending.content.length });
+            latestPayloadRef.current = null;
+            clearTimer(debounceTimerRef);
+            clearTimer(maxWaitTimerRef);
+            clearTimer(gateTimerRef);
+            return;
+        }
+
+        sendPacket(pending);
+        lastSentRef.current = nowMs();
+        lastSentSnapshotRef.current = { content: pending.content, format: pending.format };
+        lastFingerprintRef.current = fingerprint;
         latestPayloadRef.current = null;
-    }, [sendPacket]);
+
+        clearTimer(debounceTimerRef);
+        clearTimer(maxWaitTimerRef);
+        clearTimer(gateTimerRef);
+    }, [lessonId, sendPacket]);
 
     const broadcast = useCallback((payload: SoftSyncPayload) => {
-        latestPayloadRef.current = payload;
-        const now = Date.now();
-        const elapsed = now - lastSentRef.current;
-        const MIN_INTERVAL = 200;
-
-        if (elapsed >= MIN_INTERVAL) {
-            if (pendingRef.current) {
-                clearTimeout(pendingRef.current);
-                pendingRef.current = null;
-            }
-            flushPending();
-        } else if (!pendingRef.current) {
-            pendingRef.current = setTimeout(() => {
-                pendingRef.current = null;
-                flushPending();
-            }, MIN_INTERVAL - elapsed);
+        if (!lessonId || !enabled) {
+            debugLog('broadcast-ignore', { reason: 'disabled', enabled, lessonId });
+            return;
         }
-    }, [flushPending]);
+
+        const now = nowMs();
+        const format = normalizeFormat(payload.format);
+        const canonical = canonicalizeContent(payload.content ?? '', format);
+
+        debugLog('broadcast-scheduled', {
+            lessonId,
+            len: canonical.length,
+            format,
+            sinceLast: lastSentRef.current ? Math.round(now - lastSentRef.current) : null
+        });
+
+        latestPayloadRef.current = { content: canonical, format, updatedAt: payload.updatedAt };
+
+        const last = lastSentSnapshotRef.current;
+        const prevLen = last?.content.length ?? 0;
+        const delta = Math.abs(canonical.length - prevLen);
+        const isTinyChange = delta <= 2 && (!!last || canonical.length <= 2);
+
+        clearTimer(debounceTimerRef);
+
+        if (isTinyChange) {
+            clearTimer(gateTimerRef);
+            gateTimerRef.current = setTimeout(() => {
+                gateTimerRef.current = null;
+                flushPending();
+            }, MIN_IDLE_GATE_MS);
+        } else {
+            debounceTimerRef.current = setTimeout(() => {
+                flushPending();
+            }, DEBOUNCE_MS);
+        }
+
+        if (!maxWaitTimerRef.current) {
+            maxWaitTimerRef.current = setTimeout(() => {
+                flushPending();
+            }, MAX_WAIT_MS);
+        }
+    }, [enabled, flushPending, lessonId]);
 
     useEffect(() => {
         if (!lessonId || !enabled) {
             lastSentRef.current = 0;
             latestPayloadRef.current = null;
-            if (pendingRef.current) {
-                clearTimeout(pendingRef.current);
-                pendingRef.current = null;
-            }
+            lastSentSnapshotRef.current = null;
+            lastFingerprintRef.current = null;
+            clearTimer(debounceTimerRef);
+            clearTimer(maxWaitTimerRef);
+            clearTimer(gateTimerRef);
         }
     }, [lessonId, enabled]);
 
     useEffect(() => {
         return () => {
-            if (pendingRef.current) {
-                clearTimeout(pendingRef.current);
-                pendingRef.current = null;
-            }
+            clearTimer(debounceTimerRef);
+            clearTimer(maxWaitTimerRef);
+            clearTimer(gateTimerRef);
         };
     }, []);
 
     useEffect(() => {
-        const dailyCall = call;
-        if (!dailyCall || !lessonId || !enabled) {
+        if (!call || !lessonId || !enabled) {
             return;
         }
 
-        let localId: string | undefined;
-        try {
-            localId = dailyCall.participants().local?.session_id;
-        } catch {
-            localId = undefined;
-        }
-
         const handler = (event: DailyEventObjectAppMessage) => {
-            if (event.fromId && localId && event.fromId === localId) {
+            const localFromId = localSessionIdRef.current;
+            if (event.fromId && localFromId && event.fromId === localFromId) {
                 return;
             }
 
-            const data = event.data;
-            let parsed: unknown = data;
-            if (typeof data === 'string') {
+            let parsed: unknown = event.data;
+            if (typeof event.data === 'string') {
                 try {
-                    parsed = JSON.parse(data);
+                    parsed = JSON.parse(event.data);
                 } catch {
                     return;
                 }
             }
 
-            if (!isSoftSyncPacket(parsed)) {
+            if (!isSoftSyncPacket(parsed) || parsed.lessonId !== lessonId) {
                 return;
             }
 
-            if (parsed.lessonId !== lessonId) {
+            const effectiveSender = localSessionIdRef.current ?? senderIdRef.current;
+            if (parsed.senderId && effectiveSender && parsed.senderId === effectiveSender) {
+                debugLog('daily:skip-self-sender', { lessonId, senderId: parsed.senderId });
                 return;
             }
 
-            if (parsed.senderId && senderId && parsed.senderId === senderId) {
-                return;
-            }
+            const format = normalizeFormat(parsed.format);
+            const content = canonicalizeContent(typeof parsed.content === 'string' ? parsed.content : '', format);
+
+            const receivedAt = nowMs();
+            const sentAtMs = typeof (parsed as any).sentAtMs === 'number' ? (parsed as any).sentAtMs : undefined;
+            const transitMs = sentAtMs !== undefined ? Math.round(receivedAt - sentAtMs) : undefined;
+
+            debugLog('daily:received', {
+                lessonId,
+                len: content.length,
+                format,
+                sentAtMs,
+                receivedAt,
+                transitMs
+            });
 
             setIncoming({
-                content: typeof parsed.content === 'string' ? parsed.content : '',
-                format: parsed.format === 'plain' ? 'plain' : 'md',
+                content,
+                format,
                 updatedAt: parsed.updatedAt,
                 senderId: parsed.senderId
             });
         };
 
-        dailyCall.on('app-message', handler);
+        call.on('app-message', handler);
         return () => {
-            dailyCall.off('app-message', handler);
+            call.off('app-message', handler);
         };
-    }, [call, lessonId, enabled, senderId]);
+    }, [call, lessonId, enabled]);
 
     const resetIncoming = useCallback(() => setIncoming(null), []);
 
-    return useMemo(() => ({
+    return {
         incoming,
         broadcast,
         resetIncoming
-    }), [incoming, broadcast, resetIncoming]);
+    };
 };
 
 export default useNotesSoftSync;

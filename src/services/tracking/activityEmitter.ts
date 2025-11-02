@@ -280,7 +280,7 @@ class ActivityEmitter {
   }
 
   private async send(events: ActivityEvent[], preferBeacon = false): Promise<TransportResult> {
-    const url = 'http://localhost/users-service/api/tracking/events';
+    const url = `${import.meta.env.VITE_API_URL}/users-service/api/tracking/events`;
 
     // Beacon path: send only if available and either preferBeacon is true or page is unloading/hidden
     const body = JSON.stringify(events);

@@ -24,7 +24,6 @@ import LessonActions from "../components/lessonDetail/LessonActions";
 import {useAuth} from "../context/AuthContext";
 import { LessonNotesPanel } from "../features/notes";
 import { useRtc } from "../context/RtcContext";
-import useNotesSoftSync, { SoftSyncPayload } from "../features/notes/hooks/useNotesSoftSync";
 
 // Tab panel component
 interface TabPanelProps {
@@ -107,21 +106,45 @@ const LessonDetailPage = () => {
         return user.id === lesson.tutorId || user.id === lesson.studentId;
     }, [lesson, user]);
 
-    const softSync = useNotesSoftSync({
-        call: dailyCall,
-        lessonId: lesson?.id,
-        enabled: Boolean(dailyCall && lesson && rtcLessonId === lesson.id),
-        senderId: user?.id
-    });
-
-    const [incomingSoftSync, setIncomingSoftSync] = useState<SoftSyncPayload | null>(null);
+    const [callActive, setCallActive] = useState(false);
 
     useEffect(() => {
-        if (softSync.incoming) {
-            setIncomingSoftSync(softSync.incoming);
-            softSync.resetIncoming();
+        if (!dailyCall) {
+            setCallActive(false);
+            return;
         }
-    }, [softSync.incoming, softSync.resetIncoming]);
+
+        const computeState = () => {
+            try {
+                const state = dailyCall.meetingState?.();
+                setCallActive(state === 'joined-meeting');
+            } catch {
+                setCallActive(false);
+            }
+        };
+
+        const handleJoined = () => setCallActive(true);
+        const handleLeft = () => setCallActive(false);
+
+        computeState();
+
+        dailyCall.on('joined-meeting', handleJoined);
+        dailyCall.on('left-meeting', handleLeft);
+
+        return () => {
+            try { dailyCall.off('joined-meeting', handleJoined); } catch { /* noop */ }
+            try { dailyCall.off('left-meeting', handleLeft); } catch { /* noop */ }
+        };
+    }, [dailyCall]);
+
+    const notesDataMode = useMemo(() => {
+        if (!lesson) return 'offline';
+        if (!callActive) return 'offline';
+        if (!rtcLessonId) return 'offline';
+        return rtcLessonId === lesson.id ? 'realtime' : 'offline';
+    }, [lesson, callActive, rtcLessonId]);
+
+    const notesCall = notesDataMode === 'realtime' ? dailyCall : null;
 
     const applyNotesSearchParams = (tab: 'current' | 'previous', lessonId: string | null = null) => {
         const params = new URLSearchParams(searchParams);
@@ -271,13 +294,14 @@ const LessonDetailPage = () => {
                                 studentId={lesson.studentId}
                                 teacherId={lesson.tutorId}
                                 canEdit={canEditNotes}
+                                dataMode={notesDataMode}
+                                call={notesCall}
+                                senderId={user?.id}
                                 initialTab={notesTab}
                                 initialPreviousLessonId={selectedPreviousLessonId ?? undefined}
                                 onTabChange={handleNotesTabSwitch}
                                 onSelectPreviousLesson={handlePreviousLessonSelect}
-                                pollIntervalMs={15000}
-                                incomingSoftSync={incomingSoftSync ?? undefined}
-                                onBroadcastSoftSync={softSync.broadcast}
+                                pollIntervalMs={notesDataMode === 'realtime' ? undefined : 15000}
                                 showPreviousTab={false}
                             />
                         </Box>
