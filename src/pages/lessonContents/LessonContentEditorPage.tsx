@@ -62,6 +62,28 @@ const InnerEditor: React.FC<{ id: string }> = ({ id }) => {
     },
   });
 
+  // Ensure latest draft is saved before publishing (handles fast "Publish" click after title change)
+  const handlePublish = async () => {
+    // Guard against invalid state — same as button disabled logic
+    const disabled = !state.isLayoutValid || Boolean(state.inspectorInvalid) || (state.invalidCount ?? 0) > 0;
+    if (disabled) return;
+
+    try {
+      // If there are unsaved changes, save them immediately and wait
+      if (state.isDirty) {
+        await mutation.mutateAsync({
+          title: state.title,
+          tags: state.tags,
+          layout: state.layout,
+          content: state.content,
+        });
+      }
+      await publishMutation.mutateAsync();
+    } catch (e) {
+      // Errors are already handled by respective onError callbacks
+    }
+  };
+
   // Debounced autosave (waits until layout is valid)
   useEffect(() => {
     if (!state.id || state.status !== 'DRAFT') return;
@@ -101,10 +123,10 @@ const InnerEditor: React.FC<{ id: string }> = ({ id }) => {
                 <span>
                   <Button
                     variant="contained"
-                    disabled={disabled || publishMutation.isPending}
-                    onClick={() => publishMutation.mutate()}
+                    disabled={disabled || publishMutation.isPending || mutation.isPending}
+                    onClick={handlePublish}
                   >
-                    {publishMutation.isPending ? 'Publishing…' : 'Publish'}
+                    {publishMutation.isPending || mutation.isPending ? 'Publishing…' : 'Publish'}
                   </Button>
                 </span>
               </Tooltip>
