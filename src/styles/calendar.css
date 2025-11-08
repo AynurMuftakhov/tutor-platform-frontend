@@ -61,7 +61,6 @@
   overflow: hidden;
   background-color: var(--fc-page-bg-color);
   box-shadow: 0 4px 20px rgba(0, 0, 0, .04);
-  padding: 12px;
 }
 
 /* header */
@@ -76,7 +75,6 @@
 /* sticky day‑header strip */
 .fc .fc-col-header-cell {
   border-bottom: 1px solid var(--fc-border-color);
-  padding: 12px 0;
   background: var(--fc-page-bg-color);
   position: relative;
   z-index: 11;

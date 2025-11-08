@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import {
     Box,
     Typography,
@@ -8,9 +8,10 @@ import {
     Menu,
     useTheme,
     alpha,
-    Tooltip,
     ToggleButtonGroup,
-    ToggleButton
+    ToggleButton,
+    Stack,
+    useMediaQuery
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import {
@@ -21,11 +22,8 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { Student } from "./MyStudentsPage";
 import { useNavigate } from "react-router-dom";
-import { 
-    FilterList, 
-    ViewDay, 
-    ViewWeek, 
-    CalendarMonth, 
+import {
+    FilterList,
     ArrowBackIos,
     ArrowForwardIos,
 } from "@mui/icons-material";
@@ -41,7 +39,10 @@ import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin, {DateClickArg} from '@fullcalendar/interaction';
-import { EventInput, DateSelectArg, EventClickArg } from '@fullcalendar/core';
+import { EventInput, DateSelectArg, EventClickArg, EventContentArg } from '@fullcalendar/core';
+
+const DAY_COLUMN_MIN_WIDTH = 136;
+const TIME_COLUMN_WIDTH = 64;
 
 const LessonsPage = () => {
     const [lessons, setLessons] = useState<any[]>([]);
@@ -55,15 +56,11 @@ const LessonsPage = () => {
     const statusFilterOpen = Boolean(anchorEl);
     const [showTeacherCal, setShowTeacherCal] = useState(false);
     const [busyEvents, setBusyEvents] = useState<EventInput[]>([]);
-
-    // Set default calendar view based on screen size (xs: day, sm+: week)
-    const getDefaultCalendarView = () => {
-        if (window && window.matchMedia && window.matchMedia('(max-width:600px)').matches) {
-            return 'timeGridDay';
-        }
-        return 'timeGridWeek';
-    };
-    const [calendarView, setCalendarView] = useState<'timeGridDay' | 'timeGridWeek' | 'dayGridMonth'>(getDefaultCalendarView());
+    const theme = useTheme();
+    const isCompactLayout = useMediaQuery(theme.breakpoints.down('lg'));
+    const [calendarView, setCalendarView] = useState<'timeGridDay' | 'timeGridWeek' | 'dayGridMonth'>(() =>
+        isCompactLayout ? 'timeGridDay' : 'timeGridWeek'
+    );
     // Auto-scroll to the current time and center it in the view when calendarView changes
     useEffect(() => {
         const timeout = setTimeout(() => {
@@ -80,10 +77,38 @@ const LessonsPage = () => {
 
         return () => clearTimeout(timeout);
     }, [calendarView]);
+    useEffect(() => {
+        if (!isCompactLayout) return;
+        const api = calendarRef.current?.getApi();
+        if (!api || api.view.type === 'timeGridDay') return;
+        setCalendarView('timeGridDay');
+        api.changeView('timeGridDay');
+    }, [isCompactLayout]);
     const [selectedDate, setSelectedDate] = useState<dayjs.Dayjs>(dayjs());
-    const theme = useTheme();
     const calendarRef = useRef<any>(null);
+    const calendarViewportRef = useRef<HTMLDivElement | null>(null);
+    const [calendarViewportHeight, setCalendarViewportHeight] = useState<number | null>(null);
     const suppressNextAutoSelect = useRef(false);
+    const updateCalendarViewportHeight = useCallback(() => {
+        if (typeof window === 'undefined') return;
+        if (!calendarViewportRef.current) return;
+        const rect = calendarViewportRef.current.getBoundingClientRect();
+        const viewportHeight = window.innerHeight;
+        const paddingBottom = 16; // match bottom page padding
+        const available = viewportHeight - rect.top - paddingBottom;
+        setCalendarViewportHeight(Math.max(available, 360));
+    }, []);
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        updateCalendarViewportHeight();
+        window.addEventListener('resize', updateCalendarViewportHeight);
+        return () => {
+            window.removeEventListener('resize', updateCalendarViewportHeight);
+        };
+    }, [updateCalendarViewportHeight]);
+    useEffect(() => {
+        updateCalendarViewportHeight();
+    }, [calendarView, isCompactLayout, updateCalendarViewportHeight]);
 
     const handleStatusFilterClick = (event: React.MouseEvent<HTMLButtonElement>) => {
         setAnchorEl(event.currentTarget);
@@ -343,247 +368,381 @@ const LessonsPage = () => {
         }
         return "";
     };
+    const compactButtonSx = {
+        height: 32,
+        minHeight: 32,
+        borderRadius: 1,
+        px: 1
+    };
+    const dayColumnCount = calendarView === 'timeGridWeek' || calendarView === 'dayGridMonth' ? 7 : 1;
+    const calendarMinWidth = (calendarView === 'dayGridMonth' ? 0 : TIME_COLUMN_WIDTH) + (dayColumnCount * DAY_COLUMN_MIN_WIDTH);
+    const renderEventContent = React.useCallback(
+        (eventInfo: EventContentArg) => (
+            <Box
+                component="span"
+                sx={{
+                    display: 'block',
+                    backgroundColor: eventInfo.backgroundColor || theme.palette.primary.light,
+                    color: theme.palette.primary.contrastText,
+                    borderRadius: 1,
+                    px: 1,
+                    py: 0.5,
+                    fontSize: 12,
+                    lineHeight: 1.2,
+                    wordBreak: 'break-word'
+                }}
+            >
+                {eventInfo.timeText && (
+                    <Box component="span" sx={{ display: 'block', fontWeight: 600 }}>
+                        {eventInfo.timeText}
+                    </Box>
+                )}
+                <Box component="span" sx={{ display: 'block' }}>
+                    {eventInfo.event.title}
+                </Box>
+            </Box>
+        ),
+        [theme]
+    );
 
     return (
         <Box
             sx={{
-                p: { xs: 2, sm: 3 },
-                bgcolor: '#fafbfd',
-                minHeight: '100dvh',
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                height: '100%',
+                minHeight: 0,
                 width: '100%',
-                overflowX: 'hidden'
+                p: { xs: 1.5, sm: 2.5 },
+                bgcolor: '#fafbfd',
+                overflow: 'hidden'
             }}
         >
-            {/* Header */}
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", rowGap: 2, columnGap: 3, mb: 3 }}>
-                <Typography variant="h5" fontWeight={600}>
-                    Lessons
-                </Typography>
-
-                {/* Calendar Controls */}
-                <Box
-                    sx={{
-                        display: 'flex',
-                        flexWrap: 'wrap',
-                        alignItems: 'center',
-                        rowGap: 1.5,
-                        columnGap: 2,
-                        justifyContent: { xs: 'flex-start', sm: 'flex-end' },
-                        flexDirection: 'row'
-                    }}
+            <Stack spacing={1} flexShrink={0}>
+                <Stack
+                    direction={{ xs: 'column', lg: 'row' }}
+                    spacing={0.75}
+                    justifyContent="space-between"
+                    alignItems={{ xs: 'flex-start', lg: 'center' }}
                 >
-                    {/* Status Filter */}
-                    <Tooltip title="Filter by status">
-                        <IconButton onClick={handleStatusFilterClick}>
-                            <FilterList />
+                    <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap">
+                        <IconButton onClick={handlePrevClick} size="small" sx={{ width: 32, height: 32 }}>
+                            <ArrowBackIos fontSize="small" />
                         </IconButton>
-                    </Tooltip>
-                    <Menu
-                        anchorEl={anchorEl}
-                        open={statusFilterOpen}
-                        onClose={handleStatusFilterClose}
-                    >
-                        <MenuItem onClick={() => handleStatusSelect("SCHEDULED")}>Scheduled</MenuItem>
-                        <MenuItem onClick={() => handleStatusSelect("COMPLETED")}>Completed</MenuItem>
-                        <MenuItem onClick={() => handleStatusSelect("CANCELED")}>Canceled</MenuItem>
-                        <MenuItem onClick={() => handleStatusSelect("")}>All</MenuItem>
-                    </Menu>
-
-                    {/* View Toggle */}
-                    <ToggleButtonGroup
-                        value={calendarView}
-                        exclusive
-                        onChange={handleViewChange}
-                        aria-label="calendar view"
-                        size="small"
-                    >
-                        <ToggleButton value="timeGridDay" aria-label="day view">
-                            <ViewDay fontSize="small" />
-                            <Typography sx={{ ml: 0.5, display: { xs: 'none', sm: 'block' } }}>Day</Typography>
-                        </ToggleButton>
-                        <ToggleButton value="timeGridWeek" aria-label="week view">
-                            <ViewWeek fontSize="small" />
-                            <Typography sx={{ ml: 0.5, display: { xs: 'none', sm: 'block' } }}>Week</Typography>
-                        </ToggleButton>
-                        <ToggleButton value="dayGridMonth" aria-label="month view">
-                            <CalendarMonth fontSize="small" />
-                            <Typography sx={{ ml: 0.5, display: { xs: 'none', sm: 'block' } }}>Month</Typography>
-                        </ToggleButton>
-                    </ToggleButtonGroup>
-
-                    {/* Add Lesson Button (for tutors only) */}
-                    {user?.role === "tutor" && (
-                        <Button
-                            variant="contained"
-                            startIcon={<AddIcon />}
-                            onClick={() => setIsModalOpen(true)}
-                        >
-                            Add Lesson
-                        </Button>
-                    )}
-
-                    {user?.role === 'student' && (
+                        <IconButton onClick={handleNextClick} size="small" sx={{ width: 32, height: 32 }}>
+                            <ArrowForwardIos fontSize="small" />
+                        </IconButton>
                         <Button
                             variant="outlined"
-                            onClick={() => setShowTeacherCal(true)}
+                            size="small"
+                            onClick={handleTodayClick}
+                            sx={compactButtonSx}
                         >
-                            Show teacher calendar
+                            Today
                         </Button>
-                    )}
-                </Box>
-            </Box>
+                        <ToggleButtonGroup
+                            value={calendarView}
+                            exclusive
+                            onChange={handleViewChange}
+                            aria-label="calendar view"
+                            size="small"
+                            sx={{
+                                height: 32,
+                                borderRadius: 4,
+                                overflow: 'hidden',
+                                border: `1px solid ${alpha(theme.palette.text.primary, 0.15)}`,
+                                '& .MuiToggleButton-root': {
+                                    px: 0.75,
+                                    height: 32,
+                                    borderRadius: 0,
+                                    fontSize: '0.78rem',
+                                    textTransform: 'none',
+                                    letterSpacing: 0.2,
+                                    borderColor: alpha(theme.palette.text.primary, 0.15)
+                                },
+                                '& .MuiToggleButtonGroup-grouped:not(:last-of-type)': {
+                                    borderRight: `1px solid ${alpha(theme.palette.text.primary, 0.1)}`
+                                },
+                                '& .MuiToggleButtonGroup-grouped.Mui-selected': {
+                                    backgroundColor: alpha(theme.palette.primary.main, 0.1),
+                                    color: theme.palette.primary.main
+                                }
+                            }}
+                        >
+                            <ToggleButton value="timeGridDay" aria-label="day view">
+                                Day
+                            </ToggleButton>
+                            <ToggleButton value="timeGridWeek" aria-label="week view">
+                                Week
+                            </ToggleButton>
+                            <ToggleButton value="dayGridMonth" aria-label="month view">
+                                Month
+                            </ToggleButton>
+                        </ToggleButtonGroup>
+                    </Stack>
 
-            {/* Calendar Navigation */}
-            <Box sx={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                mb: 2,
-                backgroundColor: theme.palette.background.paper,
-                borderRadius: 2,
-                p: 1.5,
-                boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
-            }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <IconButton onClick={handlePrevClick} size="small">
-                        <ArrowBackIos fontSize="small" />
-                    </IconButton>
-                    <IconButton onClick={handleNextClick} size="small">
-                        <ArrowForwardIos fontSize="small" />
-                    </IconButton>
-                    <Button
-                        variant="text"
-                        onClick={handleTodayClick}
-                        sx={{
-                            minWidth: 'auto',
-                            fontWeight: 500,
-                            textTransform: 'none',
-                            fontSize: '0.9rem'
+                        <Typography
+                            variant="subtitle2"
+                            fontWeight={500}
+                            sx={{
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                            textAlign: { xs: 'left', lg: 'right' }
                         }}
                     >
-                        Today
-                    </Button>
-                </Box>
+                        {getCurrentViewTitle()}
+                    </Typography>
 
-                <Typography
-                    variant="h6"
-                    fontWeight={500}
-                    sx={{
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        maxWidth: { xs: '60vw', sm: '100%' }
-                    }}
-                >
-                    {getCurrentViewTitle()}
-                </Typography>
+                    <Stack
+                        direction={{ xs: 'column', lg: 'row' }}
+                        justifyContent="space-between"
+                        alignItems={{ xs: 'flex-start', lg: 'center' }}
+                        spacing={0.75}
+                    >
+                        <Stack
+                            direction="row"
+                            spacing={0.75}
+                            flexWrap="wrap"
+                            justifyContent={{ xs: 'flex-start', lg: 'flex-end' }}
+                        >
+                            <Button
+                                variant="outlined"
+                                size="small"
+                                startIcon={<FilterList />}
+                                onClick={handleStatusFilterClick}
+                                sx={compactButtonSx}
+                            >
+                                Filter
+                            </Button>
+                            {user?.role === "tutor" && (
+                                <Button
+                                    variant="contained"
+                                    size="small"
+                                    startIcon={<AddIcon />}
+                                    onClick={() => setIsModalOpen(true)}
+                                    sx={compactButtonSx}
+                                >
+                                    Add Lesson
+                                </Button>
+                            )}
+                            {user?.role === 'student' && (
+                                <Button
+                                    variant="outlined"
+                                    size="small"
+                                    onClick={() => setShowTeacherCal(true)}
+                                    sx={compactButtonSx}
+                                >
+                                    Show teacher calendar
+                                </Button>
+                            )}
+                        </Stack>
+                    </Stack>
+                </Stack>
+            </Stack>
 
-                <Box sx={{ width: 100 }}></Box> {/* Spacer for alignment */}
-            </Box>
+            <Menu
+                anchorEl={anchorEl}
+                open={statusFilterOpen}
+                onClose={handleStatusFilterClose}
+            >
+                <MenuItem onClick={() => handleStatusSelect("SCHEDULED")}>Scheduled</MenuItem>
+                <MenuItem onClick={() => handleStatusSelect("COMPLETED")}>Completed</MenuItem>
+                <MenuItem onClick={() => handleStatusSelect("CANCELED")}>Canceled</MenuItem>
+                <MenuItem onClick={() => handleStatusSelect("")}>All</MenuItem>
+            </Menu>
 
-            {/* Calendar */}
-            {/* Calendar container with horizontal scroll on mobile */}
             <Box
+                ref={calendarViewportRef}
                 sx={{
-                    minWidth: { xs: '100%', sm: 'unset' },
-                    overflowX: { xs: 'auto', sm: 'visible' },
-                    WebkitOverflowScrolling: 'touch',
+                    flex: calendarViewportHeight ? '0 0 auto' : 1,
+                    minHeight: 0,
+                    mt: 1.5,
                     width: '100%',
-                    // Paper wrapper style
-                    borderRadius: 2,
-                    border: `1px solid ${theme.palette.divider}`,
-                    bgcolor: theme.palette.background.paper,
-                    p: 0,
-                    // Height for calendar
-                    height: { xs: 'calc(100dvh - 280px)', md: 'calc(100vh - 240px)' },
-                    minHeight: 400,
-                    position: 'relative',
-                    zIndex: 0,
+                    overflow: 'hidden',
+                    height: calendarViewportHeight ? `${calendarViewportHeight}px` : 'auto',
+                    maxHeight: calendarViewportHeight ? `${calendarViewportHeight}px` : undefined,
+                    transition: 'height 0.25s ease, max-height 0.25s ease'
                 }}
             >
-                <Box sx={{ width: '100%', height: '100%', position: 'relative', zIndex: 1 }}>
-                    <FullCalendar
-                        ref={calendarRef}
-                        plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-                        initialView={getDefaultCalendarView()}
-                        headerToolbar={false} // We're creating our own header
-                        firstDay={1}
-                        events={lessonsToEvents()}
-                        selectable={user?.role === "tutor"}
-                        select={handleDateSelect}
-                        selectOverlap={false}
-                        eventClick={handleEventClick}
-                        dateClick={handleDayClick}
-                        height="100%"
-                        nowIndicator={true}
-                        dayMaxEvents={true}
-                        allDaySlot={false}
-                        slotMinTime="08:00:00"
-                        slotMaxTime="23:00:00"
-                        slotDuration="01:00:00"
-                        slotLabelInterval="01:00:00"
-                        snapDuration="00:15:00"
-                        expandRows={true}
-                        stickyHeaderDates={true}
-                        editable={user?.role === "tutor"}
-                        datesSet={() => {
-                            refreshLessons();
+                <Box
+                    sx={{
+                        height: '100%',
+                        borderRadius: 2,
+                        border: `1px solid ${theme.palette.divider}`,
+                        bgcolor: theme.palette.background.paper,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        overflow: 'hidden'
+                    }}
+                >
+                    <Box
+                        sx={{
+                            flex: 1,
+                            minHeight: 0,
+                            overflow: 'hidden',
+                            display: 'flex',
+                            flexDirection: 'column'
                         }}
-                        eventDrop={(info) => {
-                            // Handle event drop (reschedule)
-                            const lesson = info.event.extendedProps.lesson;
-                            const newStart = info.event.start;
-                            const newEnd = info.event.end;
+                    >
+                        <Box
+                            sx={{
+                                flex: 1,
+                                minHeight: 0,
+                                overflow: 'hidden'
+                            }}
+                        >
+                            <Box
+                                sx={{
+                                    height: '100%',
+                                    width: '100%',
+                                    overflowX: 'auto',
+                                    overflowY: 'hidden',
+                                    WebkitOverflowScrolling: 'touch'
+                                }}
+                            >
+                                <Box
+                                    sx={{
+                                        minWidth: `${calendarMinWidth}px`,
+                                        height: '100%',
+                                        '& .fc': {
+                                            minHeight: '100%'
+                                        },
+                                        '& .fc-view-harness': {
+                                            minHeight: '100%'
+                                        },
+                                        '& .fc-scrollgrid': {
+                                            minWidth: `${calendarMinWidth}px`
+                                        },
+                                        '& .fc-scroller': {
+                                            overflowY: 'auto !important'
+                                        },
+                                        '& .fc-scroller-harness': {
+                                            height: '100% !important'
+                                        },
+                                        '& .fc-timegrid-axis': {
+                                            width: `${TIME_COLUMN_WIDTH}px`,
+                                            minWidth: `${TIME_COLUMN_WIDTH}px`,
+                                            maxWidth: `${TIME_COLUMN_WIDTH}px`
+                                        },
+                                        '& .fc-timegrid-col': {
+                                            minWidth: `${DAY_COLUMN_MIN_WIDTH}px`
+                                        },
+                                        '& .fc-timegrid-slot': {
+                                            height: { xs: '36px', md: '40px' },
+                                            minHeight: { xs: '36px', md: '40px' }
+                                        },
+                                        '& .fc-timegrid-slot-label': {
+                                            height: { xs: '36px', md: '40px' },
+                                            minHeight: { xs: '36px', md: '40px' }
+                                        },
+                                        '& .fc-timegrid-slot-label-cushion': {
+                                            fontSize: { xs: '0.75rem', md: '0.85rem' },
+                                            paddingTop: 0
+                                        },
+                                        '& .fc-daygrid-day': {
+                                            minWidth: `${DAY_COLUMN_MIN_WIDTH}px`
+                                        },
+                                        '& .fc-daygrid-body table': {
+                                            minWidth: `${calendarMinWidth}px`
+                                        },
+                                        '& .fc-timegrid-body > table': {
+                                            minWidth: `${calendarMinWidth}px`
+                                        },
+                                        '& .fc-event': {
+                                            backgroundColor: 'transparent !important',
+                                            border: 'none !important',
+                                            padding: 0
+                                        }
+                                    }}
+                                >
+                                    <FullCalendar
+                                        ref={calendarRef}
+                                        plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+                                        initialView={calendarView}
+                                        headerToolbar={false} // We're creating our own header
+                                        firstDay={1}
+                                        events={lessonsToEvents()}
+                                        selectable={user?.role === "tutor"}
+                                        select={handleDateSelect}
+                                        selectOverlap={false}
+                                        eventClick={handleEventClick}
+                                        dateClick={handleDayClick}
+                                        height="100%"
+                                        nowIndicator={true}
+                                        dayMaxEvents={true}
+                                        allDaySlot={false}
+                                        slotMinTime="08:00:00"
+                                        slotMaxTime="23:00:00"
+                                        slotDuration="01:00:00"
+                                        slotLabelInterval="01:00:00"
+                                        snapDuration="00:15:00"
+                                        expandRows={true}
+                                        stickyHeaderDates={true}
+                                        editable={user?.role === "tutor"}
+                                        datesSet={() => {
+                                            refreshLessons();
+                                        }}
+                                        eventDrop={(info) => {
+                                            // Handle event drop (reschedule)
+                                            const lesson = info.event.extendedProps.lesson;
+                                            const newStart = info.event.start;
+                                            const newEnd = info.event.end;
 
-                            if (newStart && newEnd) {
-                                // Calculate new duration in minutes
-                                const newDuration = Math.round((newEnd.getTime() - newStart.getTime()) / (1000 * 60));
+                                            if (newStart && newEnd) {
+                                                // Calculate new duration in minutes
+                                                const newDuration = Math.round((newEnd.getTime() - newStart.getTime()) / (1000 * 60));
 
-                                // Show loading indicator
-                                const originalElement = info.el;
-                                originalElement.style.opacity = '0.7';
+                                                // Show loading indicator
+                                                const originalElement = info.el;
+                                                originalElement.style.opacity = '0.7';
 
-                                // Update lesson in backend
-                                updateLesson(lesson.id, {
-                                    dateTime: newStart.toISOString(),
-                                    duration: newDuration
-                                })
-                                .then(() => {
-                                    // Success - show confirmation
-                                    originalElement.style.opacity = '1';
-                                    originalElement.classList.add('status-change');
-                                    setTimeout(() => {
-                                        originalElement.classList.remove('status-change');
-                                    }, 500);
+                                                // Update lesson in backend
+                                                updateLesson(lesson.id, {
+                                                    dateTime: newStart.toISOString(),
+                                                    duration: newDuration
+                                                })
+                                                .then(() => {
+                                                    // Success - show confirmation
+                                                    originalElement.style.opacity = '1';
+                                                    originalElement.classList.add('status-change');
+                                                    setTimeout(() => {
+                                                        originalElement.classList.remove('status-change');
+                                                    }, 500);
 
-                                    // Refresh lessons to get updated data
-                                    refreshLessons();
-                                })
-                                .catch((error) => {
-                                    console.error("Failed to update lesson:", error);
-                                    info.revert(); // Revert the drag if update fails
-                                });
-                            }
-                        }}
-                        dayHeaderFormat={{ weekday: 'short', day: 'numeric', omitCommas: true }}
-                        eventTimeFormat={{
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            meridiem: false
-                        }}
-                        slotLabelFormat={{
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            hour12: false
-                        }}
-
-                        dayCellDidMount={(info) => {
-                            // Highlight today's date
-                            if (info.isToday) {
-                                info.el.style.backgroundColor = alpha(theme.palette.primary.main, 0.05);
-                            }
-                        }}
-                    />
+                                                    // Refresh lessons to get updated data
+                                                    refreshLessons();
+                                                })
+                                                .catch((error) => {
+                                                    console.error("Failed to update lesson:", error);
+                                                    info.revert(); // Revert the drag if update fails
+                                                });
+                                            }
+                                        }}
+                                        dayHeaderFormat={{ weekday: 'short', day: 'numeric', omitCommas: true }}
+                                        eventTimeFormat={{
+                                            hour: '2-digit',
+                                            minute: '2-digit',
+                                            meridiem: false
+                                        }}
+                                        slotLabelFormat={{
+                                            hour: '2-digit',
+                                            minute: '2-digit',
+                                            hour12: false
+                                        }}
+                                        eventContent={renderEventContent}
+                                        dayCellDidMount={(info) => {
+                                            // Highlight today's date
+                                            if (info.isToday) {
+                                                info.el.style.backgroundColor = alpha(theme.palette.primary.main, 0.05);
+                                            }
+                                        }}
+                                    />
+                                </Box>
+                            </Box>
+                        </Box>
+                    </Box>
                 </Box>
             </Box>
 
