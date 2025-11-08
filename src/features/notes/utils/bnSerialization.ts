@@ -229,14 +229,18 @@ function textToInline(text: string) {
       }
     }
     // italic
-    if (text[i] === '_' ) {
-      const end = text.indexOf('_', i + 1);
-      if (end > i + 1) {
-        pushText(text.slice(i + 1, end), ['italic']);
-        i = end + 1;
-        continue;
+      if (text[i] === '_') {
+          const end = text.indexOf('_', i + 1);
+          if (end > i + 1) {
+              pushText(text.slice(i + 1, end), ['italic']);
+              i = end + 1;
+              continue;
+          } else {
+              pushText('_');
+              i += 1;
+              continue;
+          }
       }
-    }
     // highlight ==text==
     if (text[i] === '=' && text[i + 1] === '=') {
       const end = text.indexOf('==', i + 2);
