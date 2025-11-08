@@ -254,6 +254,7 @@ const VocabularyList: React.FC<VocabularyListProps> = ({
                                     }
                                 >
                                     <ListItemText
+                                        disableTypography
                                         primary={
                                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                                 <Typography 

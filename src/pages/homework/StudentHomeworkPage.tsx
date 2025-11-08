@@ -1,62 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import {
-    Box, Button, Card,
-    CardActionArea, CardContent, Chip, CircularProgress, Container, Grid, Typography, Pagination, LinearProgress,
-    Tooltip, IconButton, Stack,
+    Box, Button, Chip, Container, Grid, Typography, Pagination, Stack,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useStudentAssignments } from '../../hooks/useHomeworks';
-import { AssignmentListItemDto } from '../../types/homework';
 import { Link as RouterLink } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import FiltersBar, { FiltersState } from '../../components/homework/FiltersBar';
-
-const AssignmentCard: React.FC<{ a: AssignmentListItemDto }> = ({ a }) => {
-  const total = a.totalTasks;
-  const done = a.completedTasks;
-  const pct = a.progressPct ?? (total ? Math.round((done / total) * 100) : 0);
-  const due = a.dueAt ? new Date(a.dueAt) : null;
-
-  return (
-      <Card variant="outlined" sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-          <CardActionArea
-              component={RouterLink}
-              to={`/homework/${a.id}`}
-              sx={{ flexGrow: 1, display: 'flex', alignItems: 'stretch' }}
-          >
-              <CardContent sx={{ flexGrow: 1 }}>
-                  <Typography variant="h6" gutterBottom>{a.title}</Typography>
-                  {a.instructions && (
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>{a.instructions}</Typography>
-                  )}
-                  <Box display="flex" alignItems="center" gap={2}>
-                      <Box position="relative" display="inline-flex">
-                          <CircularProgress variant="determinate" value={pct} />
-                          <Box
-                              top={0}
-                              left={0}
-                              bottom={0}
-                              right={0}
-                              position="absolute"
-                              display="flex"
-                              alignItems="center"
-                              justifyContent="center"
-                          >
-                              <Typography variant="caption" component="div" color="text.secondary">
-                                  {`${pct}%`}
-                              </Typography>
-                          </Box>
-                      </Box>
-                      <Typography variant="body2">{done}/{total} tasks</Typography>
-                  </Box>
-                  {due && (
-                      <Chip size="small" label={`Due: ${due.toLocaleDateString()}`} sx={{ mt: 1 }} />
-                  )}
-              </CardContent>
-          </CardActionArea>
-      </Card>
-  );
-};
 
 const StudentHomeworkPage: React.FC = () => {
   const { user } = useAuth();
@@ -102,7 +52,7 @@ const StudentHomeworkPage: React.FC = () => {
   const studentId = !isTeacher ? (user?.id || '') : '';
 
   const [page, setPage] = useState<number>(1);
-  const [size, setSize] = useState<number>(10);
+  const [size] = useState<number>(10);
 
   // reset to first page when filters change
   React.useEffect(() => {
@@ -133,7 +83,7 @@ const StudentHomeworkPage: React.FC = () => {
     };
   }, [filtersApplied, filters.status, filters.hideCompleted, from, to, page, size, filters.sort]);
 
-  const { data, isError, isFetching } = useStudentAssignments(studentId, effectiveParams);
+  const { data, isError} = useStudentAssignments(studentId, effectiveParams);
 
   // Keep previous data to avoid list flashing during refetch
   const [prevData, setPrevData] = useState<typeof data>(undefined);

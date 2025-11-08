@@ -482,6 +482,22 @@ const DailyCallLayout: React.FC<{
         sendTranscriptionPanelState(open);
     }, [isTutor, sendTranscriptionPanelState]);
 
+    // Keep stable references so lesson reset effect doesn't re-run when callbacks change
+    const studentPanelStateRef = useRef(sendStudentPanelState);
+    useEffect(() => {
+        studentPanelStateRef.current = sendStudentPanelState;
+    }, [sendStudentPanelState]);
+
+    const contentPanelStateRef = useRef(sendContentPanelState);
+    useEffect(() => {
+        contentPanelStateRef.current = sendContentPanelState;
+    }, [sendContentPanelState]);
+
+    const transcriptionPanelStateRef = useRef(shareTranscriptionPanel);
+    useEffect(() => {
+        transcriptionPanelStateRef.current = shareTranscriptionPanel;
+    }, [shareTranscriptionPanel]);
+
     useEffect(() => {
         if (!isTutor) {
             transcriptionShareRef.current = false;
@@ -622,17 +638,14 @@ const DailyCallLayout: React.FC<{
         setSharedContentOpen(false);
         setSharedContentBy(undefined);
         if (isTutor) {
-            sendStudentPanelState(false);
-            sendContentPanelState(false);
-            shareTranscriptionPanel(false);
+            studentPanelStateRef.current?.(false);
+            contentPanelStateRef.current?.(false);
+            transcriptionPanelStateRef.current?.(false);
         }
     }, [
         lessonId,
         closeWorkspace,
         isTutor,
-        sendStudentPanelState,
-        sendContentPanelState,
-        shareTranscriptionPanel
     ]);
 
     useEffect(() => {
@@ -958,9 +971,9 @@ const DailyCallLayout: React.FC<{
                             </IconButton>
                         </Box>
                     </Box>
-                    <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+                    <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex' }}>
                         {workspaceView === 'transcription' && (
-                            <Box sx={{ flex: 1, position: 'relative' }}>
+                            <Box sx={{ flex: 1, minHeight: 0, position: 'relative', width: '100%' }}>
                                 <TranscriptionPanel
                                     embedded
                                     call={dailyCall}
@@ -973,7 +986,7 @@ const DailyCallLayout: React.FC<{
                         )}
 
                         {workspaceView === 'student' && (
-                            <Box sx={{ flex: 1, overflow: 'auto', p: 1.5 }}>
+                            <Box sx={{ flex: 1, minHeight: 0, width: '100%', overflow: 'auto', p: 1.5 }}>
                                 {(isTutor ? !!studentId : !!resolvedStudentId) ? (
                                     <StudentPage
                                         studentIdOverride={(isTutor ? studentId : resolvedStudentId) as string}
@@ -1002,7 +1015,7 @@ const DailyCallLayout: React.FC<{
                         )}
 
                         {workspaceView === 'content' && (
-                            <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                            <Box sx={{ flex: 1, minHeight: 0, width: '100%', display: 'flex', flexDirection: 'column' }}>
                                 {isTutor && (
                                     <Box sx={{ p: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
                                         <OpenCompositionButton onOpen={handleContentSelection} />
