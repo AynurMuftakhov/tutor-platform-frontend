@@ -827,7 +827,9 @@ const ListeningMaterialBuilder: React.FC<ListeningMaterialBuilderProps> = ({
             fullWidth
             placeholder="Write or generate the listening transcript here"
             inputRef={transcriptInputRef}
-            onSelect={handleTranscriptSelectionChange}
+            inputProps={{
+              onSelect: handleTranscriptSelectionChange,
+            }}
           />
 
           {selectedWordIds.length > 0 && (

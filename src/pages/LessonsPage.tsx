@@ -389,6 +389,7 @@ const LessonsPage = () => {
                     py: 0.5,
                     fontSize: 12,
                     lineHeight: 1.2,
+                    height: '100%',
                     wordBreak: 'break-word'
                 }}
             >
