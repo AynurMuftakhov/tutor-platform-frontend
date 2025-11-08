@@ -441,11 +441,6 @@ const ListeningAudioGenerationPanel: React.FC<ListeningAudioGenerationPanelProps
       enqueueSnackbar('Select a voice to continue.', { variant: 'warning' });
       return;
     }
-    if (!coverageSatisfied) {
-      enqueueSnackbar('Please ensure every focus word appears in the transcript.', { variant: 'warning' });
-      return;
-    }
-
     stopPreviewAudio();
     setIsSubmitting(true);
     setJobError(null);
@@ -509,7 +504,6 @@ const ListeningAudioGenerationPanel: React.FC<ListeningAudioGenerationPanelProps
     !!transcriptId &&
     !!transcriptText.trim() &&
     !!selectedVoiceId &&
-    coverageSatisfied &&
     !isSubmitting &&
     !(job && !isTerminalStatus(job.status));
 
@@ -527,6 +521,11 @@ const ListeningAudioGenerationPanel: React.FC<ListeningAudioGenerationPanelProps
       <Typography variant="body2" color="text.secondary">
         Choose a narration voice, optionally tweak the delivery, then generate an MP3 preview for this listening task.
       </Typography>
+      {!coverageSatisfied && wordIds.length > 0 && (
+        <Alert severity="warning">
+          Some focus words are still missing from the transcript. You can continue, but consider editing the transcript for full coverage.
+        </Alert>
+      )}
 
       <Paper variant="outlined" sx={{ p: 2 }}>
         <Stack spacing={2}>

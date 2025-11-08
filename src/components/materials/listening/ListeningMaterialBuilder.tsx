@@ -406,7 +406,6 @@ const ListeningMaterialBuilder: React.FC<ListeningMaterialBuilderProps> = ({
     Boolean(transcriptId) &&
     !hasUnsavedTranscriptEdits &&
     Boolean(audioSourceUrl) &&
-    !(selectedWordIds.length > 0 && !coverageSatisfied) &&
     !isTranscriptSaving &&
     !isGeneratingTranscript &&
     !loadingTask;
@@ -420,8 +419,6 @@ const ListeningMaterialBuilder: React.FC<ListeningMaterialBuilderProps> = ({
         enqueueSnackbar('Save transcript edits before continuing.', { variant: 'warning' });
       } else if (!audioSourceUrl) {
         enqueueSnackbar('Generate audio before saving the material.', { variant: 'warning' });
-      } else if (selectedWordIds.length > 0 && !coverageSatisfied) {
-        enqueueSnackbar('Please cover every target word in the transcript.', { variant: 'warning' });
       }
       return;
     }
@@ -713,6 +710,11 @@ const ListeningMaterialBuilder: React.FC<ListeningMaterialBuilderProps> = ({
                   />
                 ))}
               </Stack>
+              {!coverageSatisfied && (
+                <Alert severity="warning" sx={{ mt: 1 }}>
+                  Some target words are still missing, but you can continue if you&apos;re comfortable with the coverage.
+                </Alert>
+              )}
             </Box>
           )}
 
