@@ -18,6 +18,7 @@ import {
     Slider,
     Stack,
     TextField,
+    Tooltip,
     Typography,
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
@@ -82,6 +83,14 @@ const buildFolderOptions = (folders: MaterialFolderTree[], level = 0): React.Rea
 
 const countWords = (text: string) => (text.trim() ? text.trim().split(/\s+/).length : 0);
 
+type CoverageEntry = {
+  word: string;
+  wordId: string;
+  covered: boolean;
+  manual: boolean;
+  manualText?: string;
+};
+
 const ListeningMaterialBuilder: React.FC<ListeningMaterialBuilderProps> = ({
   onCancel,
   onMaterialCreated,
@@ -119,6 +128,10 @@ const ListeningMaterialBuilder: React.FC<ListeningMaterialBuilderProps> = ({
   const [isTranscriptSaving, setIsTranscriptSaving] = useState(false);
   const [isGeneratingTranscript, setIsGeneratingTranscript] = useState(false);
   const [isValidatingTranscript, setIsValidatingTranscript] = useState(false);
+  const transcriptInputRef = useRef<HTMLTextAreaElement | HTMLInputElement | null>(null);
+  const [manualCoverageLinks, setManualCoverageLinks] = useState<Record<string, string>>({});
+  const [linkTargetWordId, setLinkTargetWordId] = useState('');
+  const [selectionPreview, setSelectionPreview] = useState('');
 
   const [audioStatus, setAudioStatus] = useState<ListeningAudioJobStatus | null>(null);
   const [audioSourceUrl, setAudioSourceUrl] = useState<string>(materialToEdit?.sourceUrl ?? '');
@@ -160,21 +173,141 @@ const ListeningMaterialBuilder: React.FC<ListeningMaterialBuilderProps> = ({
       .filter((word): word is VocabularyWord => Boolean(word));
   }, [allWords, selectedWordIds]);
 
-  const coverageEntries = useMemo(() => {
+  const coverageEntries: CoverageEntry[] = useMemo(() => {
     if (!selectedWords.length) return [];
     return selectedWords.map((word) => {
       const normalized = word.text.trim();
       const lower = normalized.toLowerCase();
-      const covered = Boolean(
+      const autoCovered = Boolean(
         wordCoverage[normalized] ?? wordCoverage[lower] ?? wordCoverage[word.text] ?? false,
       );
-      return { word: normalized, covered };
+      const manualText = manualCoverageLinks[word.id];
+      return {
+        word: normalized,
+        wordId: word.id,
+        covered: autoCovered || Boolean(manualText),
+        manual: Boolean(manualText),
+        manualText: manualText || undefined,
+      };
+    });
+  }, [selectedWords, wordCoverage, manualCoverageLinks]);
+
+  const missingCoverageEntries = useMemo(
+    () => coverageEntries.filter((entry) => !entry.covered),
+    [coverageEntries],
+  );
+  const coverageSatisfied =
+    selectedWordIds.length === 0 || missingCoverageEntries.length === 0;
+  const missingCoverage = missingCoverageEntries.map((entry) => entry.word);
+
+  useEffect(() => {
+    if (!missingCoverageEntries.length) {
+      if (linkTargetWordId) {
+        setLinkTargetWordId('');
+      }
+      return;
+    }
+    const stillValid = missingCoverageEntries.some((entry) => entry.wordId === linkTargetWordId);
+    if (!linkTargetWordId || !stillValid) {
+      setLinkTargetWordId(missingCoverageEntries[0].wordId);
+    }
+  }, [missingCoverageEntries, linkTargetWordId]);
+
+  useEffect(() => {
+    setManualCoverageLinks((prev) => {
+      if (!Object.keys(prev).length) return prev;
+      const next: Record<string, string> = {};
+      selectedWordIds.forEach((wordId) => {
+        if (prev[wordId]) {
+          next[wordId] = prev[wordId];
+        }
+      });
+      if (Object.keys(next).length === Object.keys(prev).length) {
+        return prev;
+      }
+      return next;
+    });
+  }, [selectedWordIds]);
+
+  useEffect(() => {
+    if (!selectedWords.length) return;
+    setManualCoverageLinks((prev) => {
+      if (!Object.keys(prev).length) return prev;
+      let updated = false;
+      const next = { ...prev };
+      selectedWords.forEach((word) => {
+        const normalized = word.text.trim();
+        const lower = normalized.toLowerCase();
+        const autoCovered = Boolean(
+          wordCoverage[normalized] ?? wordCoverage[lower] ?? wordCoverage[word.text] ?? false,
+        );
+        if (autoCovered && next[word.id]) {
+          delete next[word.id];
+          updated = true;
+        }
+      });
+      return updated ? next : prev;
     });
   }, [selectedWords, wordCoverage]);
 
-  const coverageSatisfied =
-    selectedWordIds.length === 0 || coverageEntries.every((entry) => entry.covered);
-  const missingCoverage = coverageEntries.filter((entry) => !entry.covered).map((entry) => entry.word);
+  useEffect(() => {
+    setManualCoverageLinks({});
+    setSelectionPreview('');
+  }, [transcriptId]);
+
+  const getCurrentTranscriptSelection = () => {
+    const input = transcriptInputRef.current;
+    if (!input) return '';
+    const start = input.selectionStart ?? 0;
+    const end = input.selectionEnd ?? 0;
+    if (start === end) return '';
+    return input.value.substring(start, end).trim();
+  };
+
+  const handleTranscriptSelectionChange = (
+    event: React.SyntheticEvent<HTMLTextAreaElement | HTMLInputElement>,
+  ) => {
+    const target = event.currentTarget;
+    const start = target.selectionStart ?? 0;
+    const end = target.selectionEnd ?? 0;
+    if (start === end) {
+      setSelectionPreview('');
+      return;
+    }
+    setSelectionPreview(target.value.substring(start, end).trim());
+  };
+
+  const handleLinkSelectionToWord = () => {
+    if (!linkTargetWordId) {
+      enqueueSnackbar('Choose a target word to link.', { variant: 'info' });
+      return;
+    }
+    const selection = getCurrentTranscriptSelection();
+    if (!selection) {
+      enqueueSnackbar('Select text in the transcript before linking.', { variant: 'warning' });
+      return;
+    }
+    const targetWord = selectedWords.find((word) => word.id === linkTargetWordId);
+    if (!targetWord) {
+      enqueueSnackbar('Selected target word is no longer available.', { variant: 'warning' });
+      return;
+    }
+    setManualCoverageLinks((prev) => ({
+      ...prev,
+      [linkTargetWordId]: selection,
+    }));
+    setSelectionPreview(selection);
+    enqueueSnackbar(`Linked selection to "${targetWord.text}".`, { variant: 'success' });
+  };
+
+  const handleManualLinkClear = (wordId: string) => {
+    setManualCoverageLinks((prev) => {
+      if (!prev[wordId]) return prev;
+      const next = { ...prev };
+      delete next[wordId];
+      return next;
+    });
+  };
 
   const ensureTeacher = () => {
     if (!user?.id) {
@@ -693,6 +826,8 @@ const ListeningMaterialBuilder: React.FC<ListeningMaterialBuilderProps> = ({
             minRows={6}
             fullWidth
             placeholder="Write or generate the listening transcript here"
+            inputRef={transcriptInputRef}
+            onSelect={handleTranscriptSelectionChange}
           />
 
           {selectedWordIds.length > 0 && (
@@ -701,19 +836,78 @@ const ListeningMaterialBuilder: React.FC<ListeningMaterialBuilderProps> = ({
                 Coverage
               </Typography>
               <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                {coverageEntries.map((entry) => (
-                  <Chip
-                    key={entry.word}
-                    label={entry.word}
-                    color={entry.covered ? 'success' : 'warning'}
-                    variant={entry.covered ? 'filled' : 'outlined'}
-                  />
-                ))}
+                {coverageEntries.map((entry) => {
+                  const chip = (
+                    <Chip
+                      label={entry.word}
+                      color={entry.manual ? 'info' : entry.covered ? 'success' : 'warning'}
+                      variant={entry.covered ? 'filled' : 'outlined'}
+                      onDelete={entry.manual ? () => handleManualLinkClear(entry.wordId) : undefined}
+                    />
+                  );
+                  return (
+                    <Box component="span" key={entry.wordId}>
+                      {entry.manualText ? (
+                        <Tooltip title={`Manual link: "${entry.manualText}"`}>
+                          {chip}
+                        </Tooltip>
+                      ) : (
+                        chip
+                      )}
+                    </Box>
+                  );
+                })}
               </Stack>
               {!coverageSatisfied && (
-                <Alert severity="warning" sx={{ mt: 1 }}>
-                  Some target words are still missing, but you can continue if you&apos;re comfortable with the coverage.
-                </Alert>
+                <>
+                  <Alert severity="warning" sx={{ mt: 1 }}>
+                    Some target words are still missing, but you can continue if you&apos;re comfortable with the coverage or link them manually below.
+                  </Alert>
+                  {missingCoverageEntries.length > 0 && (
+                    <Box
+                      sx={{
+                        mt: 2,
+                        p: 2,
+                        borderRadius: 1,
+                        border: (theme) => `1px dashed ${theme.palette.divider}`,
+                      }}
+                    >
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                        Link coverage manually
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                        Highlight transcript text, choose the target word it satisfies, then link them if validation missed it.
+                      </Typography>
+                      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                        <TextField
+                          select
+                          fullWidth
+                          label="Target word"
+                          value={linkTargetWordId}
+                          onChange={(e) => setLinkTargetWordId(e.target.value)}
+                        >
+                          {missingCoverageEntries.map((entry) => (
+                            <MenuItem key={entry.wordId} value={entry.wordId}>
+                              {entry.word}
+                            </MenuItem>
+                          ))}
+                        </TextField>
+                        <Button
+                          variant="outlined"
+                          onClick={handleLinkSelectionToWord}
+                          disabled={!linkTargetWordId}
+                        >
+                          Link selection
+                        </Button>
+                      </Stack>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                        {selectionPreview
+                          ? `Selection: "${selectionPreview.length > 80 ? `${selectionPreview.slice(0, 77)}…` : selectionPreview}"`
+                          : 'Select text in the transcript to link it.'}
+                      </Typography>
+                    </Box>
+                  )}
+                </>
               )}
             </Box>
           )}
