@@ -414,7 +414,7 @@ const DailyCallLayout: React.FC<{
         if (!dailyCall) return;
         const state = (dailyCall as any).meetingState?.() ?? undefined;
         // if already joined — send immediately
-        if (state === 'joined') {
+        if (state === 'joined-meeting') {
             try {
                 (dailyCall as any).sendAppMessage?.(payload);
             } catch (err) {
@@ -1026,11 +1026,12 @@ const DailyCallLayout: React.FC<{
                 )}
 
                 {workspaceView === 'student' && (
-                    <Box sx={{ flex: 1, minHeight: 0, width: '100%', overflow: 'auto', p: 1.5 }}>
+                    <Box sx={{ flex: 1, minHeight: 0, width: '100%', overflow: 'auto' }}>
                         {(isTutor ? !!studentId : !!resolvedStudentId) ? (
                             <StudentPage
                                 studentIdOverride={(isTutor ? studentId : resolvedStudentId) as string}
                                 embedded
+                                insideDrawer
                                 hideOverviewTab
                                 headerAccessory={studentHeaderAccessory}
                                 activeTabOverride={isTutor ? studentProfileTab : sharedProfileTab}

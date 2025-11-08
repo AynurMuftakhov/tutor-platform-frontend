@@ -95,8 +95,8 @@ const HomeworkTaskFrame: React.FC<Props> = ({ assignment, task, readOnly }) => {
   if (task.type === 'VIDEO') {
     if (url) {
       return (
-        <Card variant="outlined">
-          <CardContent>
+        <Card variant="outlined" sx={{ width: '100%' }}>
+          <CardContent sx={{ p: { xs: 2, sm: 2.5 } }}>
             <Typography variant="subtitle1" sx={{ mb: 1 }}>{task.title}</Typography>
             <Box sx={{ position: 'relative', pt: '56.25%' }}>
               <video
@@ -129,8 +129,8 @@ const HomeworkTaskFrame: React.FC<Props> = ({ assignment, task, readOnly }) => {
 
   if (task.type === 'READING') {
     return (
-      <Card variant="outlined">
-        <CardContent>
+      <Card variant="outlined" sx={{ width: '100%' }}>
+        <CardContent sx={{ p: { xs: 2, sm: 2.5 } }}>
           <Typography variant="subtitle1" sx={{ mb: 1 }}>{task.title}</Typography>
           {lessonLoading && <Stack alignItems="center" py={4}><CircularProgress size={24} /></Stack>}
           {!lessonLoading && lessonData && (
@@ -148,8 +148,8 @@ const HomeworkTaskFrame: React.FC<Props> = ({ assignment, task, readOnly }) => {
       return <Card variant="outlined"><CardContent><Typography>No grammar material selected.</Typography></CardContent></Card>;
     }
     return (
-      <Card variant="outlined">
-        <CardContent>
+      <Card variant="outlined" sx={{ width: '100%' }}>
+        <CardContent sx={{ p: { xs: 2, sm: 2.5 } }}>
           <Typography variant="subtitle1" sx={{ mb: 1 }}>{task.title}</Typography>
           <GrammarPlayer
             materialId={materialId}
@@ -183,8 +183,8 @@ const HomeworkTaskFrame: React.FC<Props> = ({ assignment, task, readOnly }) => {
   if (task.type === 'LINK') {
     const href: string | undefined = (task.contentRef as any)?.url;
     return (
-      <Card variant="outlined">
-        <CardContent>
+      <Card variant="outlined" sx={{ width: '100%' }}>
+        <CardContent sx={{ p: { xs: 2, sm: 2.5 } }}>
           <Typography variant="subtitle1" sx={{ mb: 1 }}>{task.title}</Typography>
           {href ? (
             <Typography variant="body2" sx={{ mb: 2 }}>
@@ -337,8 +337,8 @@ const ListeningTaskPlayer: React.FC<ListeningTaskPlayerProps> = ({
 
   if (!audioUrl) {
     return (
-      <Card variant="outlined">
-        <CardContent>
+      <Card variant="outlined" sx={{ width: '100%' }}>
+        <CardContent sx={{ p: { xs: 2, sm: 2.5 } }}>
           <Typography variant="subtitle1" sx={{ mb: 1 }}>{task.title}</Typography>
           <Typography color="text.secondary">Audio preview is unavailable for this task.</Typography>
         </CardContent>

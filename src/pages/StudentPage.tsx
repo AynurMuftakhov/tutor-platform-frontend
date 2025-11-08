@@ -257,6 +257,7 @@ const SectionCard: React.FC<{ title: string; children?: React.ReactNode }> = ({ 
 export interface StudentPageProps {
   studentIdOverride?: string;
   embedded?: boolean;
+  insideDrawer?: boolean;
   onClose?: () => void;
   activeTabOverride?: number;
   onTabChange?: (tab: number) => void;
@@ -280,6 +281,7 @@ export interface StudentPageProps {
 const StudentPage: React.FC<StudentPageProps> = ({
   studentIdOverride,
   embedded = false,
+  insideDrawer = false,
   onClose,
   activeTabOverride,
   onTabChange,
@@ -579,22 +581,34 @@ const StudentPage: React.FC<StudentPageProps> = ({
                   </Button>
                   <Typography variant="subtitle1" fontWeight={700}>{openedAssignment.title}</Typography>
                 </Box>
-                <Grid container spacing={2}>
-                  <Grid size={{ xs: 12, md: 4 }}>
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                      {[...openedAssignment.tasks].sort((a,b)=>a.ordinal-b.ordinal).map(t => (
-                        <Button key={t.id} variant={t.id===currentTaskId? 'contained':'outlined'} size="small" sx={{ justifyContent: 'flex-start' }} onClick={() => setCurrentTaskId(t.id)}>
-                          {t.ordinal}. {t.title}
-                        </Button>
-                      ))}
-                    </Box>
-                  </Grid>
-                  <Grid size={{ xs: 12, md: 8 }}>
-                    {currentTask && (
-                      <HomeworkTaskFrame assignment={openedAssignment as AssignmentDto} task={currentTask as TaskDto} readOnly={isTeacher} />
-                    )}
-                  </Grid>
-                </Grid>
+                {openedAssignment.tasks.length > 1 && (
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      gap: 0.75,
+                      overflowX: 'auto',
+                      pb: 0.5,
+                      mb: 1.5,
+                    }}
+                  >
+                    {[...openedAssignment.tasks].sort((a,b)=>a.ordinal-b.ordinal).map(t => (
+                      <Button
+                        key={t.id}
+                        variant={t.id===currentTaskId? 'contained':'outlined'}
+                        size="small"
+                        sx={{ flexShrink: 0, textTransform: 'none' }}
+                        onClick={() => setCurrentTaskId(t.id)}
+                      >
+                        {t.ordinal}. {t.title}
+                      </Button>
+                    ))}
+                  </Box>
+                )}
+                {currentTask && (
+                  <Box sx={{ width: '100%' }}>
+                    <HomeworkTaskFrame assignment={openedAssignment as AssignmentDto} task={currentTask as TaskDto} readOnly={isTeacher} />
+                  </Box>
+                )}
               </>
             ) : (
               <StudentHomeworkTab studentId={student.id} isTeacher={isTeacher} onAssignmentOpen={handleAssignmentOpen} autoOpenAssignmentId={autoOpenAssignmentId} autoOpenTaskId={autoOpenTaskId} onConsumedAutoOpen={onConsumeOpenAssignmentCommand} embedded = {embedded} />
@@ -738,20 +752,30 @@ const StudentPage: React.FC<StudentPageProps> = ({
     );
   }
 
+  const isDrawerEmbed = embedded && insideDrawer;
+
   const containerSx = embedded
     ? {
         mt: 0,
         mb: 0,
-        py: 2,
-        px: { xs: 0, sm: 1.5 },
+        py: isDrawerEmbed ? 0 : 2,
+        px: isDrawerEmbed ? 0 : { xs: 0, sm: 1.5 },
         height: "100%",
         display: "flex",
         flexDirection: "column" as const,
+        backgroundColor: isDrawerEmbed ? 'background.paper' : undefined,
       }
     : { mt: 4, mb: 6 };
 
   const bodySx = embedded
-    ? { mt: 0, flex: 1, minHeight: 0, overflowY: "auto", py: 1.5, pr: { xs: 0, sm: 1 } }
+    ? {
+        mt: 0,
+        flex: 1,
+        minHeight: 0,
+        overflowY: "auto",
+        py: isDrawerEmbed ? 1 : 1.5,
+        px: isDrawerEmbed ? 1 : { xs: 0, sm: 1 },
+      }
     : { mt: 2 };
 
   const headerBlock = (
@@ -860,12 +884,15 @@ const StudentPage: React.FC<StudentPageProps> = ({
   const headerSection = embedded ? (
     <Box
       sx={{
-        position: 'sticky',
-        top: 0,
-        zIndex: 4,
-        borderBottom: '1px solid',
+        position: insideDrawer ? 'relative' : 'sticky',
+        top: insideDrawer ? 'auto' : 0,
+        zIndex: insideDrawer ? 1 : 4,
+        borderBottom: insideDrawer ? 'none' : '1px solid',
         borderColor: 'divider',
-        boxShadow: (t) => t.shadows[1],
+        boxShadow: insideDrawer ? 'none' : (t) => t.shadows[1],
+        backgroundColor: (t) => (insideDrawer ? t.palette.background.paper : t.palette.background.default),
+        px: insideDrawer ? 1 : 0,
+        pt: insideDrawer ? 1 : 0,
       }}
     >
       {headerBlock}
