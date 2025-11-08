@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Divider, Box } from '@mui/material';
 import DragHandleIcon from '@mui/icons-material/DragHandle';
 
@@ -15,19 +15,62 @@ interface DraggableDividerProps {
 const DraggableDivider: React.FC<DraggableDividerProps> = ({
   onDrag,
   minLeftWidth = 280, // Minimum width of left pane in pixels
-  maxLeftWidth = 70,  // Maximum width of left pane as percentage
+  maxLeftWidth = 60,  // Maximum width of left pane as percentage
 }) => {
   const [isDragging, setIsDragging] = useState(false);
+  const overlayRef = useRef<HTMLDivElement | null>(null);
+  const gridRectRef = useRef<{ left: number; width: number; top: number; height: number } | null>(null);
 
-  // Handle mouse down to start dragging
+  const attachOverlay = () => {
+    if (overlayRef.current) return;
+    const overlay = document.createElement('div');
+    overlay.style.position = 'fixed';
+    const rect = gridRectRef.current;
+    if (rect) {
+      overlay.style.left = `${rect.left}px`;
+      overlay.style.top = `${rect.top}px`;
+      overlay.style.width = `${rect.width}px`;
+      overlay.style.height = `${rect.height}px`;
+    } else {
+      overlay.style.inset = '0';
+    }
+    overlay.style.zIndex = '2147483647';
+    overlay.style.cursor = 'col-resize';
+    overlay.style.background = 'transparent';
+    overlay.style.touchAction = 'none';
+    document.body.appendChild(overlay);
+    overlayRef.current = overlay;
+  };
+
+  const removeOverlay = () => {
+    if (overlayRef.current) {
+      overlayRef.current.remove();
+      overlayRef.current = null;
+    }
+  };
+
+  const captureGridRect = () => {
+    const grid = document.querySelector('[data-workspace-grid="true"]') as HTMLElement | null;
+    if (grid) {
+      const rect = grid.getBoundingClientRect();
+      gridRectRef.current = { left: rect.left, width: rect.width, top: rect.top, height: rect.height };
+    } else {
+      gridRectRef.current = null;
+    }
+  };
+
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
+    captureGridRect();
+    attachOverlay();
     setIsDragging(true);
   };
 
   // Handle touch start to start dragging on touch devices
   const handleTouchStart = (e: React.TouchEvent) => {
     e.preventDefault();
+    captureGridRect();
+    attachOverlay();
     setIsDragging(true);
   };
 
@@ -36,8 +79,12 @@ const DraggableDivider: React.FC<DraggableDividerProps> = ({
     if (!isDragging) return;
 
     const handleMouseMove = (e: MouseEvent) => {
-      const containerWidth = window.innerWidth;
-      const newLeftWidth = e.clientX;
+      const rect = gridRectRef.current;
+      const containerWidth = rect?.width ?? window.innerWidth;
+      const startX = rect?.left ?? 0;
+      let newLeftWidth = e.clientX - startX;
+      if (newLeftWidth < 0) newLeftWidth = 0;
+      if (newLeftWidth > containerWidth) newLeftWidth = containerWidth;
 
       // Calculate percentage (0-100)
       let newRatio = (newLeftWidth / containerWidth) * 100;
@@ -52,17 +99,16 @@ const DraggableDivider: React.FC<DraggableDividerProps> = ({
       // Call the onDrag callback with the new ratio
       onDrag(newRatio);
 
-      // Update grid template columns directly
-      const wrapper = document.querySelector('[style*="grid-template-columns"]') as HTMLElement;
-      if (wrapper) {
-        wrapper.style.gridTemplateColumns = `${newRatio}% 6px 1fr`;
-      }
     };
 
     const handleTouchMove = (e: TouchEvent) => {
       if (e.touches.length > 0) {
-        const containerWidth = window.innerWidth;
-        const newLeftWidth = e.touches[0].clientX;
+        const rect = gridRectRef.current;
+        const containerWidth = rect?.width ?? window.innerWidth;
+        const startX = rect?.left ?? 0;
+        let newLeftWidth = e.touches[0].clientX - startX;
+        if (newLeftWidth < 0) newLeftWidth = 0;
+        if (newLeftWidth > containerWidth) newLeftWidth = containerWidth;
 
         // Calculate percentage (0-100)
         let newRatio = (newLeftWidth / containerWidth) * 100;
@@ -74,24 +120,19 @@ const DraggableDivider: React.FC<DraggableDividerProps> = ({
         // Enforce max width as percentage
         if (newRatio > maxLeftWidth) newRatio = maxLeftWidth;
 
-        // Call the onDrag callback with the new ratio
         onDrag(newRatio);
-
-        // Update grid template columns directly
-        const wrapper = document.querySelector('[style*="grid-template-columns"]') as HTMLElement;
-        if (wrapper) {
-          wrapper.style.gridTemplateColumns = `${newRatio}% 6px 1fr`;
-        }
       }
     };
 
     // Handle mouse/touch up to stop dragging
     const handleMouseUp = () => {
       setIsDragging(false);
+      removeOverlay();
     };
 
     const handleTouchEnd = () => {
       setIsDragging(false);
+      removeOverlay();
     };
 
     // Add event listeners
@@ -108,8 +149,15 @@ const DraggableDivider: React.FC<DraggableDividerProps> = ({
       document.removeEventListener('touchmove', handleTouchMove);
       document.removeEventListener('touchend', handleTouchEnd);
       document.removeEventListener('touchcancel', handleTouchEnd);
+      removeOverlay();
     };
   }, [isDragging, onDrag, minLeftWidth, maxLeftWidth]);
+
+  useEffect(() => {
+    return () => {
+      removeOverlay();
+    };
+  }, []);
 
   return (
     <Divider

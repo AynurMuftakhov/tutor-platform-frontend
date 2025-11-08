@@ -50,7 +50,7 @@ import type { AssignmentListItemDto } from "../types/homework";
 import HomeworkComposerDrawer from "../components/homework/HomeworkComposerDrawer";
 import PreviousLessonNotesTab from "../features/notes/components/PreviousLessonNotesTab";
 
-const AssignmentCardSmall: React.FC<{ a: AssignmentListItemDto; onOpen: (id: string) => void }> = ({ a, onOpen }) => {
+const AssignmentCardSmall: React.FC<{ a: AssignmentListItemDto; onOpen: (id: string) => void; compact?: boolean }> = ({ a, onOpen, compact }) => {
   const total = a.totalTasks;
   const done = a.completedTasks;
   const pct = a.progressPct ?? (total ? Math.round((done / total) * 100) : 0);
@@ -65,26 +65,35 @@ const AssignmentCardSmall: React.FC<{ a: AssignmentListItemDto; onOpen: (id: str
   return (
     <Paper
       variant="outlined"
-      sx={{ p:2, height: '100%', cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' } }}
+      sx={{
+        p: compact ? 1.25 : 2,
+        height: '100%',
+        cursor: 'pointer',
+        '&:hover': { bgcolor: 'action.hover' },
+        borderRadius: compact ? 1 : 1.5,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1.5,
+      }}
       role="button"
       tabIndex={0}
       onClick={handleActivate}
       onKeyDown={handleKeyDown}
     >
-      <Box display="flex" alignItems="center" justifyContent="space-between" gap={2}>
-        <Box sx={{ minWidth:0 }}>
-          <Typography variant="subtitle1" noWrap>{a.title}</Typography>
-          {a.instructions && (
-            <Typography variant="body2" color="text.secondary" noWrap>{a.instructions}</Typography>
-          )}
-          {due && <Typography variant="caption" color="text.secondary">Due: {due.toLocaleDateString()}</Typography>}
-        </Box>
-        <Box textAlign="center">
-          <Typography variant="caption">{done}/{total}</Typography>
-          <Box sx={{ mt:0.5 }}>
-            <Chip size="small" label={`${pct}%`} />
-          </Box>
-        </Box>
+      <Box sx={{ minWidth: 0, flex: 1 }}>
+        <Typography variant={compact ? 'subtitle2' : 'subtitle1'} noWrap fontWeight={600}>{a.title}</Typography>
+        {a.instructions && (
+          <Typography variant="body2" color="text.secondary" noWrap sx={{ fontSize: compact ? 12 : undefined }}>{a.instructions}</Typography>
+        )}
+        {due && (
+          <Typography variant="caption" color="text.secondary">
+            Due {due.toLocaleDateString()}
+          </Typography>
+        )}
+      </Box>
+      <Box textAlign="right" sx={{ minWidth: 72 }}>
+        <Typography variant="body2" fontWeight={600}>{done}/{total}</Typography>
+        <Chip size="small" label={`${pct}%`} />
       </Box>
     </Paper>
   );
@@ -165,14 +174,18 @@ const StudentHomeworkTab: React.FC<{ studentId: string; isTeacher: boolean; onAs
   if (isError) return <Typography color="error">Failed to load homework.</Typography>;
 
   const header = (
-    <Stack>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, gap: 1, flexWrap: 'wrap' }}>
+    <Stack spacing={1.25}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, flexWrap: 'wrap' }}>
         {isTeacher && !embedded && (
           <Button onClick={() => setComposerOpen(true)} variant="contained" size="small">Assign new homework</Button>
         )}
       </Box>
       <Box sx={{ flex: 1, minWidth: 260 }}>
-        <FiltersBar value={filters} onChange={(f) => { setFiltersApplied(true); setFilters(f); }} collapsed={embedded} />
+        <FiltersBar
+          value={filters}
+          onChange={(f) => { setFiltersApplied(true); setFilters(f); }}
+          collapsed={embedded}
+        />
       </Box>
       <HomeworkComposerDrawer
         open={composerOpen}
@@ -194,23 +207,32 @@ const StudentHomeworkTab: React.FC<{ studentId: string; isTeacher: boolean; onAs
     return (
       <>
         {header}
-        <Box textAlign="center" py={4}>
+        <Box textAlign="center" py={embedded ? 2 : 4}>
           <Typography variant="subtitle1">No homework yet</Typography>
           <Typography variant="body2" color="text.secondary">Use the button above to assign a new homework.</Typography>
         </Box>
       </>
     );
   }
+  const listContent = embedded ? (
+    <Stack spacing={1.25} sx={{ mt: 1.5 }}>
+      {list.map((a) => (
+        <AssignmentCardSmall key={a.id} a={a} onOpen={(id) => onAssignmentOpen(id)} compact />
+      ))}
+    </Stack>
+  ) : (
+    <Grid container spacing={2} sx={{ mt: 2 }}>
+      {list.map(a => (
+        <Grid size={{ xs: 12, md: 6 }} key={a.id}>
+          <AssignmentCardSmall a={a} onOpen={(id) => onAssignmentOpen(id)} />
+        </Grid>
+      ))}
+    </Grid>
+  );
   return (
     <>
       {header}
-      <Grid container spacing={2} sx={{ mt: 2 }}>
-        {list.map(a => (
-          <Grid size={{xs: 12, md:6, }} key={a.id}>
-            <AssignmentCardSmall a={a} onOpen={(id) => onAssignmentOpen(id)} />
-          </Grid>
-        ))}
-      </Grid>
+      {listContent}
     </>
   );
 };
@@ -252,6 +274,7 @@ export interface StudentPageProps {
   closeEmbeddedAssignment?: boolean;
   onConsumeCloseEmbeddedAssignment?: () => void;
   onWordPronounce?: (id: string, audioUrl: string) => void;
+  headerAccessory?: React.ReactNode;
 }
 
 const StudentPage: React.FC<StudentPageProps> = ({
@@ -273,6 +296,7 @@ const StudentPage: React.FC<StudentPageProps> = ({
   closeEmbeddedAssignment,
   onConsumeCloseEmbeddedAssignment,
   onWordPronounce,
+  headerAccessory,
 }) => {
   const { studentId: routeStudentId } = useParams();
   const navigate = useNavigate();
@@ -628,7 +652,7 @@ const StudentPage: React.FC<StudentPageProps> = ({
         label: "Notes",
         hidden: false,
         content: (
-          <Box sx={{ mt: 2, minHeight: 320, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <Box sx={{ mt: embedded ? 1 : 2, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 1.25 }}>
             {notesTeacherLoading ? (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'text.secondary' }}>
                 <CircularProgress size={18} />
@@ -726,85 +750,133 @@ const StudentPage: React.FC<StudentPageProps> = ({
       }
     : { mt: 4, mb: 6 };
 
-  const contentSx = embedded
-    ? { mt: 0, flex: 1, overflowY: "auto", pr: { xs: 0, sm: 1 } }
-    : {mt: 2 };
+  const bodySx = embedded
+    ? { mt: 0, flex: 1, minHeight: 0, overflowY: "auto", py: 1.5, pr: { xs: 0, sm: 1 } }
+    : { mt: 2 };
 
-  return (
-    <Container maxWidth={embedded ? false : "lg"} sx={containerSx}>
-      {/* Header bar */}
-      <Box display="flex" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
-        <Box display="flex" alignItems="center" gap={2}>
+  const headerBlock = (
+    <>
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: embedded ? 'flex-start' : 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 1.5,
+          mb: embedded ? 1 : 2,
+        }}
+      >
+        <Box display="flex" alignItems="center" gap={2} sx={{ flex: 1, minWidth: 0 }}>
           {!embedded && (
             <IconButton onClick={() => navigate(-1)}>
               <ArrowBackIcon />
             </IconButton>
           )}
           {embedded && onClose && (
-            <IconButton onClick={onClose}>
-              <CloseIcon />
+            <IconButton onClick={onClose} size="small">
+              <CloseIcon fontSize="small" />
             </IconButton>
           )}
           <Avatar
-            src={student.avatar}
+            src={student.avatar || undefined}
             alt={student.name}
-            sx={{ width: 64, height: 64, bgcolor: (t) => t.palette.primary.light }}
+            sx={{ width: 56, height: 56, borderRadius: 2, bgcolor: (t) => t.palette.primary.light }}
           />
-          <Box>
-            <Typography variant="h5" fontWeight={800}>{student.name}</Typography>
-            <Box display="flex" alignItems="center" gap={1}>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="h6" fontWeight={800} noWrap>{student.name}</Typography>
+            <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
               {student.level && (
                 <Tooltip title={levelInfo?.description || ""}>
                   <Chip
-                    label={`${student.level} ${levelInfo?.code ? `(${levelInfo.code})` : ""}`}
+                    label={`${student.level}${levelInfo?.code ? ` (${levelInfo.code})` : ""}`}
                     size="small"
                     sx={{ bgcolor: "#f0f4ff", color: "#1e3a8a", fontWeight: 700, borderRadius: 1 }}
                   />
                 </Tooltip>
               )}
-              <Typography variant="body2" color="text.secondary">{student.email || '—'}</Typography>
+              <Typography variant="body2" color="text.secondary" noWrap>{student.email || '—'}</Typography>
             </Box>
           </Box>
         </Box>
-        {isTeacher && !embedded && (
-          <Box display="flex" gap={1}>
-            <Tooltip title="Edit">
-              <IconButton color="primary" onClick={() => setEditDialogOpen(true)}>
-                <EditIcon />
-              </IconButton>
-            </Tooltip>
-            {student.email && (
-              <Tooltip title="Send password reset email">
-                <IconButton color="info" onClick={() => setResetDialogOpen(true)}>
-                  <RestartAltIcon />
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+            flexWrap: 'wrap',
+            justifyContent: 'flex-end',
+          }}
+        >
+          {headerAccessory}
+          {isTeacher && !embedded && (
+            <>
+              <Tooltip title="Edit">
+                <IconButton color="primary" onClick={() => setEditDialogOpen(true)}>
+                  <EditIcon />
                 </IconButton>
               </Tooltip>
-            )}
-            <Tooltip title="Delete">
-              <IconButton color="error" onClick={() => setDeleteDialogOpen(true)}>
-                <DeleteIcon />
-              </IconButton>
-            </Tooltip>
-          </Box>
-        )}
+              {student.email && (
+                <Tooltip title="Send password reset email">
+                  <IconButton color="info" onClick={() => setResetDialogOpen(true)}>
+                    <RestartAltIcon />
+                  </IconButton>
+                </Tooltip>
+              )}
+              <Tooltip title="Delete">
+                <IconButton color="error" onClick={() => setDeleteDialogOpen(true)}>
+                  <DeleteIcon />
+                </IconButton>
+              </Tooltip>
+            </>
+          )}
+        </Box>
       </Box>
 
-      {/* Tabs */}
-      <Paper elevation={0} sx={{ borderRadius: 1, bgcolor: (t) => t.palette.background.paper }}>
+      <Paper
+        elevation={0}
+        sx={{
+          borderRadius: 1,
+          border: '1px solid',
+          borderColor: 'divider',
+          bgcolor: (t) => t.palette.background.paper,
+          px: 1,
+        }}
+      >
         <Tabs
           value={effectiveActiveTab}
           onChange={handleTabChange}
           variant="scrollable"
           scrollButtons="auto"
-          sx={{ px: 1 }}
+          sx={{ minHeight: 44 }}
         >
           {visibleTabs.map((tab) => (
-            <Tab key={tab.label} label={tab.label} />
+            <Tab key={tab.label} label={tab.label} sx={{ minHeight: 44 }} />
           ))}
         </Tabs>
       </Paper>
+    </>
+  );
 
-      <Box sx={contentSx}>
+  const headerSection = embedded ? (
+    <Box
+      sx={{
+        position: 'sticky',
+        top: 0,
+        zIndex: 4,
+        borderBottom: '1px solid',
+        borderColor: 'divider',
+        boxShadow: (t) => t.shadows[1],
+      }}
+    >
+      {headerBlock}
+    </Box>
+  ) : headerBlock;
+
+  return (
+    <Container maxWidth={embedded ? false : "lg"} sx={containerSx}>
+      {headerSection}
+
+      <Box sx={bodySx}>
         {visibleTabs[effectiveActiveTab]?.content}
       </Box>
 

@@ -16,7 +16,7 @@ import DraggableDivider from '../components/lessonDetail/DraggableDivider';
 import { useWorkspaceToggle } from '../hooks/useWorkspaceToggle';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DoneIcon from "@mui/icons-material/Done";
-import { useTheme } from '@mui/material/styles';
+import { useTheme, alpha } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
 
 import { useRtc } from '../context/RtcContext';
@@ -68,21 +68,27 @@ const VideoCallPage: React.FC<VideoCallPageProps> = (props) => {
     const handleLeave = () => navigate(previousPath);
 
     // Bootstrap RTC join once auth user and roomName are available
+    const joinRoomRef = useRef<string | null>(null);
+
     useEffect(() => {
         if (!user?.id || !roomName) return;
-        if (joinStartedRef.current) return;
-        joinStartedRef.current = true;
+
+        // если зашли в другую комнату — надо заново дернуть refreshJoin
+        if (joinRoomRef.current === roomName) {
+            return;
+        }
+
+        joinRoomRef.current = roomName;
 
         const mappedRole =
-            user?.role === 'tutor' ? 'teacher'
-                : user?.role === 'student' ? 'student'
+            user?.role === 'tutor'
+                ? 'teacher'
+                : user?.role === 'student'
+                    ? 'student'
                     : undefined;
 
-        // Pass explicit hint so context doesn't depend solely on the URL query
         void refreshJoin({ roomName, lessonId, role: mappedRole });
     }, [user?.id, user?.role, roomName, lessonId, refreshJoin]);
-
-    const joinStartedRef = useRef(false);
 
     // Activity tracking for lessons: join on mount, leave on unmount/hidden
     useEffect(() => {
@@ -161,8 +167,13 @@ const DailyCallLayout: React.FC<{
     const theme = useTheme();
     const isPhone = useMediaQuery(theme.breakpoints.down('sm'));
     const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'lg'));
-    const isSmallScreen = isPhone || isTablet;
+    const isCompactDrawer = useMediaQuery('(max-width:1199px)');
+    const isOverlayDrawer = useMediaQuery('(max-width:991px)');
+    const isSmallScreen = isOverlayDrawer;
 
+    const drawerMinWidth = isCompactDrawer ? 340 : 380;
+    const drawerMaxWidth = isCompactDrawer ? 420 : 460;
+    const callMinWidth = isCompactDrawer ? 520 : 640;
     const notesButtonRef = useRef<HTMLButtonElement | null>(null);
     const [notesVisible, setNotesVisible] = useState(false);
     const [noteStatus, setNoteStatus] = useState<LessonNoteStatus | null>(null);
@@ -851,6 +862,9 @@ const DailyCallLayout: React.FC<{
         try { return dailyCall?.participants().local?.session_id || user?.id; } catch { return user?.id; }
     }, [dailyCall, user?.id]);
 
+    const dividerWidth = 6;
+    const callPanePercent = Math.max(0, Math.min(100, splitRatio));
+    const drawerPercent = Math.max(0, 100 - callPanePercent);
     const showNotes = Boolean(lessonId && notesVisible);
     const notesPanelElement = showNotes && lessonId ? (
         <LessonNotesPanel
@@ -873,188 +887,256 @@ const DailyCallLayout: React.FC<{
         />
     ) : null;
 
+    const studentHeaderAccessory = useMemo(() => {
+        if (workspaceView !== 'student') return null;
+        if (isTutor) {
+            return (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexWrap: 'wrap' }}>
+                    <FormControlLabel
+                        control={<Switch size="small" checked={shareStudentProfile} onChange={(e) => handleStudentShareToggle(e.target.checked)} />}
+                        label="Show to student"
+                        sx={{ m: 0, '& .MuiFormControlLabel-label': { fontSize: 12, fontWeight: 600, letterSpacing: 0.6 } }}
+                    />
+                    {shareStudentProfile && (<Chip size="small" color="success" label="Sharing" sx={{ fontWeight: 600 }} />)}
+                </Box>
+            );
+        }
+        return sharedProfileBy ? (
+            <Chip
+                size="small"
+                color="primary"
+                variant="outlined"
+                label={`Shared by ${sharedProfileBy}`}
+                sx={{ fontWeight: 600 }}
+            />
+        ) : null;
+    }, [workspaceView, isTutor, shareStudentProfile, sharedProfileBy, handleStudentShareToggle]);
+
+    const gridTemplateColumns = !workspaceOpen || isSmallScreen
+        ? '100%'
+        : `minmax(${callMinWidth}px, ${callPanePercent}%) ${dividerWidth}px minmax(${drawerMinWidth}px, ${drawerPercent}%)`;
+
+    const drawerSurface = (
+        <Box
+            sx={{
+                height: '100%',
+                width: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                borderLeft: isSmallScreen ? 0 : '1px solid',
+                borderColor: 'divider',
+                backgroundColor: (theme) => alpha(theme.palette.background.paper, 0.96),
+                boxShadow: isSmallScreen ? (theme) => theme.shadows[8] : 'none',
+            }}
+        >
+            <Box
+                sx={{
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 3,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 1,
+                    px: 1.5,
+                    py: 1,
+                    borderBottom: '1px solid',
+                    borderColor: 'divider',
+                    backgroundColor: 'background.paper',
+                }}
+            >
+                <Box>
+                    <Typography variant="overline" sx={{ letterSpacing: 1, color: 'primary.main' }}>{workspaceTagline}</Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 700 }}>{workspaceHeader}</Typography>
+                    {workspaceView === 'student' && !isTutor && sharedProfileBy && (
+                        <Typography variant="caption" color="text.secondary">Shared by {sharedProfileBy}</Typography>
+                    )}
+                    {workspaceView === 'content' && !isTutor && sharedContentBy && (
+                        <Typography variant="caption" color="text.secondary">Shared by {sharedContentBy}</Typography>
+                    )}
+                    {workspaceView === 'content' && isContentOpen && (
+                        <Typography variant="caption" color="text.secondary">
+                            Section {contentSectionIndex + 1}{contentSections.length ? ` of ${contentSections.length}` : ''}
+                        </Typography>
+                    )}
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                    {workspaceView === 'content' && (
+                        isTutor ? (
+                            <>
+                                <FormControlLabel
+                                    control={
+                                        <Switch
+                                            size="small"
+                                            checked={shareLessonContent}
+                                            onChange={(e) => handleContentShareToggle(e.target.checked)}
+                                            disabled={!isContentOpen}
+                                        />
+                                    }
+                                    label="Show to student"
+                                    sx={{ m: 0, '& .MuiFormControlLabel-label': { fontSize: 12, fontWeight: 600, letterSpacing: 0.6 } }}
+                                />
+                                {shareLessonContent && (<Chip size="small" color="success" label="Sharing" sx={{ fontWeight: 600 }} />)}
+                            </>
+                        ) : (
+                            sharedContentBy ? <Chip size="small" color="primary" variant="outlined" label={`Shared by ${sharedContentBy}`} sx={{ fontWeight: 600 }} /> : null
+                        )
+                    )}
+                    {workspaceView === 'content' && isContentOpen && (
+                        <Chip size="small" color="primary" variant="outlined" label={`Section ${contentSectionIndex + 1}/${Math.max(contentSections.length, 1)}`} sx={{ fontWeight: 600 }} />
+                    )}
+                    <IconButton
+                        onClick={() => {
+                            if (workspaceView === 'student') {
+                                handleStudentDrawerClose();
+                            }
+                            if (workspaceView === 'transcription' && isTutor) {
+                                shareTranscriptionPanel(false);
+                            }
+                            if (workspaceView === 'content') {
+                                if (isTutor && shareLessonContent) {
+                                    handleContentShareToggle(false);
+                                }
+                                setWorkspaceView('student');
+                            } else if (workspaceView === 'transcription') {
+                                setWorkspaceView('student');
+                            } else {
+                                closeWorkspace();
+                            }
+                        }}
+                        data-fw-action="true"
+                        size="small"
+                    >
+                        <CloseIcon fontSize="small" />
+                    </IconButton>
+                </Box>
+            </Box>
+            <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                {workspaceView === 'transcription' && (
+                    <Box sx={{ flex: 1, minHeight: 0, position: 'relative', width: '100%' }}>
+                        <TranscriptionPanel
+                            embedded
+                            call={dailyCall}
+                            studentSessionId={studentSessionIdForDaily}
+                            studentId={(isTutor ? studentId : resolvedStudentId) as string | undefined}
+                            homeworkWords={homeworkWords}
+                            lessonId={lessonId || undefined}
+                        />
+                    </Box>
+                )}
+
+                {workspaceView === 'student' && (
+                    <Box sx={{ flex: 1, minHeight: 0, width: '100%', overflow: 'auto', p: 1.5 }}>
+                        {(isTutor ? !!studentId : !!resolvedStudentId) ? (
+                            <StudentPage
+                                studentIdOverride={(isTutor ? studentId : resolvedStudentId) as string}
+                                embedded
+                                hideOverviewTab
+                                headerAccessory={studentHeaderAccessory}
+                                activeTabOverride={isTutor ? studentProfileTab : sharedProfileTab}
+                                onTabChange={isTutor ? handleStudentProfileTabChange : undefined}
+                                onWordPronounce={isTutor ? sendWordPronounceToStudent : undefined}
+                                openWordId={isTutor ? undefined : openWordIdCmd}
+                                onConsumeOpenWordCommand={isTutor ? sendWordCloseToStudent : consumeWordCommand}
+                                autoOpenAssignmentId={isTutor ? undefined : openAssignmentIdCmd}
+                                autoOpenTaskId={isTutor ? undefined : openTaskIdCmd}
+                                onConsumeOpenAssignmentCommand={isTutor ? undefined : consumeAssignmentCommand}
+                                onWordOpen={isTutor ? sendWordOpenToStudent : undefined}
+                                onEmbeddedAssignmentOpen={isTutor ? sendAssignmentOpenToStudent : undefined}
+                                onEmbeddedAssignmentClose={isTutor ? sendAssignmentCloseToStudent : undefined}
+                                closeEmbeddedAssignment={isTutor ? undefined : closeAssignmentCmd}
+                                onConsumeCloseEmbeddedAssignment={isTutor ? undefined : consumeCloseAssignmentCommand}
+                            />
+                        ) : (
+                            <Box sx={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <Typography color="text.secondary">No student selected.</Typography>
+                            </Box>
+                        )}
+                    </Box>
+                )}
+
+                {workspaceView === 'content' && (
+                    <Box sx={{ flex: 1, minHeight: 0, width: '100%', display: 'flex', flexDirection: 'column' }}>
+                        {isTutor && (
+                            <Box sx={{ p: 1, borderBottom: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>
+                                <OpenCompositionButton onOpen={handleContentSelection} />
+                            </Box>
+                        )}
+                        {isTutor && isContentOpen && (
+                            <PresenterBar
+                                content={{ id: contentSync.state.contentId as string, title: contentSync.state.title }}
+                                onPrevSection={handlePrevSection}
+                                onNextSection={handleNextSection}
+                                onLockToggle={handleContentLockToggle}
+                                locked={!!contentSync.state.locked}
+                                onEnd={handleContentEnd}
+                                onFocus={handleContentFocus}
+                            />
+                        )}
+                        <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', bgcolor: 'background.paper' }}>
+                            {isPresenterContentFetching && (
+                                <Box sx={{ p: 2 }}>
+                                    <Typography variant="body2" color="text.secondary">Loading content…</Typography>
+                                </Box>
+                            )}
+                            {isContentOpen ? (
+                                <SyncedContentView
+                                    contentId={contentSync.state.contentId as string}
+                                    focusBlockId={contentSync.state.focusBlockId}
+                                    locked={!!contentSync.state.locked && !isTutor}
+                                    contentSync={{ call: dailyCall, isTutor, contentId: contentSync.state.contentId as string, controller: contentSync }}
+                                />
+                            ) : (!isTutor && contentSync.state.open ? null : (
+                                <Box sx={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', p: 3 }}>
+                                    <Typography color="text.secondary">
+                                        {isTutor ? 'Select lesson materials to present.' : 'Waiting for the teacher to start the presentation.'}
+                                    </Typography>
+                                </Box>
+                            ))}
+                        </Box>
+                    </Box>
+                )}
+            </Box>
+        </Box>
+    );
+
     const mainStage = (
         <Box
             sx={{
                 display: 'grid',
-                gridTemplateColumns: !workspaceOpen || isSmallScreen ? '100%' : `${splitRatio}% 6px 1fr`,
+                gridTemplateColumns,
                 gridTemplateRows: '100%',
-                height: '100%'
+                height: '100%',
+                position: 'relative'
             }}
+            data-workspace-grid="true"
         >
             <Box sx={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
                 <RtcHost onLeft={onLeave} />
             </Box>
             {workspaceOpen && !isSmallScreen && (
-                <DraggableDivider onDrag={setSplitRatio} />
+                <>
+                    <DraggableDivider onDrag={setSplitRatio} />
+                    {drawerSurface}
+                </>
             )}
-            {workspaceOpen && (
-                <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', borderLeft: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
-                        <Box>
-                            <Typography variant="overline" sx={{ letterSpacing: 1, color: 'primary.main' }}>{workspaceTagline}</Typography>
-                            <Typography variant="h6" sx={{ fontWeight: 700 }}>{workspaceHeader}</Typography>
-                            {workspaceView === 'student' && !isTutor && sharedProfileBy && (
-                                <Typography variant="caption" color="text.secondary">Shared by {sharedProfileBy}</Typography>
-                            )}
-                            {workspaceView === 'content' && !isTutor && sharedContentBy && (
-                                <Typography variant="caption" color="text.secondary">Shared by {sharedContentBy}</Typography>
-                            )}
-                            {workspaceView === 'content' && isContentOpen && (
-                                <Typography variant="caption" color="text.secondary">
-                                    Section {contentSectionIndex + 1}{contentSections.length ? ` of ${contentSections.length}` : ''}
-                                </Typography>
-                            )}
-                        </Box>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            {workspaceView === 'student' && (
-                                isTutor ? (
-                                    <>
-                                        <FormControlLabel
-                                            control={<Switch size="small" checked={shareStudentProfile} onChange={(e) => handleStudentShareToggle(e.target.checked)} />}
-                                            label="Show to student"
-                                            sx={{ m: 0, '& .MuiFormControlLabel-label': { fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.6 } }}
-                                        />
-                                        {shareStudentProfile && (<Chip size="small" color="success" label="Sharing" sx={{ fontWeight: 600 }} />)}
-                                    </>
-                                ) : (
-                                    sharedProfileBy ? <Chip size="small" color="primary" variant="outlined" label={`Shared by ${sharedProfileBy}`} sx={{ fontWeight: 600 }} /> : null
-                                )
-                            )}
-                            {workspaceView === 'content' && (
-                                isTutor ? (
-                                    <>
-                                        <FormControlLabel
-                                            control={
-                                                <Switch
-                                                    size="small"
-                                                    checked={shareLessonContent}
-                                                    onChange={(e) => handleContentShareToggle(e.target.checked)}
-                                                    disabled={!isContentOpen}
-                                                />
-                                            }
-                                            label="Show to student"
-                                            sx={{ m: 0, '& .MuiFormControlLabel-label': { fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.6 } }}
-                                        />
-                                        {shareLessonContent && (<Chip size="small" color="success" label="Sharing" sx={{ fontWeight: 600 }} />)}
-                                    </>
-                                ) : (
-                                    sharedContentBy ? <Chip size="small" color="primary" variant="outlined" label={`Shared by ${sharedContentBy}`} sx={{ fontWeight: 600 }} /> : null
-                                )
-                            )}
-                            {workspaceView === 'content' && isContentOpen && (
-                                <Chip size="small" color="primary" variant="outlined" label={`Section ${contentSectionIndex + 1}/${Math.max(contentSections.length, 1)}`} sx={{ fontWeight: 600 }} />
-                            )}
-                            <IconButton
-                                onClick={() => {
-                                    if (workspaceView === 'student') {
-                                        handleStudentDrawerClose();
-                                    }
-                                    if (workspaceView === 'transcription' && isTutor) {
-                                        shareTranscriptionPanel(false);
-                                    }
-                                    if (workspaceView === 'content') {
-                                        if (isTutor && shareLessonContent) {
-                                            handleContentShareToggle(false);
-                                        }
-                                        setWorkspaceView('student');
-                                    } else if (workspaceView === 'transcription') {
-                                        setWorkspaceView('student');
-                                    } else {
-                                        closeWorkspace();
-                                    }
-                                }}
-                                data-fw-action="true"
-                                size="small"
-                            >
-                                <CloseIcon fontSize="small" />
-                            </IconButton>
-                        </Box>
-                    </Box>
-                    <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex' }}>
-                        {workspaceView === 'transcription' && (
-                            <Box sx={{ flex: 1, minHeight: 0, position: 'relative', width: '100%' }}>
-                                <TranscriptionPanel
-                                    embedded
-                                    call={dailyCall}
-                                    studentSessionId={studentSessionIdForDaily}
-                                    studentId={(isTutor ? studentId : resolvedStudentId) as string | undefined}
-                                    homeworkWords={homeworkWords}
-                                    lessonId={lessonId || undefined}
-                                />
-                            </Box>
-                        )}
-
-                        {workspaceView === 'student' && (
-                            <Box sx={{ flex: 1, minHeight: 0, width: '100%', overflow: 'auto', p: 1.5 }}>
-                                {(isTutor ? !!studentId : !!resolvedStudentId) ? (
-                                    <StudentPage
-                                        studentIdOverride={(isTutor ? studentId : resolvedStudentId) as string}
-                                        embedded
-                                        hideOverviewTab
-                                        activeTabOverride={isTutor ? studentProfileTab : sharedProfileTab}
-                                        onTabChange={isTutor ? handleStudentProfileTabChange : undefined}
-                                        onWordPronounce={isTutor ? sendWordPronounceToStudent : undefined}
-                                        openWordId={isTutor ? undefined : openWordIdCmd}
-                                        onConsumeOpenWordCommand={isTutor ? sendWordCloseToStudent : consumeWordCommand}
-                                        autoOpenAssignmentId={isTutor ? undefined : openAssignmentIdCmd}
-                                        autoOpenTaskId={isTutor ? undefined : openTaskIdCmd}
-                                        onConsumeOpenAssignmentCommand={isTutor ? undefined : consumeAssignmentCommand}
-                                        onWordOpen={isTutor ? sendWordOpenToStudent : undefined}
-                                        onEmbeddedAssignmentOpen={isTutor ? sendAssignmentOpenToStudent : undefined}
-                                        onEmbeddedAssignmentClose={isTutor ? sendAssignmentCloseToStudent : undefined}
-                                        closeEmbeddedAssignment={isTutor ? undefined : closeAssignmentCmd}
-                                        onConsumeCloseEmbeddedAssignment={isTutor ? undefined : consumeCloseAssignmentCommand}
-                                    />
-                                ) : (
-                                    <Box sx={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                        <Typography color="text.secondary">No student selected.</Typography>
-                                    </Box>
-                                )}
-                            </Box>
-                        )}
-
-                        {workspaceView === 'content' && (
-                            <Box sx={{ flex: 1, minHeight: 0, width: '100%', display: 'flex', flexDirection: 'column' }}>
-                                {isTutor && (
-                                    <Box sx={{ p: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
-                                        <OpenCompositionButton onOpen={handleContentSelection} />
-                                    </Box>
-                                )}
-                                {isTutor && isContentOpen && (
-                                    <PresenterBar
-                                        content={{ id: contentSync.state.contentId as string, title: contentSync.state.title }}
-                                        onPrevSection={handlePrevSection}
-                                        onNextSection={handleNextSection}
-                                        onLockToggle={handleContentLockToggle}
-                                        locked={!!contentSync.state.locked}
-                                        onEnd={handleContentEnd}
-                                        onFocus={handleContentFocus}
-                                    />
-                                )}
-                                <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-                                    {isPresenterContentFetching && (
-                                        <Box sx={{ p: 2 }}>
-                                            <Typography variant="body2" color="text.secondary">Loading content…</Typography>
-                                        </Box>
-                                    )}
-                                    {isContentOpen ? (
-                                        <SyncedContentView
-                                            contentId={contentSync.state.contentId as string}
-                                            focusBlockId={contentSync.state.focusBlockId}
-                                            locked={!!contentSync.state.locked && !isTutor}
-                                            contentSync={{ call: dailyCall, isTutor, contentId: contentSync.state.contentId as string, controller: contentSync }}
-                                        />
-                                    ) : (!isTutor && contentSync.state.open ? null : (
-                                        <Box sx={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', p: 3 }}>
-                                            <Typography color="text.secondary">
-                                                {isTutor ? 'Select lesson materials to present.' : 'Waiting for the teacher to start the presentation.'}
-                                            </Typography>
-                                        </Box>
-                                    ))}
-                                </Box>
-                            </Box>
-                        )}
+            {workspaceOpen && isSmallScreen && (
+                <Box
+                    sx={{
+                        position: 'absolute',
+                        inset: 0,
+                        zIndex: 20,
+                        backgroundColor: 'rgba(9, 9, 12, 0.55)',
+                        display: 'flex',
+                        justifyContent: 'flex-end'
+                    }}
+                    onClick={closeWorkspace}
+                >
+                    <Box
+                        sx={{ width: 'min(420px, 100%)', height: '100%' }}
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        {drawerSurface}
                     </Box>
                 </Box>
             )}
