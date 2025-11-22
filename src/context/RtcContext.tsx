@@ -59,6 +59,17 @@ export const RtcProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const lessonIdFromRoom = roomName ? (roomName.startsWith('lesson-') ? roomName.slice(7) : roomName) : undefined;
     const lessonId = hint?.lessonId ?? lessonIdFromRoom;
 
+    try {
+      // Debug signal to diagnose incorrect room/lesson resolution
+      console.debug('[RtcContext] deriveLessonAndRole', {
+        hint,
+        userId: user?.id,
+        userRole: user?.role,
+        derived: { role, roomName, lessonIdFromRoom, lessonId },
+        url: { search: window.location.search }
+      });
+    } catch {/*noop*/}
+
     return { lessonId, role };
   };
 
@@ -66,10 +77,13 @@ export const RtcProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const { lessonId, role } = deriveLessonAndRole(hint);
       if (!user?.id || !lessonId || !role) {
-        throw new Error('Missing userId, lessonId, or role for /api/video/join');
+        const msg = 'Missing userId, lessonId, or role for /api/video/join';
+        console.warn('[RtcContext] refreshJoin aborted:', { userId: user?.id, lessonId, role, hint });
+        throw new Error(msg);
       }
-
+      console.debug('[RtcContext] refreshJoin → fetchRtcJoin', { userId: user.id, lessonId, role, hint });
       const join = await fetchRtcJoin({ userId: user.id, lessonId, role });
+      console.debug('[RtcContext] refreshJoin success', { provider: join.provider, effectiveProvider: join.provider, lessonId: join.lessonId ?? lessonId, role: join.role ?? role });
       setState({
         provider: join.provider,
         effectiveProvider: join.provider,

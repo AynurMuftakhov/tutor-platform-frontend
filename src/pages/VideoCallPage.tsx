@@ -59,7 +59,9 @@ const VideoCallPage: React.FC<VideoCallPageProps> = (props) => {
     const studentId = searchParams.get('studentId') ||
         (location.state?.studentId as string);
 
-    const lessonId = roomName?.startsWith('lesson-') ? roomName.slice(7) : roomName;
+    // Prefer explicit lessonId (query/state) over inferring from roomName to avoid stale room joins
+    const lessonIdFromParams = (searchParams.get('lessonId') || (location.state?.lessonId as string | undefined)) ?? undefined;
+    const lessonId = lessonIdFromParams ?? (roomName?.startsWith('lesson-') ? roomName.slice(7) : roomName);
     const previousPath = location.state?.from || '/dashboard';
 
     const { refreshJoin } = useRtc();
@@ -71,14 +73,16 @@ const VideoCallPage: React.FC<VideoCallPageProps> = (props) => {
     const joinRoomRef = useRef<string | null>(null);
 
     useEffect(() => {
-        if (!user?.id || !roomName) return;
+        // Join should be keyed by lessonId. Room may be omitted in navigation, but lessonId must be present.
+        if (!user?.id || !lessonId) return;
 
-        // если зашли в другую комнату — надо заново дернуть refreshJoin
-        if (joinRoomRef.current === roomName) {
+        // если зашли в другой урок — надо заново дернуть refreshJoin
+        const joinKey = lessonId;
+        if (joinRoomRef.current === joinKey) {
             return;
         }
 
-        joinRoomRef.current = roomName;
+        joinRoomRef.current = joinKey;
 
         const mappedRole =
             user?.role === 'tutor'
@@ -87,23 +91,46 @@ const VideoCallPage: React.FC<VideoCallPageProps> = (props) => {
                     ? 'student'
                     : undefined;
 
+        // Debug signal for investigating stale-room joins
+        try {
+            console.debug('[VideoCallPage] Trigger refreshJoin', {
+                userId: user?.id,
+                appRole: user?.role,
+                mappedRole,
+                lessonId,
+                roomName,
+                from: 'useEffect:user+lessonId',
+            });
+        } catch {/*noop*/}
+
         void refreshJoin({ roomName, lessonId, role: mappedRole });
-    }, [user?.id, user?.role, roomName, lessonId, refreshJoin]);
+    }, [user?.id, user?.role, lessonId, roomName, refreshJoin]);
 
     // Activity tracking for lessons: join on mount, leave on unmount/hidden
     useEffect(() => {
-        if (!roomName) return;
-        try { activityEmitter.emit('lesson_join', '/lesson', { roomName, lessonId }); } catch {/* no op*/}
+        if (!lessonId) return;
+        try {
+            activityEmitter.emit('lesson_join', '/lesson', { roomName, lessonId });
+            console.debug('[VideoCallPage] activity: lesson_join', { roomName, lessonId });
+        } catch {/* no op*/}
         const onVis = () => {
             try {
-                if (document.hidden) activityEmitter.emit('lesson_leave', '/lesson', { reason: 'hidden' });
-                else activityEmitter.emit('lesson_join', '/lesson', { reason: 'visible' });
+                if (document.hidden) {
+                    activityEmitter.emit('lesson_leave', '/lesson', { reason: 'hidden' });
+                    console.debug('[VideoCallPage] activity: lesson_leave (hidden)');
+                } else {
+                    activityEmitter.emit('lesson_join', '/lesson', { reason: 'visible' });
+                    console.debug('[VideoCallPage] activity: lesson_join (visible)');
+                }
             } catch {/* no op*/}
         };
         document.addEventListener('visibilitychange', onVis);
         return () => {
             document.removeEventListener('visibilitychange', onVis);
-            try { activityEmitter.emit('lesson_leave', '/lesson', { reason: 'unmount' }); } catch {/* no op*/}
+            try {
+                activityEmitter.emit('lesson_leave', '/lesson', { reason: 'unmount' });
+                console.debug('[VideoCallPage] activity: lesson_leave (unmount)');
+            } catch {/* no op*/}
         };
     }, [roomName, lessonId]);
 
