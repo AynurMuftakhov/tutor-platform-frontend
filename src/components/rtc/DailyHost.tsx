@@ -44,15 +44,13 @@ export default function DailyHost({ url, token, onLeft }: Props) {
   const joiningKeyRef = useRef<string | undefined>(undefined);
   const queuedJoinRef = useRef<{ key: string; url: string; token?: string } | null>(null);
   const joinedForKeyRef = useRef<string | undefined>(undefined);
-  const suppressedLeftEventsRef = useRef<symbol[]>([]);
+  const suppressedLeftEventsRef = useRef(0);
 
   const suppressNextLeftEvent = () => {
-    const token = Symbol('suppress-left');
-    suppressedLeftEventsRef.current.push(token);
+    suppressedLeftEventsRef.current += 1;
     return () => {
-      const idx = suppressedLeftEventsRef.current.indexOf(token);
-      if (idx >= 0) {
-        suppressedLeftEventsRef.current.splice(idx, 1);
+      if (suppressedLeftEventsRef.current > 0) {
+        suppressedLeftEventsRef.current -= 1;
       }
     };
   };
@@ -72,8 +70,8 @@ export default function DailyHost({ url, token, onLeft }: Props) {
       setFailureRef.current?.(e?.errorMsg || 'Call error');
     };
     const onLeftHandler = async () => {
-      if (suppressedLeftEventsRef.current.length > 0) {
-        suppressedLeftEventsRef.current.shift();
+      if (suppressedLeftEventsRef.current > 0) {
+        suppressedLeftEventsRef.current -= 1;
         log('left-meeting event suppressed');
         return;
       }

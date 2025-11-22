@@ -81,6 +81,21 @@ export const RtcProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         console.warn('[RtcContext] refreshJoin aborted:', { userId: user?.id, lessonId, role, hint });
         throw new Error(msg);
       }
+
+      // Reset RTC state before fetching a new room to ensure DailyHost unmounts
+      // and does not continue rendering the previous call while we wait.
+      setState((prev) => ({
+        ...prev,
+        provider: undefined,
+        effectiveProvider: undefined,
+        lessonId,
+        role,
+        join: undefined,
+        providerReady: false,
+        failureMessage: undefined,
+        error: undefined,
+      }));
+
       console.debug('[RtcContext] refreshJoin → fetchRtcJoin', { userId: user.id, lessonId, role, hint });
       const join = await fetchRtcJoin({ userId: user.id, lessonId, role });
       console.debug('[RtcContext] refreshJoin success', { provider: join.provider, effectiveProvider: join.provider, lessonId: join.lessonId ?? lessonId, role: join.role ?? role });
