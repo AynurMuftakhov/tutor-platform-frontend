@@ -585,7 +585,7 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
         });
       }
 
-      const transcriptText = listeningShowTranscript ? (audioContentRef?.transcript ?? transcriptDraft.trim()) : undefined;
+      const transcriptText = listeningShowTranscript ? (audioContentRef?.transcriptId ?? transcriptDraft.trim()) : undefined;
       const listeningContentRef: Record<string, any> = {
         generatorRequestId: audioContentRef.generatorRequestId,
         audioMaterialId: audioContentRef.audioMaterialId,

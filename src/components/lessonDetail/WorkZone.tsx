@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Box, Typography, IconButton, Tabs, Tab, Button, Dialog, DialogTitle, DialogContent, List, ListItemButton, ListItemText } from '@mui/material';
+import { Box, Typography, IconButton, Tabs, Tab, Button, Dialog, DialogTitle, DialogContent, List, ListItemButton, ListItemText, TextField, InputAdornment } from '@mui/material';
 import { 
   Close as CloseIcon,
   Videocam as VideoIcon,
@@ -13,6 +13,7 @@ import { useWorkspace, WorkspaceTool } from '../../context/WorkspaceContext';
 import { useAuth } from '../../context/AuthContext';
 import { UseSyncedGrammarResult } from '../../hooks/useSyncedGrammar';
 import GridViewIcon from '@mui/icons-material/GridView';
+import SearchIcon from '@mui/icons-material/Search';
 import PresenterBar from './PresenterBar';
 import SyncedContentView from '../../features/lessonContent/student/SyncedContentView';
 import type { useSyncedContent } from '../../hooks/useSyncedContent';
@@ -243,10 +244,13 @@ const WorkZone: React.FC<WorkZoneProps> = ({useSyncedVideo, useSyncedGrammar, us
 
 export const OpenCompositionButton: React.FC<{ onOpen: (c: { id: string; title?: string }) => void }> = ({ onOpen }) => {
   const [open, setOpen] = React.useState(false);
+  const [q, setQ] = React.useState('');
   const { user } = useAuth();
   const { data } = useQuery({
-    queryKey: ['lesson-contents', { page: 0, size: 20 }],
-    queryFn: () => getLessonContents({ownerId: user!.id, status: "PUBLISHED", page: 0, size: 20, }),
+    queryKey: ['lesson-contents', { q, page: 0, size: 20 }],
+    queryFn: () => getLessonContents({ ownerId: user!.id, q: q || undefined, status: 'PUBLISHED', page: 0, size: 20 }),
+    placeholderData: (prev) => prev,
+    staleTime: 10_000,
   });
   const items: { id: string; title?: string }[] = React.useMemo(() => data?.content || data?.items || [], [data]);
   return (
@@ -255,6 +259,22 @@ export const OpenCompositionButton: React.FC<{ onOpen: (c: { id: string; title?:
       <Dialog open={open} onClose={() => setOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Select composition</DialogTitle>
         <DialogContent dividers>
+          <Box sx={{ mb: 2 }}>
+            <TextField
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              size="small"
+              fullWidth
+              placeholder="Search compositions"
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" />
+                  </InputAdornment>
+                )
+              }}
+            />
+          </Box>
           <List>
             {items?.length ? items.map((it: any) => (
               <ListItemButton key={it.id} onClick={() => { onOpen({ id: it.id, title: it.title }); setOpen(false); }}>
