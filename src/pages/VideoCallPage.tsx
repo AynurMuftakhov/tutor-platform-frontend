@@ -34,7 +34,7 @@ import SyncedContentView from '../features/lessonContent/student/SyncedContentVi
 import PresenterBar from '../components/lessonDetail/PresenterBar';
 import { OpenCompositionButton } from '../components/lessonDetail/WorkZone';
 import { useQuery } from '@tanstack/react-query';
-import { getLessonById, getLessonContent } from '../services/api';
+import { getLessonById, getLessonContent, fetchUserById } from '../services/api';
 import type { PageModel } from '../types/lessonContent';
 import NoteAltOutlinedIcon from '@mui/icons-material/NoteAltOutlined';
 import { FloatingNotesPanel, LessonNotesPanel } from '../features/notes';
@@ -319,6 +319,25 @@ const DailyCallLayout: React.FC<{
                 : (user?.role === 'tutor' || user?.role === 'student')
         )
     );
+
+    const lessonStudentId = lessonDetails?.studentId ?? resolvedStudentId;
+    const { data: studentProfile } = useQuery({
+        queryKey: ['lesson-student-profile', lessonStudentId],
+        queryFn: () => fetchUserById(lessonStudentId!),
+        enabled: Boolean(lessonStudentId),
+        staleTime: 60_000,
+    });
+    const studentDisplayName = studentProfile?.name ?? lessonDetails?.studentName ?? undefined;
+    const studentProfileTargetLabel = useMemo(() => {
+        if (!studentDisplayName) return 'student profile';
+        const trimmed = studentDisplayName.trim();
+        if (!trimmed.length) return 'student profile';
+        const possessive = /s$/i.test(trimmed) ? `${trimmed}'` : `${trimmed}'s`;
+        return `${possessive} profile`;
+    }, [studentDisplayName]);
+    const studentProfileTooltipTitle = shareStudentProfile
+        ? `Sharing ${studentProfileTargetLabel}`
+        : `Open ${studentProfileTargetLabel}`;
 
     const { data: presenterContent, isFetching: isPresenterContentFetching } = useQuery({
         queryKey: ['lesson-content', contentId],
@@ -1263,7 +1282,7 @@ const DailyCallLayout: React.FC<{
                 </Box>
             )}
             {isTutor && (
-                <Tooltip title={shareStudentProfile ? 'Sharing student profile' : 'Open student profile'}>
+                <Tooltip title={studentProfileTooltipTitle}>
                     <IconButton
                         onClick={() => {
                             if (isTutor) {
@@ -1285,7 +1304,7 @@ const DailyCallLayout: React.FC<{
                             border: '1px solid',
                             borderColor: 'divider',
                         }}
-                        aria-label="Open student profile"
+                        aria-label={studentProfileTooltipTitle}
                         aria-pressed={workspaceOpen && workspaceView==='student'}
                     >
                         <PersonRoundedIcon />
