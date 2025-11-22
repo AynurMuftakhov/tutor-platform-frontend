@@ -96,6 +96,7 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
   const [listeningStyle, setListeningStyle] = React.useState('neutral');
   const [listeningSeed, setListeningSeed] = React.useState('');
   const [listeningMustIncludeAll, setListeningMustIncludeAll] = React.useState(true);
+  const [listeningShowTranscript, setListeningShowTranscript] = React.useState(false);
   const [transcriptId, setTranscriptId] = React.useState<string | null>(null);
   const [transcriptDraft, setTranscriptDraft] = React.useState('');
   const [transcriptMetadata, setTranscriptMetadata] = React.useState<ListeningTranscriptResponse['metadata']>({
@@ -584,12 +585,14 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
         });
       }
 
-      const listeningContentRef = {
+      const transcriptText = listeningShowTranscript ? (audioContentRef?.transcript ?? transcriptDraft.trim()) : undefined;
+      const listeningContentRef: Record<string, any> = {
         generatorRequestId: audioContentRef.generatorRequestId,
         audioMaterialId: audioContentRef.audioMaterialId,
         audioUrl: audioContentRef.audioUrl,
         transcriptId,
-       // transcript: transcriptText,
+        ...(listeningShowTranscript && transcriptText ? { transcript: transcriptText } : {}),
+        showTranscript: listeningShowTranscript,
         durationSec,
         wordIds: listeningWordIds,
         theme: audioContentRef.theme ?? (listeningTheme || undefined),
@@ -873,6 +876,11 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
                       <FormControlLabel
                         control={<Checkbox checked={listeningMustIncludeAll} onChange={(e) => setListeningMustIncludeAll(e.target.checked)} />}
                         label="Force every selected word to appear"
+                      />
+
+                      <FormControlLabel
+                        control={<Checkbox checked={listeningShowTranscript} onChange={(e) => setListeningShowTranscript(e.target.checked)} />}
+                        label="Show transcript to student"
                       />
 
                       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }}>

@@ -1,8 +1,9 @@
 import React from 'react';
-import { Box, Chip, Stack, Typography, Dialog, DialogContent, IconButton } from '@mui/material';
+import { Box, Chip, Stack, Typography, Dialog, DialogContent, IconButton, Accordion, AccordionSummary, AccordionDetails } from '@mui/material';
 import ImageIcon from '@mui/icons-material/Image';
 import AudiotrackIcon from '@mui/icons-material/Audiotrack';
 import SmartDisplayIcon from '@mui/icons-material/SmartDisplay';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ReactPlayer from 'react-player';
 import type { OnProgressProps } from 'react-player/base';
 import type { DailyCall, DailyEventObjectAppMessage } from '@daily-co/daily-js';
@@ -516,39 +517,37 @@ const ListeningTaskBlockView: React.FC<{ payload: ListeningTaskBlockPayload; con
       ) : (
         <Typography variant="body2" color="text.secondary">Audio not available.</Typography>
       )}
-      <Stack spacing={0.5}>
-        <Typography variant="subtitle2">Transcript</Typography>
-        {transcriptText ? (
-          <Typography component="div" sx={{ lineHeight: 1.8 }}>
-            {transcriptTokens.map((token, idx) => {
-              const normalized = normalizeListeningWord(token);
-              if (!normalized || !targetSet.has(normalized)) {
-                return <Box component="span" key={idx}>{token}</Box>;
-              }
-              return (
-                <Box
-                  component="span"
-                  key={`${normalized}-${idx}`}
-                  sx={{
-                    fontWeight: 600,
-                    color: payload.showTranscript ? 'primary.main' : 'transparent',
-                    display: 'inline-block',
-                    borderBottom: payload.showTranscript ? 'none' : '2px solid',
-                    borderColor: 'primary.main',
-                    minWidth: 32,
-                    textAlign: 'center',
-                    mx: 0.5,
-                  }}
-                >
-                  {payload.showTranscript ? token : '____'}
-                </Box>
-              );
-            })}
-          </Typography>
-        ) : (
-          <Typography variant="body2" color="text.secondary">Transcript coming soon.</Typography>
-        )}
-      </Stack>
+          {payload.showTranscript && (
+        <Accordion sx={{ mt: 0.5 }} defaultExpanded={false}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>Transcript</Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            {transcriptText ? (
+              <Typography component="div" sx={{ lineHeight: 1.8 }}>
+                {transcriptTokens.map((token, idx) => {
+                  const normalized = normalizeListeningWord(token);
+                  if (!normalized) {
+                    return <Box component="span" key={idx}>{token}</Box>;
+                  }
+                  const isFocus = targetSet.has(normalized);
+                  return (
+                    <Box
+                      component="span"
+                      key={`${normalized}-${idx}`}
+                      sx={{ fontWeight: isFocus ? 600 : 400, color: isFocus ? 'primary.main' : 'inherit' }}
+                    >
+                      {token}
+                    </Box>
+                  );
+                })}
+              </Typography>
+            ) : (
+              <Typography variant="body2" color="text.secondary">Transcript coming soon.</Typography>
+            )}
+          </AccordionDetails>
+        </Accordion>
+      )}
       {task.targetWords && task.targetWords.length > 0 && (
         <Stack spacing={0.5}>
           <Typography variant="subtitle2">Focus words</Typography>

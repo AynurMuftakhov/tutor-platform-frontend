@@ -4,13 +4,14 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import type { AssignmentDto, TaskDto, UpdateProgressPayload } from '../../types/homework';
 import useHomeworkTaskLifecycle from '../../hooks/useHomeworkTaskLifecycle';
 import { useQuery } from '@tanstack/react-query';
-import { getLessonContent } from '../../services/api';
+import { getLessonContent, getListeningTranscript } from '../../services/api';
 import StudentRenderer from '../../features/lessonContent/student/StudentRenderer';
 import GrammarPlayer from '../grammar/GrammarPlayer';
 import QuizMode from '../vocabulary/QuizMode';
 import VocabularyRoundSetup from '../vocabulary/VocabularyRoundSetup';
 import { vocabApi } from '../../services/vocabulary.api';
 import VocabularyList from '../vocabulary/VocabularyList';
+import { useAuth } from '../../context/AuthContext';
 
 interface Props {
   assignment: AssignmentDto;
@@ -236,7 +237,20 @@ const ListeningTaskPlayer: React.FC<ListeningTaskPlayerProps> = ({
 }) => {
   const content = (task.contentRef as any) || {};
   const audioUrl: string | undefined = content.audioUrl;
-  const transcript: string | undefined = content.transcript;
+  const showTranscript: boolean = Boolean(content.showTranscript);
+  const embeddedTranscript: string | undefined = content.transcript;
+  const transcriptId: string | undefined = content.transcriptId;
+  const { user } = useAuth();
+  const { data: fetchedTranscript, isLoading: transcriptLoading } = useQuery({
+    queryKey: ['hw-transcript', transcriptId],
+    queryFn: () => getListeningTranscript(user!.id, transcriptId!),
+    enabled: Boolean(showTranscript && transcriptId && !embeddedTranscript && user?.id),
+    staleTime: 30_000,
+    retry: false,
+  });
+  const transcript: string | undefined = showTranscript
+    ? (embeddedTranscript || fetchedTranscript?.transcript)
+    : undefined;
   const initialDuration = toFiniteNumber(content.durationSec) ?? toFiniteNumber(content.estimatedDurationSec);
   const initialProgress = clamp(toFiniteNumber(task.progressPct) ?? 0);
 
