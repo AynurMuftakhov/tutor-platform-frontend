@@ -318,6 +318,7 @@ const StudentPage: React.FC<StudentPageProps> = ({
   const [student, setStudent] = useState<StudentProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTabState, setActiveTabState] = useState(initialTab);
+  const [tabInitialized, setTabInitialized] = useState(false);
   const activeTab = activeTabOverride ?? activeTabState;
   const [openedAssignment, setOpenedAssignment] = useState<AssignmentDto | null>(null);
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
@@ -539,12 +540,45 @@ const StudentPage: React.FC<StudentPageProps> = ({
     }
   };
 
+  const persistTab = (tab: number) => {
+    if (!resolvedStudentId || activeTabOverride !== undefined) return;
+    try {
+      sessionStorage.setItem(`studentPage:lastTab:${resolvedStudentId}`, String(tab));
+    } catch {
+      // ignore storage failures
+    }
+  };
+
   const handleTabChange = (_event: React.SyntheticEvent, value: number) => {
     onTabChange?.(value);
     if (activeTabOverride === undefined) {
       setActiveTabState(value);
+      persistTab(value);
     }
   };
+
+  useEffect(() => {
+    if (activeTabOverride !== undefined) {
+      setTabInitialized(true);
+      return;
+    }
+    if (!resolvedStudentId) return;
+    try {
+      const saved = sessionStorage.getItem(`studentPage:lastTab:${resolvedStudentId}`);
+      if (saved !== null) {
+        const parsed = Number(saved);
+        if (!Number.isNaN(parsed)) {
+          setActiveTabState(parsed);
+        }
+      } else {
+        setActiveTabState(initialTab);
+      }
+    } catch {
+      // ignore storage failures
+    } finally {
+      setTabInitialized(true);
+    }
+  }, [activeTabOverride, resolvedStudentId, initialTab]);
 
   const tabDefinitions = useMemo(() => {
     if (!student) {
@@ -729,13 +763,6 @@ const StudentPage: React.FC<StudentPageProps> = ({
 
   const visibleTabs = tabDefinitions.filter((tab) => !tab.hidden);
   const effectiveActiveTab = Math.min(activeTab, Math.max(visibleTabs.length - 1, 0));
-
-  useEffect(() => {
-    if (activeTabOverride !== undefined) return;
-    if (effectiveActiveTab !== activeTabState) {
-      setActiveTabState(effectiveActiveTab);
-    }
-  }, [activeTabOverride, activeTabState, effectiveActiveTab]);
 
   if (!resolvedStudentId) {
     return (
