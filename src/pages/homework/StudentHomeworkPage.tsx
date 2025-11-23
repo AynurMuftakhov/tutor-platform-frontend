@@ -7,6 +7,7 @@ import { useStudentAssignments } from '../../hooks/useHomeworks';
 import { Link as RouterLink } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import FiltersBar, { FiltersState } from '../../components/homework/FiltersBar';
+import { getTaskTypeLabels } from '../../utils/homeworkTaskTypes';
 
 const StudentHomeworkPage: React.FC = () => {
   const { user } = useAuth();
@@ -127,7 +128,8 @@ const StudentHomeworkPage: React.FC = () => {
                   visible.map(a => {
                       const total = a.totalTasks;
                       const completed = a.completedTasks;
-                      const inProgress =  a.inProgressTasks;
+                      const inProgress = a.inProgressTasks;
+                      const taskTypes = getTaskTypeLabels(a.tasks);
                       return (
                           <Grid size={{xs:12}} key={a.id}>
                               <Box
@@ -153,6 +155,13 @@ const StudentHomeworkPage: React.FC = () => {
                               >
                                   <Box sx={{ minWidth: 0 }}>
                                       <Typography variant="subtitle1" noWrap>{a.title}</Typography>
+                                      {taskTypes.length > 0 && (
+                                          <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap" sx={{ mt: 0.5 }}>
+                                              {taskTypes.map((label) => (
+                                                  <Chip key={label} size="small" variant="outlined" label={label} />
+                                              ))}
+                                          </Stack>
+                                      )}
                                       <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
                                           <Typography variant="caption" color="text.secondary">• Created {new Date(a.createdAt).toLocaleString()}</Typography>
                                           {a.dueAt && <Chip size="small" label={`Due ${new Date(a.dueAt).toLocaleDateString()}`}/>}

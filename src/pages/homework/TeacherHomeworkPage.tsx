@@ -13,6 +13,7 @@ import {AssignmentDto} from "../../types/homework";
 import FiltersBar, { FiltersState } from '../../components/homework/FiltersBar';
 import AddIcon from '@mui/icons-material/Add';
 import { Fab } from '@mui/material';
+import { getTaskTypeLabels } from '../../utils/homeworkTaskTypes';
 
 const TeacherHomeworkPage: React.FC = () => {
   const { user } = useAuth();
@@ -256,7 +257,8 @@ const TeacherHomeworkPage: React.FC = () => {
                 visible.map(a => {
                     const total = a.totalTasks;
                     const completed = a.completedTasks;
-                    const inProgress = a.inProgressTasks
+                    const inProgress = a.inProgressTasks;
+                    const taskTypes = getTaskTypeLabels(a.tasks);
                     return (
                         <Grid size={{xs:12}} key={a.id}>
                             <Box
@@ -282,6 +284,13 @@ const TeacherHomeworkPage: React.FC = () => {
                             >
                                 <Box sx={{ minWidth: 0 }}>
                                     <Typography variant="subtitle1" noWrap>{a.title}</Typography>
+                                    {taskTypes.length > 0 && (
+                                        <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap" sx={{ mt: 0.5 }}>
+                                            {taskTypes.map((label) => (
+                                                <Chip key={label} size="small" variant="outlined" label={label} />
+                                            ))}
+                                        </Stack>
+                                    )}
                                     <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
                                         {a.studentId && <StudentMeta userId={a.studentId} />}
                                         <Typography variant="caption" color="text.secondary">• Created {new Date(a.createdAt).toLocaleString()}</Typography>

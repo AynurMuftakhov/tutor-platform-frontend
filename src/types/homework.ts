@@ -32,6 +32,7 @@ export interface AssignmentDto {
   instructions?: string;
   dueAt?: string; // ISO date
   createdAt: string; // ISO date
+  assignedAt?: string; // ISO date
   tasks: TaskDto[];
 }
 
@@ -40,6 +41,7 @@ export interface AssignmentListItemDto {
   id: string;
   title: string;
   createdAt: string; // ISO datetime
+  assignedAt?: string; // ISO datetime
   dueAt?: string | null; // ISO datetime
   totalTasks: number;
   completedTasks: number;
@@ -49,6 +51,7 @@ export interface AssignmentListItemDto {
   overdue: boolean;
   studentId?: string; // present on tutor list
   instructions?: string; // may be present when view=full
+  tasks?: TaskDto[]; // present when view=full
 }
 
 // Create payloads (frontend helpers)

@@ -49,12 +49,14 @@ import { getAssignmentById } from "../services/homework";
 import type { AssignmentListItemDto } from "../types/homework";
 import HomeworkComposerDrawer from "../components/homework/HomeworkComposerDrawer";
 import PreviousLessonNotesTab from "../features/notes/components/PreviousLessonNotesTab";
+import { getTaskTypeLabels } from "../utils/homeworkTaskTypes";
 
 const AssignmentCardSmall: React.FC<{ a: AssignmentListItemDto; onOpen: (id: string) => void; compact?: boolean }> = ({ a, onOpen, compact }) => {
   const total = a.totalTasks;
   const done = a.completedTasks;
   const pct = a.progressPct ?? (total ? Math.round((done / total) * 100) : 0);
   const due = a.dueAt ? new Date(a.dueAt) : null;
+  const taskTypes = useMemo(() => getTaskTypeLabels(a.tasks), [a.tasks]);
   const handleActivate = () => onOpen(a.id);
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Enter' || e.key === ' ') {
@@ -82,6 +84,13 @@ const AssignmentCardSmall: React.FC<{ a: AssignmentListItemDto; onOpen: (id: str
     >
       <Box sx={{ minWidth: 0, flex: 1 }}>
         <Typography variant={compact ? 'subtitle2' : 'subtitle1'} noWrap fontWeight={600}>{a.title}</Typography>
+        {taskTypes.length > 0 && (
+          <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap" sx={{ mt: 0.25 }}>
+            {taskTypes.map((label) => (
+              <Chip key={label} size="small" variant="outlined" label={label} />
+            ))}
+          </Stack>
+        )}
         {a.instructions && (
           <Typography variant="body2" color="text.secondary" noWrap sx={{ fontSize: compact ? 12 : undefined }}>{a.instructions}</Typography>
         )}

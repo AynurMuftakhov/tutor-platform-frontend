@@ -336,6 +336,8 @@ const BlockForm: React.FC<{ type: string; payloadId: string; value: AnyBlock; on
               <Typography variant="body2" color="text.secondary">
                 No listening tasks found for this material.
               </Typography>
+            ) : listeningTasks.length === 1 ? (
+                <></>
             ) : (
               <Autocomplete<ListeningTask>
                 options={listeningTasks}
