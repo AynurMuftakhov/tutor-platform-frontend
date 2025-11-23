@@ -31,7 +31,6 @@ import { FocusWordsProvider, useFocusWords } from "../context/FocusWordsContext"
 import GridViewIcon from '@mui/icons-material/GridView';
 import { useSyncedContent } from '../hooks/useSyncedContent';
 import SyncedContentView from '../features/lessonContent/student/SyncedContentView';
-import PresenterBar from '../components/lessonDetail/PresenterBar';
 import { OpenCompositionButton } from '../components/lessonDetail/WorkZone';
 import { useQuery } from '@tanstack/react-query';
 import { getLessonById, getLessonContent, fetchUserById } from '../services/api';
@@ -42,6 +41,7 @@ import useNotesOverlaySync from '../features/notes/hooks/useNotesOverlaySync';
 import { getNotesUIMode } from '../features/notes/utils/modeSelectors';
 import type { LessonNoteFormat } from '../types/lessonNotes';
 import type { LessonNoteStatus } from '../features/notes/components/CurrentLessonNote';
+import { useLessonContentLinks } from '../hooks/useLessonContentLinks';
 
 interface VideoCallPageProps {
     identity?: string;
@@ -180,6 +180,11 @@ const DailyCallLayout: React.FC<{
     const { setWordsFromRemote } = useFocusWords();
     const isTutor = user?.role === 'tutor';
     const contentSync = useSyncedContent(dailyCall, isTutor);
+    const { data: lessonContentLinks = [], isLoading: lessonContentLinksLoading } = useLessonContentLinks(lessonId || '');
+    const attachedLessonContents = useMemo(
+        () => (lessonContentLinks as any[]).map((link) => link.lessonContent).filter(Boolean),
+        [lessonContentLinks]
+    );
 
     // Workspace view selector: student profile or live transcription
     const [workspaceView, setWorkspaceView] = useState<'student' | 'transcription' | 'content'>('student');
@@ -993,17 +998,9 @@ const DailyCallLayout: React.FC<{
             >
                 <Box>
                     <Typography variant="overline" sx={{ letterSpacing: 1, color: 'primary.main' }}>{workspaceTagline}</Typography>
-                    <Typography variant="h6" sx={{ fontWeight: 700 }}>{workspaceHeader}</Typography>
+
                     {workspaceView === 'student' && !isTutor && sharedProfileBy && (
                         <Typography variant="caption" color="text.secondary">Shared by {sharedProfileBy}</Typography>
-                    )}
-                    {workspaceView === 'content' && !isTutor && sharedContentBy && (
-                        <Typography variant="caption" color="text.secondary">Shared by {sharedContentBy}</Typography>
-                    )}
-                    {workspaceView === 'content' && isContentOpen && (
-                        <Typography variant="caption" color="text.secondary">
-                            Section {contentSectionIndex + 1}{contentSections.length ? ` of ${contentSections.length}` : ''}
-                        </Typography>
                     )}
                 </Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
@@ -1106,19 +1103,29 @@ const DailyCallLayout: React.FC<{
                     <Box sx={{ flex: 1, minHeight: 0, width: '100%', display: 'flex', flexDirection: 'column' }}>
                         {isTutor && (
                             <Box sx={{ p: 1, borderBottom: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>
-                                <OpenCompositionButton onOpen={handleContentSelection} />
+                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                    <OpenCompositionButton lessonId={lessonId || undefined} onOpen={handleContentSelection} />
+                                    <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+                                        <Typography variant="caption" color="text.secondary">Attached Lesson Materials:</Typography>
+                                        {lessonContentLinksLoading ? (
+                                            <Typography variant="caption" color="text.secondary">Loading…</Typography>
+                                        ) : attachedLessonContents.length ? (
+                                            attachedLessonContents.map((it: any) => (
+                                                <Chip
+                                                    key={it.id}
+                                                    size="small"
+                                                    label={it.title || 'Untitled'}
+                                                    onClick={() => handleContentSelection({ id: it.id, title: it.title })}
+                                                    variant="outlined"
+                                                    color="primary"
+                                                />
+                                            ))
+                                        ) : (
+                                            <Typography variant="caption" color="text.secondary">None yet.</Typography>
+                                        )}
+                                    </Box>
+                                </Box>
                             </Box>
-                        )}
-                        {isTutor && isContentOpen && (
-                            <PresenterBar
-                                content={{ id: contentSync.state.contentId as string, title: contentSync.state.title }}
-                                onPrevSection={handlePrevSection}
-                                onNextSection={handleNextSection}
-                                onLockToggle={handleContentLockToggle}
-                                locked={!!contentSync.state.locked}
-                                onEnd={handleContentEnd}
-                                onFocus={handleContentFocus}
-                            />
                         )}
                         <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', bgcolor: 'background.paper' }}>
                             {isPresenterContentFetching && (

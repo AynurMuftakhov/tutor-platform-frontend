@@ -74,7 +74,7 @@ const LessonContentsLibraryPage: React.FC = () => {
   const createMutation = useMutation({
     mutationFn: () => {
       const { layout, content } = buildInitialComposition();
-      return createLessonContent({ ownerId: user!.id, title: 'Untitled composition', tags: [], layout: layout, content });
+      return createLessonContent({ ownerId: user!.id, title: 'Untitled Lesson Material', tags: [], layout: layout, content });
     },
     onSuccess: (created) => {
       qc.invalidateQueries({ queryKey: ['lesson-contents'] });
@@ -90,7 +90,7 @@ const LessonContentsLibraryPage: React.FC = () => {
   });
 
   const handleDelete = (id: string) => {
-    if (window.confirm('Delete this composition? This action cannot be undone.')) {
+    if (window.confirm('Delete this Lesson Material? This action cannot be undone.')) {
       deleteMutation.mutate(id);
     }
   };
@@ -113,7 +113,7 @@ const LessonContentsLibraryPage: React.FC = () => {
       <Stack direction="row" alignItems="center" justifyContent="space-between" mb={2}>
         <Typography variant="h5">Lesson Contents</Typography>
         <Button variant="contained" startIcon={<AddIcon />} onClick={() => createMutation.mutate()}>
-          New Composition
+          New Lesson Material
         </Button>
       </Stack>
 
@@ -153,7 +153,7 @@ const LessonContentsLibraryPage: React.FC = () => {
           <Typography variant="body2" color="text.secondary">Loading…</Typography>
         ) : items.length === 0 ? (
           <Box textAlign="center" py={6}>
-            <Typography variant="body1" color="text.secondary">No compositions yet.</Typography>
+            <Typography variant="body1" color="text.secondary">No Lesson Material yet.</Typography>
             <Button sx={{ mt: 2 }} variant="outlined" onClick={() => createMutation.mutate()}>Create your first</Button>
           </Box>
         ) : view === 'grid' ? (

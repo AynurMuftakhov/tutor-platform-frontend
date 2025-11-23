@@ -11,9 +11,11 @@ const normalizeFormat = (format?: LessonNoteFormat | string | null): LessonNoteF
     return format === 'plain' ? 'plain' : 'md';
 };
 
-const normalizeNote = (raw: LessonNote | (LessonNote & Record<string, unknown>) | undefined): LessonNote => {
+const normalizeNote = (
+    raw: LessonNote | (LessonNote & Record<string, unknown>) | null | undefined
+): LessonNote | null => {
     if (!raw) {
-        throw new Error('Missing note payload');
+        return null;
     }
 
     return {
@@ -21,7 +23,7 @@ const normalizeNote = (raw: LessonNote | (LessonNote & Record<string, unknown>) 
         content: raw.content,
         format: normalizeFormat((raw as LessonNote).format),
         updatedAt: raw.updatedAt,
-        updatedBy: (raw as LessonNote).updatedBy
+        updatedBy: (raw as LessonNote).updatedBy,
     };
 };
 

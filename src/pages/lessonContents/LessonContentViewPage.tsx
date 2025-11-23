@@ -140,7 +140,7 @@ const LessonContentViewPage: React.FC = () => {
             <Paper sx={{ p: 4, borderRadius: 2 }}>
               <Stack spacing={3}>
                 <Box>
-                  <Typography variant="h4">{data.title || 'Untitled composition'}</Typography>
+                  <Typography variant="h4">{data.title || 'Untitled Lesson Material'}</Typography>
                   <Stack direction="row" spacing={1} mt={1} flexWrap="wrap" alignItems="center">
                     <Chip size="small" label={data.status} color={data.status === 'PUBLISHED' ? 'success' : 'default'} />
                     {data.tags?.map((tag) => (

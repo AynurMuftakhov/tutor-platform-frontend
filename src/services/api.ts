@@ -504,6 +504,16 @@ export const reorderLessonMaterial = (
 ) =>
   api.patch(`/lessons-service/api/lessons/${lessonId}/materials/${linkId}`, { sortOrder });
 
+// Lesson ↔ LessonContent links
+export const fetchLessonContentLinks = async (lessonId: string) =>
+  api.get(`/lessons-service/api/lessons/${lessonId}/lesson-contents`).then(r => r.data);
+
+export const linkLessonContentToLesson = (lessonId: string, lessonContentId: string) =>
+  api.post(`/lessons-service/api/lessons/${lessonId}/lesson-contents`, null, { params: { lessonContentId } });
+
+export const unlinkLessonContentFromLesson = (lessonId: string, linkId: string) =>
+  api.delete(`/lessons-service/api/lessons/${lessonId}/lesson-contents/${linkId}`);
+
 // Request interceptor to add authorization token
 api.interceptors.request.use((config) => {
     const token = sessionStorage.getItem("token");

@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Box, Typography, IconButton, Tabs, Tab, Button, Dialog, DialogTitle, DialogContent, List, ListItemButton, ListItemText, TextField, InputAdornment } from '@mui/material';
+import { Box, Typography, IconButton, Tabs, Tab, Button, Dialog, DialogTitle, DialogContent, List, ListItemButton, ListItemText, TextField, InputAdornment, Divider, Chip } from '@mui/material';
 import { 
   Close as CloseIcon,
   Videocam as VideoIcon,
@@ -20,6 +20,7 @@ import type { useSyncedContent } from '../../hooks/useSyncedContent';
 import { useQuery } from '@tanstack/react-query';
 import { getLessonContents } from '../../services/api';
 import type { DailyCall } from '@daily-co/daily-js';
+import { useLessonContentLinks } from '../../hooks/useLessonContentLinks';
 
 type UseSyncedContentResult = ReturnType<typeof useSyncedContent>;
 
@@ -174,7 +175,10 @@ const WorkZone: React.FC<WorkZoneProps> = ({useSyncedVideo, useSyncedGrammar, us
             <Box sx={{ height: '100%', overflow: 'auto' }}>
               {isTutor && useSyncedContent && (
                 <Box sx={{ p: 1, borderBottom: '1px solid', borderColor: 'divider', display: 'flex', justifyContent: 'flex-end' }}>
-                  <OpenCompositionButton onOpen={(c) => { useSyncedContent.open({ id: c.id, title: c.title }); setCurrentTool('content'); }} />
+                  <OpenCompositionButton
+                    lessonId={lessonId}
+                    onOpen={(c) => { useSyncedContent.open({ id: c.id, title: c.title }); setCurrentTool('content'); }}
+                  />
                 </Box>
               )}
               <LessonMaterialsTab 
@@ -242,7 +246,7 @@ const WorkZone: React.FC<WorkZoneProps> = ({useSyncedVideo, useSyncedGrammar, us
   );
 };
 
-export const OpenCompositionButton: React.FC<{ onOpen: (c: { id: string; title?: string }) => void }> = ({ onOpen }) => {
+export const OpenCompositionButton: React.FC<{ onOpen: (c: { id: string; title?: string }) => void; lessonId?: string }> = ({ onOpen, lessonId }) => {
   const [open, setOpen] = React.useState(false);
   const [q, setQ] = React.useState('');
   const { user } = useAuth();
@@ -252,12 +256,21 @@ export const OpenCompositionButton: React.FC<{ onOpen: (c: { id: string; title?:
     placeholderData: (prev) => prev,
     staleTime: 10_000,
   });
-  const items: { id: string; title?: string }[] = React.useMemo(() => data?.content || data?.items || [], [data]);
+  const { data: attached = [], isLoading: attachedLoading } = useLessonContentLinks(lessonId || '');
+  const attachedItems: any[] = React.useMemo(() => (attached || [])
+    .map((link: any) => link.lessonContent)
+    .filter(Boolean), [attached]);
+  const attachedIds = React.useMemo(() => new Set(attachedItems.map((it) => it.id)), [attachedItems]);
+  const items: { id: string; title?: string }[] = React.useMemo(
+    () => (data?.content || data?.items || []).filter((it: any) => !attachedIds.has(it.id)),
+    [data, attachedIds]
+  );
+
   return (
     <>
-      <Button variant="outlined" size="small" startIcon={<GridViewIcon />} onClick={() => setOpen(true)}>Open composition…</Button>
+      <Button variant="outlined" size="small" startIcon={<GridViewIcon />} onClick={() => setOpen(true)}>Open Lesson Material…</Button>
       <Dialog open={open} onClose={() => setOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Select composition</DialogTitle>
+        <DialogTitle>Select Lesson Material</DialogTitle>
         <DialogContent dividers>
           <Box sx={{ mb: 2 }}>
             <TextField
@@ -265,7 +278,7 @@ export const OpenCompositionButton: React.FC<{ onOpen: (c: { id: string; title?:
               onChange={(e) => setQ(e.target.value)}
               size="small"
               fullWidth
-              placeholder="Search compositions"
+              placeholder="Search Lesson Materials"
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -275,13 +288,35 @@ export const OpenCompositionButton: React.FC<{ onOpen: (c: { id: string; title?:
               }}
             />
           </Box>
+
+          {lessonId && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700 }}>Attached to this lesson</Typography>
+              {attachedLoading ? (
+                <Typography variant="body2" color="text.secondary">Loading attached Lesson Materials…</Typography>
+              ) : attachedItems.length ? (
+                <List dense>
+                  {attachedItems.map((it: any) => (
+                    <ListItemButton key={it.id} onClick={() => { onOpen({ id: it.id, title: it.title }); setOpen(false); }}>
+                      <ListItemText primary={it.title || it.id} secondary={<Chip size="small" label={it.status || 'Saved'} />} />
+                    </ListItemButton>
+                  ))}
+                </List>
+              ) : (
+                <Typography variant="body2" color="text.secondary">Nothing attached yet.</Typography>
+              )}
+              <Divider sx={{ mt: 1.5 }} />
+            </Box>
+          )}
+
+          <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700 }}>Library</Typography>
           <List>
             {items?.length ? items.map((it: any) => (
               <ListItemButton key={it.id} onClick={() => { onOpen({ id: it.id, title: it.title }); setOpen(false); }}>
                 <ListItemText primary={it.title || it.id} secondary={it.status || undefined} />
               </ListItemButton>
             )) : (
-              <Typography variant="body2" color="text.secondary">No compositions found.</Typography>
+              <Typography variant="body2" color="text.secondary">No Lesson Materials found.</Typography>
             )}
           </List>
         </DialogContent>

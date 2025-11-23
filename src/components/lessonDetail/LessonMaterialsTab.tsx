@@ -19,6 +19,7 @@ import StandaloneMediaPlayer from "./StandaloneMediaPlayer";
 import {extractVideoId} from "../../utils/videoUtils";
 import GrammarViewerDialog from "../grammar/GrammarViewerDialog";
 import { resolveUrl } from '../../services/assets';
+import LessonContentAttachments from './LessonContentAttachments';
 
 interface LessonMaterialsTabProps {
   lessonId: string;
@@ -41,7 +42,7 @@ const LessonMaterialsTab: React.FC<LessonMaterialsTabProps> = ({ lessonId, isTea
   const [studentQ, setStudentQ] = useState<string>("");
   const [studentOptions, setStudentOptions] = useState<{ id: string; name: string; email?: string }[]>([]);
   const [studentLoading, setStudentLoading] = useState<boolean>(false);
-
+  const meterialsEnabled = false;
   React.useEffect(() => {
     if (!user?.id) return;
     const h = setTimeout(async () => {
@@ -177,20 +178,14 @@ const LessonMaterialsTab: React.FC<LessonMaterialsTabProps> = ({ lessonId, isTea
     </Paper>
   );
 
-  // Loading state
-  if (isLoading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
-
   return (
     <Box sx={{ p: 2 }}>
+      <LessonContentAttachments lessonId={lessonId} isTeacher={isTeacher} />
+
+        {meterialsEnabled && (<Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         {isTeacher && lessonMaterials.length > 0 && (
-          <Button 
+        <Button
             variant="outlined" 
             startIcon={<AddIcon />}
             onClick={handleOpenPicker}
@@ -200,7 +195,11 @@ const LessonMaterialsTab: React.FC<LessonMaterialsTabProps> = ({ lessonId, isTea
         )}
       </Box>
 
-      {lessonMaterials.length === 0 ? (
+      {isLoading ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+          <CircularProgress />
+        </Box>
+      ) : lessonMaterials.length === 0 ? (
         <EmptyState />
       ) : (
         <Grid container spacing={2}>
@@ -224,7 +223,7 @@ const LessonMaterialsTab: React.FC<LessonMaterialsTabProps> = ({ lessonId, isTea
       )}
 
 
-        {/* Media Player Dialog */}
+         Media Player Dialog
         <Dialog
             open={!!currentMaterial}
             onClose={handleClosePlayer}
@@ -254,14 +253,14 @@ const LessonMaterialsTab: React.FC<LessonMaterialsTabProps> = ({ lessonId, isTea
             )}
         </Dialog>
 
-      {/* Material Picker Dialog */}
+       Material Picker Dialog
       <MaterialPickerDialog
         lessonId={lessonId}
         open={isPickerOpen}
         onClose={handleClosePicker}
       />
 
-      {/* Listening Task Manager */}
+       Listening Task Manager
       {selectedMaterial && (selectedMaterial.type === 'VIDEO' || selectedMaterial.type === 'AUDIO') && (
         <ListeningTaskManager
           material={selectedMaterial}
@@ -270,7 +269,7 @@ const LessonMaterialsTab: React.FC<LessonMaterialsTabProps> = ({ lessonId, isTea
         />
       )}
 
-        {/* Grammar Viewer Dialog */}
+         Grammar Viewer Dialog
         {selectedMaterial && selectedMaterial.type === 'GRAMMAR' && (
             <GrammarViewerDialog
                 open={isGrammarDialogOpen}
@@ -279,6 +278,7 @@ const LessonMaterialsTab: React.FC<LessonMaterialsTabProps> = ({ lessonId, isTea
                 title={selectedMaterial.title}
             />
         )}
+    </Box>)}
     </Box>
   );
 };

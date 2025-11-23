@@ -65,3 +65,9 @@ export interface LessonContentListResponse {
   size: number;
   number: number; // current page
 }
+
+export interface LessonContentLink {
+  id: string;
+  lessonContent: LessonContent;
+  sortOrder?: number;
+}
