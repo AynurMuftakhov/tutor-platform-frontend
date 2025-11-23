@@ -493,7 +493,8 @@ const ListeningTaskBlockView: React.FC<{ payload: ListeningTaskBlockPayload; con
   const audioSrc = task.audioUrl || material?.sourceUrl || '';
   const targetSet = new Set((task.targetWords || []).map(normalizeListeningWord));
   const transcriptText = transcriptData?.transcript || '';
-    const transcriptTokens = transcriptText.split(/(\s+)/);
+  const transcriptTokens = transcriptText.split(/(\s+)/);
+  const showFocusWords = payload.showFocusWords !== false;
 
   return (
     <Stack spacing={1.5} sx={{ border: (t) => `1px solid ${t.palette.divider}`, borderRadius: 2, p: 2 }}>
@@ -548,7 +549,7 @@ const ListeningTaskBlockView: React.FC<{ payload: ListeningTaskBlockPayload; con
           </AccordionDetails>
         </Accordion>
       )}
-      {task.targetWords && task.targetWords.length > 0 && (
+      {showFocusWords && task.targetWords && task.targetWords.length > 0 && (
         <Stack spacing={0.5}>
           <Typography variant="subtitle2">Focus words</Typography>
           <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>

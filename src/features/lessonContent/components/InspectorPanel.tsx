@@ -312,9 +312,18 @@ const BlockForm: React.FC<{ type: string; payloadId: string; value: AnyBlock; on
   if (type === 'listeningTask') {
     const payload = value as ListeningTaskBlockPayload;
     const selectedTask = listeningTasks.find((task) => task.id === payload.taskId);
+    const hasSingleTask = !listeningTasksLoading && listeningTasks.length === 1;
+
+    useEffect(() => {
+      if (!payload.materialId) return;
+      if (payload.taskId) return;
+      if (hasSingleTask) {
+        onChange({ taskId: listeningTasks[0].id });
+      }
+    }, [hasSingleTask, listeningTasks, onChange, payload.materialId, payload.taskId]);
 
     const handleMaterialSelect = (material: PickedMaterial) => {
-      onChange({ materialId: material.id, taskId: '', showTranscript: payload.showTranscript });
+      onChange({ materialId: material.id, taskId: '', showTranscript: payload.showTranscript, showFocusWords: payload.showFocusWords });
       setListeningPickerOpen(false);
     };
 
@@ -336,6 +345,13 @@ const BlockForm: React.FC<{ type: string; payloadId: string; value: AnyBlock; on
               <Typography variant="body2" color="text.secondary">
                 No listening tasks found for this material.
               </Typography>
+            ) : hasSingleTask ? (
+              <Stack spacing={0.5}>
+                <Typography variant="body2">Using the only available task:</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {listeningTasks[0].title || `${formatTime(listeningTasks[0].startSec)} – ${formatTime(listeningTasks[0].endSec)}`}
+                </Typography>
+              </Stack>
             ) : (
               <Autocomplete<ListeningTask>
                 options={listeningTasks}
@@ -361,6 +377,16 @@ const BlockForm: React.FC<{ type: string; payloadId: string; value: AnyBlock; on
                 />
               )}
               label="Show transcript"
+            />
+            <FormControlLabel
+              control={(
+                <Switch
+                  size="small"
+                  checked={payload.showFocusWords !== false}
+                  onChange={(e) => onChange({ showFocusWords: e.target.checked })}
+                />
+              )}
+              label="Show focus words"
             />
           </Stack>
         )}

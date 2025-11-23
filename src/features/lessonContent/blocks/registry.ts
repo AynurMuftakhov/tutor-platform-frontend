@@ -105,7 +105,7 @@ register<ListeningTaskBlockPayload>('listeningTask', {
   icon: React.createElement(HeadphonesIcon, { fontSize: 'small' }),
   label: 'Listening task',
   schemaId: 'listeningTask.v1.json',
-  defaultContent: () => ({ materialId: '', taskId: '', showTranscript: false }),
+  defaultContent: () => ({ materialId: '', taskId: '', showTranscript: false, showFocusWords: true }),
   EditorComponent: (props) => React.createElement(PlaceholderEditor, { ...props, label: 'Listening task (editor)' }),
   StudentComponent: (props) => React.createElement(PlaceholderStudent, { ...props, label: 'Listening task (student)' }),
 });
