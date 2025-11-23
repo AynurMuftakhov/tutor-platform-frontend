@@ -91,6 +91,13 @@ const TextInlineEditor: React.FC<Props> = ({ id, html }) => {
         if (!active) editor.commands.blur();
     }, [editor, active]);
 
+    // Keep editor in sync with external updates (e.g., AI insert) when not actively editing
+    useEffect(() => {
+        if (!editor) return;
+        if (active) return; // avoid clobbering while user types
+        editor.commands.setContent(html || '<p></p>', false, { preserveWhitespace: true });
+    }, [editor, html, active]);
+
     const debouncedSave = useDebouncedCallback((rawHtml: string) => {
         const safe = sanitizeHtml(rawHtml);
         actions.upsertBlock(id, { html: safe } as any);

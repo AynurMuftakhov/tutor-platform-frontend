@@ -780,6 +780,30 @@ export const postMicDiag = async (payload: MicDiagPayload) => {
   return res.data;
 };
 
+export interface GenerateLessonTextRequest {
+  prompt: string;
+  existingText?: string;
+  lessonTitle?: string;
+  level?: string;
+}
+
+export interface GenerateLessonTextResponse {
+  html: string;
+  meta?: Record<string, unknown>;
+}
+
+export const generateLessonText = async (
+  teacherId: string,
+  payload: GenerateLessonTextRequest,
+): Promise<GenerateLessonTextResponse> => {
+  const response = await api.post<GenerateLessonTextResponse>(
+    `/lessons-service/api/ai/text-blocks`,
+    payload,
+    { params: { teacherId } },
+  );
+  return response.data;
+};
+
 export const generateListeningTranscript = async (
   teacherId: string,
   payload: GenerateListeningTranscriptPayload,

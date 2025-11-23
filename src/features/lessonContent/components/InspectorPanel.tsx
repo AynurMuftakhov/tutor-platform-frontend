@@ -31,11 +31,8 @@ import type { ImageAsset, ImageAssetPage } from '../../../types/assets';
 import { fetchImageAssets, uploadImageAsset, validateImageFile, resolveUrl } from '../../../services/assets';
 import type { ListeningTask } from '../../../types';
 import { fetchListeningTasks } from '../../../services/api';
-
-function sanitizeHtml(input: string): string {
-  // Minimal sanitizer: remove <script>...</script> tags
-  return input.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
-}
+import TextAiDialog from './TextAiDialog';
+import { sanitizeHtml } from '../student/StudentRenderer';
 
 const NumberField: React.FC<{ label: string; value?: number; onChange: (n?: number) => void; min?: number }>
   = ({ label, value, onChange, min = 0 }) => (
@@ -195,6 +192,7 @@ const BlockForm: React.FC<{ type: string; payloadId: string; value: AnyBlock; on
   const [materialPreview, setMaterialPreview] = useState<{ title: string; type: string } | undefined>(undefined);
   const [tasksOpen, setTasksOpen] = useState(false);
   const [listeningPickerOpen, setListeningPickerOpen] = useState(false);
+  const [aiDialogOpen, setAiDialogOpen] = useState(false);
 
   const listeningPayload = type === 'listeningTask' ? (value as ListeningTaskBlockPayload) : undefined;
   const {
@@ -208,7 +206,7 @@ const BlockForm: React.FC<{ type: string; payloadId: string; value: AnyBlock; on
 
   useEffect(() => { onErrorChange(error); }, [error]);
 
-  const { actions } = useEditorStore();
+  const { state, actions } = useEditorStore();
 
   const deleteThisBlock = () => {
     if (!payloadId) return;
@@ -219,6 +217,14 @@ const BlockForm: React.FC<{ type: string; payloadId: string; value: AnyBlock; on
     return (
       <Stack spacing={1.5}>
         <Typography variant="subtitle2">Text</Typography>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <Button variant="outlined" size="small" onClick={() => setAiDialogOpen(true)}>
+            Generate with AI
+          </Button>
+          <Typography variant="caption" color="text.secondary">
+            Re-run prompts to refine using the current text as context.
+          </Typography>
+        </Stack>
         <TextField
           size="small"
           label="HTML"
@@ -227,6 +233,16 @@ const BlockForm: React.FC<{ type: string; payloadId: string; value: AnyBlock; on
           onChange={(e) => {
             const html = sanitizeHtml(e.target.value);
             onChange({ html });
+          }}
+        />
+        <TextAiDialog
+          open={aiDialogOpen}
+          initialHtml={value?.html ?? ''}
+          lessonTitle={state.title}
+          onClose={() => setAiDialogOpen(false)}
+          onApply={(html) => {
+            onChange({ html: sanitizeHtml(html) });
+            setAiDialogOpen(false);
           }}
         />
         <Divider />
