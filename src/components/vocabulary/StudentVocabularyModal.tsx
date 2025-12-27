@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo } from 'react';
 import {
     Box,
     Button,
@@ -11,7 +11,6 @@ import {
 } from '@mui/material';
 import { useAssignments } from '../../hooks/useAssignments';
 import WordGrid from './WordGrid';
-import { VocabularyWord } from '../../types';
 import { useDictionary } from '../../hooks/useVocabulary';
 
 interface Props {
@@ -23,19 +22,31 @@ interface Props {
     } | null;
 }
 
+const EMPTY_ARRAY: any[] = [];
+
 const StudentVocabularyModal: React.FC<Props> = ({ open, onClose, student }) => {
-    // Fetch all vocabulary words
-    const { data: allWords = [] } = useDictionary();
-    
     // Fetch assignments for the selected student
-    const { data: assignments = [], isLoading } = useAssignments(student?.id || '');
+    const { data: assignments = EMPTY_ARRAY, isLoading: assignmentsLoading } = useAssignments(
+        student?.id || '',
+        { enabled: open }
+    );
     
-    // Create a map of assigned word IDs for quick lookup
-    const assignedWordIds = new Set<string>();
-    assignments.forEach(assignment => assignedWordIds.add(assignment.vocabularyWordId));
+    // Create a list of assigned word IDs
+    const assignedWordIds = useMemo(() => 
+        assignments.map(a => a.vocabularyWordId), 
+    [assignments]);
     
-    // Filter all words to get only the ones assigned to this student
-    const assignedWords = allWords.filter(word => assignedWordIds.has(word.id));
+    // Fetch vocabulary words for these IDs
+    const { data: wordsPage, isLoading: wordsLoading } = useDictionary(
+        { 
+            ids: assignedWordIds, 
+            size: Math.max(assignedWordIds.length, 1) 
+        },
+        { enabled: open && assignedWordIds.length > 0 }
+    );
+    
+    const assignedWords = wordsPage?.content ?? EMPTY_ARRAY;
+    const isLoading = assignmentsLoading || (wordsLoading && assignedWordIds.length > 0);
 
     return (
         <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg">

@@ -21,6 +21,7 @@ import type { AssignmentListItemDto, TaskDto } from '../../types/homework';
 import type { VocabularyWord } from '../../types';
 
 const DEFAULT_LOOKBACK_DAYS = 30;
+const EMPTY_ARRAY: any[] = [];
 
 type HomeworkWordPickerProps = {
   open: boolean;
@@ -80,10 +81,11 @@ export const HomeworkWordPicker: React.FC<HomeworkWordPickerProps> = ({
     return { from: past.toISOString().slice(0, 10), to };
   }, []);
 
-  const { data: vocabWords, isLoading: vocabLoading } = useDictionary();
+  const { data: wordsPage, isLoading: vocabLoading } = useDictionary({ size: 1000 }, { enabled: open });
+  const vocabWords = wordsPage?.content ?? EMPTY_ARRAY;
   const vocabLookup = useMemo(() => {
     const map = new Map<string, VocabularyWord>();
-    (vocabWords ?? []).forEach((word) => {
+    vocabWords.forEach((word) => {
       if (word?.id) map.set(word.id, word);
     });
     return map;

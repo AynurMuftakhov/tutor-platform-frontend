@@ -23,9 +23,12 @@ interface Props {
     onClose: () => void;
 }
 
+const EMPTY_ARRAY: any[] = [];
+
 const AssignModal: React.FC<Props> = ({ open, studentId, onClose }) => {
-    const { data: words = [], isLoading: wordsLoading } = useDictionary();
-    const { data: assignments = [], isLoading: assignmentsLoading } = useAssignments(studentId);
+    const { data: wordsPage, isLoading: wordsLoading } = useDictionary({ size: 1000 }, { enabled: open });
+    const words = wordsPage?.content ?? EMPTY_ARRAY;
+    const { data: assignments = [], isLoading: assignmentsLoading } = useAssignments(studentId, { enabled: open });
     const assign = useAssignWords();
     const [selected, setSelected] = useState<string[]>([]);
     const [search, setSearch] = useState('');

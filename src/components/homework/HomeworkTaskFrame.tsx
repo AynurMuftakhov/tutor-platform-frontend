@@ -800,6 +800,7 @@ const VocabListTaskContent: React.FC<VocabListTaskContentProps> = ({
                   learnedWords={mergedMastered}
                   wordStreaks={streaks}
                   masteryStreak={masteryStreak}
+                  homeworkMode={true}
                 />
               </Box>
               {totalListPages > 1 && (

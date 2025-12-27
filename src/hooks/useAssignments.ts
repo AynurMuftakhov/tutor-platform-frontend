@@ -2,11 +2,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { vocabApi } from '../services/vocabulary.api';
 import { AssignWordsRequest } from '../types';
 
-export const useAssignments = (studentId: string) =>
+export const useAssignments = (studentId: string, options: { enabled?: boolean } = {}) =>
     useQuery({
         queryKey: ['assignments', studentId],
         queryFn: () => vocabApi.listAssignments(studentId),
-        enabled: Boolean(studentId)
+        enabled: (options.enabled ?? true) && Boolean(studentId),
+        ...options
     });
 
 export const useAssignWords = () => {

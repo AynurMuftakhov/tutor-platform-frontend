@@ -34,6 +34,7 @@ interface VocabularyListProps {
     masteryStreak?: number;
     readOnly?: boolean;
     selectionMode?: boolean;
+    homeworkMode?: boolean;
     selectedWords?: string[];
     onToggleSelection?: (id: string) => void;
     // new: sync hooks
@@ -54,6 +55,7 @@ const VocabularyList: React.FC<VocabularyListProps> = ({
     masteryStreak,
     readOnly = false,
     selectionMode = false,
+    homeworkMode = false,
     selectedWords = [],
     onToggleSelection,
     onWordOpen,
@@ -155,7 +157,7 @@ const VocabularyList: React.FC<VocabularyListProps> = ({
                         const isSelected = selectedWords.includes(word.id);
                         const needed = Math.max(1, masteryStreak || 0);
                         const streakVal = Math.max(0, wordStreaks?.[word.id] || 0);
-                        const showProgress = !isLearned && needed > 0;
+                        const showProgress = !isLearned && needed > 0 && homeworkMode;
 
                         return (
                             <React.Fragment key={word.id}>

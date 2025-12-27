@@ -59,6 +59,7 @@ const steps = ['Clip & basics', 'Focus words', 'Transcript', 'Target words', 'Au
 const cefrOptions = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 const languageOptions = ['en-US', 'en-GB', 'es-ES', 'fr-FR', 'de-DE', 'it-IT'];
 const styleOptions = ['neutral', 'friendly', 'narrative', 'dramatic', 'conversational'];
+const EMPTY_ARRAY: any[] = [];
 
 const normalizeWord = (word: string) => word.replace(/[^\p{L}\p{N}'-]+/gu, '').toLowerCase();
 
@@ -78,7 +79,8 @@ const ListeningTaskEditor: React.FC<ListeningTaskEditorProps> = ({ material, ope
   const { enqueueSnackbar } = useSnackbar();
   const createTask = useCreateListeningTask();
   const updateTask = useUpdateListeningTask();
-  const { data: dictionary = [], isLoading: vocabLoading } = useDictionary();
+  const { data: wordsPage, isLoading: vocabLoading } = useDictionary({ size: 1000 });
+  const dictionary = wordsPage?.content ?? EMPTY_ARRAY;
 
   const [activeStep, setActiveStep] = useState(0);
   const [taskId, setTaskId] = useState<string | undefined>(task?.id);

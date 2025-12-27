@@ -51,6 +51,8 @@ import HomeworkComposerDrawer from "../components/homework/HomeworkComposerDrawe
 import PreviousLessonNotesTab from "../features/notes/components/PreviousLessonNotesTab";
 import { getTaskTypeLabels } from "../utils/homeworkTaskTypes";
 
+const EMPTY_ARRAY: any[] = [];
+
 const AssignmentCardSmall: React.FC<{ a: AssignmentListItemDto; onOpen: (id: string) => void; compact?: boolean }> = ({ a, onOpen, compact }) => {
   const total = a.totalTasks;
   const done = a.completedTasks;
@@ -225,13 +227,13 @@ const StudentHomeworkTab: React.FC<{ studentId: string; isTeacher: boolean; onAs
   }
   const listContent = embedded ? (
     <Stack spacing={1.25} sx={{ mt: 1.5 }}>
-      {list.map((a) => (
+      {list.map((a: AssignmentListItemDto) => (
         <AssignmentCardSmall key={a.id} a={a} onOpen={(id) => onAssignmentOpen(id)} compact />
       ))}
     </Stack>
   ) : (
     <Grid container spacing={2} sx={{ mt: 2 }}>
-      {list.map(a => (
+      {list.map((a: AssignmentListItemDto) => (
         <Grid size={{ xs: 12, md: 6 }} key={a.id}>
           <AssignmentCardSmall a={a} onOpen={(id) => onAssignmentOpen(id)} />
         </Grid>
@@ -344,10 +346,14 @@ const StudentPage: React.FC<StudentPageProps> = ({
   const [notesTeacherError, setNotesTeacherError] = useState<string | null>(null);
 
   // Dictionary data for this student (list view)
-  const { data: allWords = [] } = useDictionary();
-  const { data: assignments = [] } = useAssignments(student?.id || "");
-  const assignedIds = useMemo(() => new Set<string>(assignments.map((a: any) => a.vocabularyWordId)), [assignments]);
-  const assignedWords = useMemo(() => allWords.filter((w: any) => assignedIds.has(w.id)), [allWords, assignedIds]);
+  const { data: assignments = EMPTY_ARRAY } = useAssignments(student?.id || "");
+  const assignedWordIds = useMemo(() => assignments.map(a => a.vocabularyWordId), [assignments]);
+  const { data: wordsPage } = useDictionary(
+      { ids: assignedWordIds, size: Math.max(assignedWordIds.length, 1) },
+      { enabled: !!student?.id && assignedWordIds.length > 0 }
+  );
+  const assignedWords = wordsPage?.content ?? EMPTY_ARRAY;
+
   const [dictSearch, setDictSearch] = useState("");
   const filteredAssigned = useMemo(
     () => assignedWords.filter((w: any) => w.text?.toLowerCase().includes(dictSearch.toLowerCase())),
