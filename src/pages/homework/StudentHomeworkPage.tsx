@@ -8,6 +8,10 @@ import { Link as RouterLink } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import FiltersBar, { FiltersState } from '../../components/homework/FiltersBar';
 import { getTaskTypeLabels } from '../../utils/homeworkTaskTypes';
+import {motion} from "framer-motion";
+import PageHeader from "../../components/PageHeader";
+import SchoolIcon from "@mui/icons-material/School";
+import {CalendarIcon} from "@mui/x-date-pickers";
 
 const StudentHomeworkPage: React.FC = () => {
   const { user } = useAuth();
@@ -106,9 +110,10 @@ const StudentHomeworkPage: React.FC = () => {
   if (isError) return <Container sx={{ py: 4 }}><Typography color="error">Failed to load homework.</Typography></Container>;
 
   return (
+
       <Box
           sx={{
-              p: { xs: 1, sm: 1 },
+              p: { xs: 2, sm: 2 },
               bgcolor: '#fafbfd',
               height: '100%',
               display: 'flex',
@@ -117,8 +122,11 @@ const StudentHomeworkPage: React.FC = () => {
               position: 'relative'
           }}
       >
-    <Container sx={{ py: 4, height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <Typography variant="h4" sx={{ mb: 2, fontWeight: 600, color: '#2573ff' }}>Here is your homework</Typography>
+      <PageHeader
+          title="Homework"
+          icon={<CalendarIcon />}
+          titleColor="primary"
+          />
       <Box sx={{ mb: 2 }}>
         <FiltersBar value={filters} onChange={(f) => { setFiltersApplied(true); setFilters(f); }} sticky />
       </Box>
@@ -199,7 +207,6 @@ const StudentHomeworkPage: React.FC = () => {
           />
         </Box>
       )}
-    </Container>
       </Box>
   );
 };

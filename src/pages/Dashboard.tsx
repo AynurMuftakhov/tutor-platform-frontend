@@ -10,6 +10,7 @@ import {
     Tooltip,
     LinearProgress
 } from "@mui/material";
+import PageHeader from "../components/PageHeader";
 import { useTutorStatistics } from "../hooks/useTutorStatistics";
 import SchoolIcon from "@mui/icons-material/School";
 import EventNoteIcon from "@mui/icons-material/EventNote";
@@ -143,7 +144,7 @@ const Dashboard = () => {
     return (
         <Box
             sx={{
-                p: { xs: 2, sm: 3, md: 4 },
+                p: { xs: 2, sm: 3, md: 2 },
                 bgcolor: '#fafbfd',
                 minHeight: '100%',
                 width: '100%',
@@ -152,39 +153,13 @@ const Dashboard = () => {
                 position: 'relative',
             }}
         >
-            {/* Header Section with Greeting */}
-            <Box
-                component={motion.div}
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5 }}
-                sx={{
-                    mb: 4,
-                    display: 'flex',
-                    flexDirection: { xs: 'column', md: 'row' },
-                    justifyContent: 'space-between',
-                    alignItems: { xs: 'flex-start', md: 'center' },
-                    gap: 2
-                }}
-            >
-                <Box>
-                    <Typography
-                        variant="h3"
-                        fontWeight={700}
-                        sx={{
-                            mb: 1,
-                            background: `linear-gradient(90deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
-                            WebkitBackgroundClip: 'text',
-                            WebkitTextFillColor: 'transparent',
-                        }}
-                    >
-                        Hello, {user?.name || "Tutor"}!
-                    </Typography>
-                    <Typography variant="subtitle1" color="text.secondary">
-                        {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                    </Typography>
-                </Box>
-            </Box>
+
+        <PageHeader
+            title={`Hello, ${user?.name || "Tutor"}!`}
+            titleColor="gradient"
+            subtitle={new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+            mb={4}
+        />
 
             {/* Stats Cards Section */}
             {user?.role === "tutor" && (
@@ -222,11 +197,6 @@ const Dashboard = () => {
             <Grid container spacing={4}>
                 {/* Next Lessons Section */}
                 <Grid size ={{ xs:12, md:8 }}>
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.5, delay: 0.2 }}
-                    >
                         <Paper
                             elevation={0}
                             sx={{
@@ -274,7 +244,6 @@ const Dashboard = () => {
                                 <UpcomingLessonsSection />
                             </Box>
                         </Paper>
-                    </motion.div>
                 </Grid>
             </Grid>
         </Box>

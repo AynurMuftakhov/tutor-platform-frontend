@@ -13,6 +13,7 @@ import {
     DialogActions,
     Chip, Tooltip, Paper,
 } from "@mui/material";
+import PageHeader from "../components/PageHeader";
 import MenuItem from "@mui/material/MenuItem";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
 
@@ -29,6 +30,8 @@ import {ENGLISH_LEVELS, EnglishLevel} from "../types/ENGLISH_LEVELS";
 import StudentVocabularyModal from "../components/vocabulary/StudentVocabularyModal";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import { useNavigate } from "react-router-dom";
+import {CalendarIcon} from "@mui/x-date-pickers";
+import {Person} from "@mui/icons-material";
 
 // Custom DataGrid toolbar without Filters and Quick Filter — only Columns, Density, Export
 const CustomToolbar: React.FC = () => (
@@ -413,26 +416,20 @@ const MyStudentsPage: React.FC = () => {
             bgcolor: '#fafbfd',
         }}>
             <Box sx={{ p: 2 }}>
-                {/* Title & Add Button */}
-                <Box
-                    sx={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        mb: 2,
-                    }}
-                >
-                    <Typography variant="h5" fontWeight="bold">
-                        My Students
-                    </Typography>
-                    <Button
-                        variant="contained"
-                        startIcon={<PersonAddIcon />}
-                        onClick={handleAddStudent}
-                    >
-                        Add Student
-                    </Button>
-                </Box>
+                <PageHeader
+                    title="My Students"
+                    titleColor="primary"
+                    icon={<Person />}
+                    actions={
+                        <Button
+                            variant="contained"
+                            startIcon={<PersonAddIcon />}
+                            onClick={handleAddStudent}
+                        >
+                            Add Student
+                        </Button>
+                    }
+                />
 
                 <Paper elevation={1} sx={{ p: 2, borderRadius: 3 }}>
                 {/* Search */}

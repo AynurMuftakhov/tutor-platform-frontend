@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Avatar, Box, Button, Chip, Container, Grid, IconButton, MenuItem, Select, Stack, TextField, Tooltip, Typography, Autocomplete, CircularProgress, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Snackbar, Pagination, LinearProgress } from '@mui/material';
+import PageHeader from '../../components/PageHeader';
 import HomeworkComposerDrawer from '../../components/homework/HomeworkComposerDrawer';
 import { useTeacherAssignments, useDeleteAssignment } from '../../hooks/useHomeworks';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -14,6 +15,7 @@ import FiltersBar, { FiltersState } from '../../components/homework/FiltersBar';
 import AddIcon from '@mui/icons-material/Add';
 import { Fab } from '@mui/material';
 import { getTaskTypeLabels } from '../../utils/homeworkTaskTypes';
+import {CalendarIcon} from "@mui/x-date-pickers";
 
 const TeacherHomeworkPage: React.FC = () => {
   const { user } = useAuth();
@@ -177,7 +179,7 @@ const TeacherHomeworkPage: React.FC = () => {
   return (
       <Box
           sx={{
-              p: { xs: 1, sm: 1 },
+              p: { xs: 2, sm: 2 },
               bgcolor: '#fafbfd',
               height: '100%',
               display: 'flex',
@@ -186,68 +188,65 @@ const TeacherHomeworkPage: React.FC = () => {
               position: 'relative'
           }}
       >
-     <Container sx={{ py: 4, height: '100%', display: 'flex', flexDirection: 'column', gap: 2 }}>
-      <Stack
-        direction={{ xs: 'column', md: 'row' }}
-        spacing={1.5}
-        alignItems={{ xs: 'flex-start', md: 'center' }}
-        justifyContent="space-between"
-      >
-        <Typography variant="h4" sx={{ fontWeight: 700, letterSpacing: '-0.02em', color: '#2573ff' }}>
-          Students Homework
-        </Typography>
+      <PageHeader
+        title="Students Homework"
+        titleColor="primary"
+        icon={<CalendarIcon />}
+        actions={
+          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+            <Autocomplete
+              size="small"
+              options={studentOptions}
+              getOptionLabel={(o) => o?.name || ''}
+              value={selectedStudent}
+              onChange={(_, val) => {
+                setSelectedStudent(val);
+                setStudentFilter(val?.id || '');
+              }}
+              onInputChange={(_, val, reason) => {
+                if (reason !== 'reset') setStudentQ(val);
+              }}
+              loading={studentLoading}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Filter by student"
+                  placeholder="Type a name..."
+                  InputProps={{
+                    ...params.InputProps,
+                    endAdornment: (
+                      <>
+                        {studentLoading ? <CircularProgress color="inherit" size={16} /> : null}
+                        {params.InputProps.endAdornment}
+                      </>
+                    ),
+                  }}
+                  sx={{ minWidth: 260 }}
+                />
+              )}
+              isOptionEqualToValue={(o, v) => o.id === v.id}
+            />
 
-        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-          <Autocomplete
-            size="small"
-            options={studentOptions}
-            getOptionLabel={(o) => o?.name || ''}
-            value={selectedStudent}
-            onChange={(_, val) => {
-              setSelectedStudent(val);
-              setStudentFilter(val?.id || '');
-            }}
-            onInputChange={(_, val, reason) => {
-              if (reason !== 'reset') setStudentQ(val);
-            }}
-            loading={studentLoading}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label="Filter by student"
-                placeholder="Type a name..."
-                InputProps={{
-                  ...params.InputProps,
-                  endAdornment: (
-                    <>
-                      {studentLoading ? <CircularProgress color="inherit" size={16} /> : null}
-                      {params.InputProps.endAdornment}
-                    </>
-                  ),
-                }}
-                sx={{ minWidth: 260 }}
-              />
-            )}
-            isOptionEqualToValue={(o, v) => o.id === v.id}
-          />
-
-          <Tooltip title="Refresh">
-            <IconButton onClick={onRefresh} aria-label="Refresh">
-              <RefreshIcon />
-            </IconButton>
-          </Tooltip>
+            <Tooltip title="Refresh">
+              <IconButton onClick={onRefresh} aria-label="Refresh">
+                <RefreshIcon />
+              </IconButton>
+            </Tooltip>
 
             <Button
-                variant="contained"
-                onClick={() => setComposerOpen(true)}
-                sx={{ display: { xs: 'none', sm: 'inline-flex' } }}
+              variant="contained"
+              onClick={() => setComposerOpen(true)}
+              sx={{ display: { xs: 'none', sm: 'inline-flex' } }}
             >
-                Add Homework
+              Add Homework
             </Button>
-        </Stack>
-      </Stack>
-
-      <FiltersBar value={filters} onChange={(f) => { setFiltersApplied(true); setFilters(f); }} sticky />
+          </Stack>
+        }
+        secondaryRow={
+          <FiltersBar value={filters} onChange={(f) => { setFiltersApplied(true); setFilters(f); }} sticky />
+        }
+        mb={1}
+      />
 
       {isError && <Typography color="error">Failed to load.</Typography>}
 
@@ -398,7 +397,6 @@ const TeacherHomeworkPage: React.FC = () => {
          >
              <AddIcon />
          </Fab>
-    </Container>
   </Box>
   );
 };

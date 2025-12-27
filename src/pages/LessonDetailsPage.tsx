@@ -183,7 +183,15 @@ const LessonDetailPage = () => {
     }
 
     return (
-        <Container maxWidth="lg" sx={{ mt: 4, mb: 6 }}>
+        <Box
+            sx={{
+                p: { xs: 2, sm: 2 },
+                bgcolor: '#fafbfd',
+                display: 'flex',
+                flexDirection: 'column',
+                position: 'relative'
+            }}
+        >
             <Grid size={{xs:12}}>
                 {user?.role === "tutor" && (
                     <Box
@@ -324,7 +332,7 @@ const LessonDetailPage = () => {
                     </Typography>
                 </Box>
             </TabPanel>
-        </Container>
+        </Box>
     )
 };
 

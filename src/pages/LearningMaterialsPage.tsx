@@ -17,6 +17,7 @@ import {
   MenuItem,
   Pagination,
 } from '@mui/material';
+import PageHeader from '../components/PageHeader';
 import ListeningTaskManager from '../components/materials/ListeningTaskManager';
 import {
   Add as AddIcon,
@@ -382,17 +383,32 @@ const LearningMaterialsPage: React.FC = () => {
           boxShadow: { xs: 'none', md: '-2px 0 5px rgba(0,0,0,0.02)' },
         }}
       >
-
-        <MaterialsToolbar
-          searchTerm={searchTerm}
-          onSearchChange={handleSearchChange}
-          viewMode={viewMode}
-          onViewModeChange={handleViewModeChange}
-          selectedType={selectedType}
-          onTypeChange={handleTypeChange}
-          selectedTags={selectedTags}
-          onTagsChange={handleTagsChange}
-          onAddMaterial={handleAddMaterial}
+        <PageHeader
+          title="Learning Materials"
+          actions={
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<AddIcon />}
+              onClick={handleAddMaterial}
+            >
+              Add Material
+            </Button>
+          }
+          secondaryRow={
+            <MaterialsToolbar
+              searchTerm={searchTerm}
+              onSearchChange={handleSearchChange}
+              viewMode={viewMode}
+              onViewModeChange={handleViewModeChange}
+              selectedType={selectedType}
+              onTypeChange={handleTypeChange}
+              selectedTags={selectedTags}
+              onTagsChange={handleTagsChange}
+              onAddMaterial={handleAddMaterial}
+            />
+          }
+          mb={0}
         />
 
         {/* Materials content */}

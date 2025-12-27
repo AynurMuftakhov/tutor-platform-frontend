@@ -4,6 +4,9 @@ import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import PreviousLessonNotesTab from '../features/notes/components/PreviousLessonNotesTab';
 import { getTeacherByStudentId } from '../services/api';
+import PageHeader from "../components/PageHeader";
+import {CalendarIcon} from "@mui/x-date-pickers";
+import {Notes} from "@mui/icons-material";
 
 const StudentNotesPage: React.FC = () => {
     const { user } = useAuth();
@@ -73,10 +76,22 @@ const StudentNotesPage: React.FC = () => {
     }
 
     return (
-        <Container maxWidth="md" sx={{ mt: 4, mb: 6 }}>
-            <Typography variant="h4" fontWeight={700} gutterBottom>
-                Lesson Notes
-            </Typography>
+        <Box
+            sx={{
+                p: { xs: 2, sm: 2 },
+                bgcolor: '#fafbfd',
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+                position: 'relative'
+            }}
+        >
+            <PageHeader
+                title="Lesson Notes"
+                icon={<Notes />}
+                titleColor="primary"
+            />
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
                 Review notes from previous lessons. Notes are read-only in this view.
             </Typography>
@@ -98,7 +113,7 @@ const StudentNotesPage: React.FC = () => {
                     />
                 )}
             </Paper>
-        </Container>
+        </Box>
     );
 };
 

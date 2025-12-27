@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { Box, Button, Chip, Divider, IconButton, InputAdornment, MenuItem, Select, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography, Pagination } from '@mui/material';
+import { Box, Button, Chip, Divider, IconButton, InputAdornment, MenuItem, Select, Stack, TextField, ToggleButton, ToggleButtonGroup, Pagination, Typography } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import PageHeader from '../../components/PageHeader';
 import SearchIcon from '@mui/icons-material/Search';
 import ViewListIcon from '@mui/icons-material/ViewList';
 import GridViewIcon from '@mui/icons-material/GridView';
@@ -11,6 +12,8 @@ import { createLessonContent, getLessonContents, deleteLessonContent } from '../
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { LessonContent, PageModel, BlockContentPayload, LessonContentListResponse } from '../../types/lessonContent';
 import EditIcon from "@mui/icons-material/Edit";
+import {ContentContainer} from "@fullcalendar/core/internal";
+import {Image} from "@mui/icons-material";
 
 const LessonContentsLibraryPage: React.FC = () => {
   const navigate = useNavigate();
@@ -102,7 +105,7 @@ const LessonContentsLibraryPage: React.FC = () => {
   const to: number = Math.min(page * size, total);
 
   return (
-    <Box p={3}  sx={{
+    <Box p={2}  sx={{
         bgcolor: '#fafbfd',
         height: '100%',
         display: 'flex',
@@ -110,43 +113,47 @@ const LessonContentsLibraryPage: React.FC = () => {
         overflow: 'hidden',
         position: 'relative'
     }}>
-      <Stack direction="row" alignItems="center" justifyContent="space-between" mb={2}>
-        <Typography variant="h5">Lesson Contents</Typography>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => createMutation.mutate()}>
-          New Lesson Material
-        </Button>
-      </Stack>
-
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }} mb={2}>
-        <TextField
-          size="small"
-          placeholder="Search"
-          value={q}
-          onChange={(e) => { setQ(e.target.value); setPageParam(1); }}
-          InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> }}
-          sx={{ minWidth: 260 }}
-        />
-        <Select size="small" value={status} onChange={(e) => { setStatus(e.target.value as any); setPageParam(1); }} sx={{ width: 180 }}>
-          <MenuItem value="ALL">All</MenuItem>
-          <MenuItem value="DRAFT">Draft</MenuItem>
-          <MenuItem value="PUBLISHED">Published</MenuItem>
-        </Select>
-        <ToggleButtonGroup size="small" exclusive value={view} onChange={(_, v) => v && setView(v)}>
-          <ToggleButton value="grid"><GridViewIcon fontSize="small" /></ToggleButton>
-          <ToggleButton value="list"><ViewListIcon fontSize="small" /></ToggleButton>
-        </ToggleButtonGroup>
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ ml: 'auto' }}>
-          <Typography variant="caption" color="text.secondary">Per page</Typography>
-          <Select size="small" value={String(size)} onChange={(e) => setSizeParam(parseInt(String(e.target.value), 10))} sx={{ width: 100 }}>
-            <MenuItem value={8}>8</MenuItem>
-            <MenuItem value={12}>12</MenuItem>
-            <MenuItem value={24}>24</MenuItem>
-            <MenuItem value={48}>48</MenuItem>
-          </Select>
-        </Stack>
-      </Stack>
-
-      <Divider sx={{ mb: 2 }} />
+      <PageHeader
+        title="Lesson Contents"
+        icon={<Image />}
+        titleColor="primary"
+        actions={
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => createMutation.mutate()}>
+            New Lesson Content
+          </Button>
+        }
+        secondaryRow={
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }}>
+            <TextField
+              size="small"
+              placeholder="Search"
+              value={q}
+              onChange={(e) => { setQ(e.target.value); setPageParam(1); }}
+              InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> }}
+              sx={{ minWidth: 260 }}
+            />
+            <Select size="small" value={status} onChange={(e) => { setStatus(e.target.value as any); setPageParam(1); }} sx={{ width: 180 }}>
+              <MenuItem value="ALL">All</MenuItem>
+              <MenuItem value="DRAFT">Draft</MenuItem>
+              <MenuItem value="PUBLISHED">Published</MenuItem>
+            </Select>
+            <ToggleButtonGroup size="small" exclusive value={view} onChange={(_, v) => v && setView(v)}>
+              <ToggleButton value="grid"><GridViewIcon fontSize="small" /></ToggleButton>
+              <ToggleButton value="list"><ViewListIcon fontSize="small" /></ToggleButton>
+            </ToggleButtonGroup>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ ml: 'auto' }}>
+              <Select size="small" value={String(size)} onChange={(e) => setSizeParam(parseInt(String(e.target.value), 10))} sx={{ width: 100 }}>
+                <MenuItem value={8}>8</MenuItem>
+                <MenuItem value={12}>12</MenuItem>
+                <MenuItem value={24}>24</MenuItem>
+                <MenuItem value={48}>48</MenuItem>
+              </Select>
+            </Stack>
+          </Stack>
+        }
+        showDivider
+        mb={2}
+      />
 
       <Box sx={{ flex: 1, overflow: 'auto' }}>
         {isLoading ? (

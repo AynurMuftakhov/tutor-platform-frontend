@@ -9,6 +9,7 @@ import {
     Stack,
     Typography,
 } from '@mui/material';
+import PageHeader from '../components/PageHeader';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useSnackbar } from 'notistack';
 import { useAuth } from '../context/AuthContext';
@@ -289,47 +290,33 @@ const StudentsActivityOverviewPage: React.FC = () => {
     }
 
     return (
-        <Container sx={{ py: 3 }}>
-            <Box
-                sx={{
-                    position: 'sticky',
-                    top: 16,
-                    zIndex: (theme) => theme.zIndex.appBar,
-                    mb: 2,
-                    px: 2,
-                    py: 1.5,
-                    borderRadius: 2,
-                    bgcolor: (theme) =>
-                        theme.palette.mode === 'dark'
-                            ? 'rgba(30,33,40,0.6)'
-                            : 'rgba(255,255,255,0.75)',
-                    backdropFilter: 'saturate(140%) blur(10px)',
-                    border: '1px solid',
-                    borderColor: 'divider',
-                }}
-            >
-                <Stack
-                    direction={{ xs: 'column', sm: 'row' }}
-                    alignItems={{ xs: 'flex-start', sm: 'center' }}
-                    justifyContent="space-between"
-                    spacing={1}
-                >
-                    <Box>
-                        <Typography variant="h5" sx={{ fontWeight: 700 }}>
-                            Students Activity Triage
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                            Monitor engagement trends, triage at‑risk students, and act fast.
-                        </Typography>
-                    </Box>
-                    <Stack direction="row" spacing={1} flexWrap="wrap">
+        <Box
+            sx={{
+                p: { xs: 2, sm: 2 },
+                bgcolor: '#fafbfd',
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+                position: 'relative'
+            }}
+        >
+            <PageHeader
+                title="Students Activity Triage"
+                titleColor={"primary"}
+                subtitle="Monitor engagement trends, triage at‑risk students, and act fast."
+                sticky
+                glassmorphism
+                metrics={
+                    <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                         <Chip size="small" label={`Online ${onlineNowCount}`} />
                         <Chip size="small" label={`Active today ${activeTodayCount}`} variant="outlined" />
                         <Chip size="small" label={`Median active ${medianActiveMinutesToday}m`} variant="outlined" />
                         <Chip size="small" label={`At‑risk ${atRiskCount}`} color="warning" />
                     </Stack>
-                </Stack>
-            </Box>
+                }
+
+            />
 
             {isError && (
                 <Alert
@@ -398,7 +385,7 @@ const StudentsActivityOverviewPage: React.FC = () => {
                     )}
                 />
             )}
-        </Container>
+        </Box>
     );
 };
 

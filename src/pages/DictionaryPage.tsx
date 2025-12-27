@@ -18,8 +18,9 @@ import {
     ToggleButtonGroup,
     ToggleButton,
     Tooltip,
-    alpha
+    alpha, Container
 } from '@mui/material';
+import PageHeader from '../components/PageHeader';
 import SearchIcon from '@mui/icons-material/Search';
 import AddIcon from '@mui/icons-material/Add';
 import SchoolIcon from '@mui/icons-material/School';
@@ -45,7 +46,6 @@ import QuizMode from '../components/vocabulary/QuizMode';
 import VocabularyRoundSetup from '../components/vocabulary/VocabularyRoundSetup';
 import AssignStudentModal from '../components/vocabulary/AssignStudentModal';
 import {VocabularyWord} from '../types';
-import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 
 const ITEMS_PER_PAGE = 12;
@@ -299,7 +299,7 @@ const DictionaryPage: React.FC = () => {
     };
 
     return (
-        <Box 
+        <Box
             sx={{
                 p: { xs: 1, sm: 1 },
                 bgcolor: '#fafbfd',
@@ -310,208 +310,187 @@ const DictionaryPage: React.FC = () => {
                 position: 'relative'
             }}
         >
-            <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5 }}
-                style={{ display: 'flex', flexDirection: 'column', flex: 1, position: 'relative', zIndex: 1, overflow: 'hidden' }}
-            >
-                <Stack
-                    direction={{ xs: 'column', sm: 'row' }}
-                    justifyContent="space-between"
-                    alignItems={{ xs: 'flex-start', sm: 'center' }}
-                    mb={3}
-                    spacing={2}
-                >
-                    <Typography
-                        variant="h4"
-                        sx={{
-                            fontWeight: 600,
-                            color: '#2573ff',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 1
-                        }}
-                    >
-                        <SchoolIcon sx={{ fontSize: 32 }} /> Vocabulary
-                    </Typography>
-
-                    {isTeacher ? (
-                        // Teacher actions
-                        <Stack direction="row" spacing={1}>
-                            {selectionMode ? (
-                                <>
-                                    <Button
-                                        variant="outlined"
-                                        onClick={toggleSelectionMode}
-                                        sx={{
-                                            borderRadius: 2,
-                                            borderColor: 'error.main',
-                                            color: 'error.main',
-                                            '&:hover': {
-                                                bgcolor: 'rgba(255, 72, 66, 0.1)'
+                <PageHeader
+                    title="Vocabulary"
+                    icon={<SchoolIcon />}
+                    titleColor="primary"
+                    actions={
+                        isTeacher ? (
+                            // Teacher actions
+                            <Stack direction="row" spacing={1}>
+                                {selectionMode ? (
+                                    <>
+                                        <Button
+                                            variant="outlined"
+                                            onClick={toggleSelectionMode}
+                                            sx={{
+                                                borderRadius: 2,
+                                                borderColor: 'error.main',
+                                                color: 'error.main',
+                                                '&:hover': {
+                                                    bgcolor: 'rgba(255, 72, 66, 0.1)'
+                                                }
+                                            }}
+                                        >
+                                            Cancel
+                                        </Button>
+                                        <Button
+                                            variant="contained"
+                                            onClick={() => setAssignOpen(true)}
+                                            disabled={selectedWords.length === 0}
+                                            sx={{
+                                                borderRadius: 2,
+                                                bgcolor: '#2573ff',
+                                                '&:hover': {
+                                                    bgcolor: '#1a5cd1'
+                                                }
+                                            }}
+                                        >
+                                            Assign {selectedWords.length} Word{selectedWords.length !== 1 ? 's' : ''}
+                                        </Button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Button
+                                            variant="outlined"
+                                            onClick={toggleSelectionMode}
+                                            startIcon={<PersonAddIcon />}
+                                            sx={{
+                                                borderRadius: 2,
+                                                borderColor: '#00d7c2',
+                                                color: '#00d7c2',
+                                                '&:hover': {
+                                                    borderColor: '#00b3a1',
+                                                    bgcolor: 'rgba(0, 215, 194, 0.1)'
+                                                }
+                                            }}
+                                        >
+                                            Select Words to Assign
+                                        </Button>
+                                        <Button
+                                            variant="contained"
+                                            onClick={() => setGenOpen(true)}
+                                            startIcon={<AddIcon />}
+                                            sx={{
+                                                borderRadius: 2,
+                                                bgcolor: '#2573ff',
+                                                '&:hover': {
+                                                    bgcolor: '#1a5cd1'
+                                                }
+                                            }}
+                                        >
+                                            Add Word
+                                        </Button>
+                                    </>
+                                )}
+                            </Stack>
+                        ) : (
+                            // Student actions
+                            <Stack direction="row" spacing={1}>
+                                <Button
+                                    variant="outlined"
+                                    onClick={() => {
+                                        setRepeatLearnedMode(false);
+                                        setAllowAnyCount(false);
+                                        // For student practice, use assigned words (quizWords). If less than 4, pad from learned
+                                        const base = quizWords.slice();
+                                        if (base.length < 4) {
+                                            const learnedOnly = quizWords.filter(w => learnedWords.has(w.id));
+                                            let idx = 0;
+                                            while (base.length < 4 && learnedOnly.length > 0) {
+                                                base.push(learnedOnly[idx % learnedOnly.length]);
+                                                idx++;
                                             }
-                                        }}
-                                    >
-                                        Cancel
-                                    </Button>
-                                    <Button
-                                        variant="contained"
-                                        onClick={() => setAssignOpen(true)}
-                                        disabled={selectedWords.length === 0}
-                                        sx={{
-                                            borderRadius: 2,
-                                            bgcolor: '#2573ff',
-                                            '&:hover': {
-                                                bgcolor: '#1a5cd1'
-                                            }
-                                        }}
-                                    >
-                                        Assign {selectedWords.length} Word{selectedWords.length !== 1 ? 's' : ''}
-                                    </Button>
-                                </>
-                            ) : (
-                                <>
-                                    <Button
-                                        variant="outlined"
-                                        onClick={toggleSelectionMode}
-                                        startIcon={<PersonAddIcon />}
-                                        sx={{
-                                            borderRadius: 2,
-                                            borderColor: '#00d7c2',
-                                            color: '#00d7c2',
-                                            '&:hover': {
-                                                borderColor: '#00b3a1',
-                                                bgcolor: 'rgba(0, 215, 194, 0.1)'
-                                            }
-                                        }}
-                                    >
-                                        Select Words to Assign
-                                    </Button>
-                                    <Button
-                                        variant="contained"
-                                        onClick={() => setGenOpen(true)}
-                                        startIcon={<AddIcon />}
-                                        sx={{
-                                            borderRadius: 2,
-                                            bgcolor: '#2573ff',
-                                            '&:hover': {
-                                                bgcolor: '#1a5cd1'
-                                            }
-                                        }}
-                                    >
-                                        Add Word
-                                    </Button>
-                                </>
-                            )}
-                        </Stack>
-                    ) : (
-                        // Student actions
-                        <Stack direction="row" spacing={1}>
-                            <Button
-                                variant="outlined"
-                                onClick={() => {
-                                    setRepeatLearnedMode(false);
-                                    setAllowAnyCount(false);
-                                    // For student practice, use assigned words (quizWords). If less than 4, pad from learned
-                                    const base = quizWords.slice();
-                                    if (base.length < 4) {
-                                        const learnedOnly = quizWords.filter(w => learnedWords.has(w.id));
-                                        let idx = 0;
-                                        while (base.length < 4 && learnedOnly.length > 0) {
-                                            base.push(learnedOnly[idx % learnedOnly.length]);
-                                            idx++;
+                                            // If still less than 4 and no learned available, allow any count
+                                            if (base.length < 4) setAllowAnyCount(true);
                                         }
-                                        // If still less than 4 and no learned available, allow any count
-                                        if (base.length < 4) setAllowAnyCount(true);
-                                    }
-                                    setQuestionWords(base);
-                                    setSetupOpen(true);
-                                }}
-                                startIcon={<SchoolIcon />}
-                                sx={{
-                                    borderRadius: 2,
-                                    borderColor: '#00d7c2',
-                                    color: '#00d7c2',
-                                    '&:hover': {
-                                        borderColor: '#00b3a1',
-                                        bgcolor: 'rgba(0, 215, 194, 0.1)'
-                                    }
-                                }}
-                            >
-                                Practice
-                            </Button>
-                            <Button
-                                variant="contained"
-                                onClick={() => {
-                                    setRepeatLearnedMode(true);
-                                    const learnedOnly = quizWords.filter(w => learnedWords.has(w.id));
-                                    setQuestionWords(learnedOnly);
-                                    setAllowAnyCount(true);
-                                    setSetupOpen(true);
-                                }}
-                                sx={{
-                                    borderRadius: 2,
-                                    bgcolor: '#2573ff',
-                                    '&:hover': {
-                                        bgcolor: '#1a5cd1'
-                                    }
-                                }}
-                                disabled={quizWords.filter(w => learnedWords.has(w.id)).length === 0}
-                            >
-                                Repeat learned
-                            </Button>
-                        </Stack>
-                    )}
-                </Stack>
-
-                {/* Student tabs for switching between My Vocabulary and Library */}
-                {!isTeacher && (
-                    <Box sx={{ mb: 3 }}>
-                        <Tabs
-                            value={activeTab}
-                            onChange={(_, newValue) => setActiveTab(newValue)}
-                            sx={{
-                                mb: 2,
-                                '& .MuiTab-root': {
-                                    minWidth: 'auto',
-                                    px: 3,
-                                    py: 1,
-                                    borderRadius: 2,
-                                    mr: 1,
-                                    color: 'text.secondary',
-                                    '&.Mui-selected': {
-                                        color: '#2573ff',
-                                        fontWeight: 600
-                                    }
-                                },
-                                '& .MuiTabs-indicator': {
-                                    height: 3,
-                                    borderRadius: 1.5
-                                }
-                            }}
-                        >
-                            <Tab
-                                value="my-vocabulary"
-                                label="My Vocabulary"
-                                icon={<BookmarkIcon />}
-                                iconPosition="start"
-                            />
-                            <Tab
-                                value="library"
-                                label="Vocabulary Library"
-                                icon={<LibraryBooksIcon />}
-                                iconPosition="start"
-                            />
-                        </Tabs>
-
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                            {activeTab === 'my-vocabulary'
-                                ? 'Words assigned to you by your teacher. Practice these to improve your vocabulary.'
-                                : 'Browse all available vocabulary words. Add interesting words to your personal vocabulary.'}
-                        </Typography>
-                    </Box>
-                )}
+                                        setQuestionWords(base);
+                                        setSetupOpen(true);
+                                    }}
+                                    startIcon={<SchoolIcon />}
+                                    sx={{
+                                        borderRadius: 2,
+                                        borderColor: '#00d7c2',
+                                        color: '#00d7c2',
+                                        '&:hover': {
+                                            borderColor: '#00b3a1',
+                                            bgcolor: 'rgba(0, 215, 194, 0.1)'
+                                        }
+                                    }}
+                                >
+                                    Practice
+                                </Button>
+                                <Button
+                                    variant="contained"
+                                    onClick={() => {
+                                        setRepeatLearnedMode(true);
+                                        const learnedOnly = quizWords.filter(w => learnedWords.has(w.id));
+                                        setQuestionWords(learnedOnly);
+                                        setAllowAnyCount(true);
+                                        setSetupOpen(true);
+                                    }}
+                                    sx={{
+                                        borderRadius: 2,
+                                        bgcolor: '#2573ff',
+                                        '&:hover': {
+                                            bgcolor: '#1a5cd1'
+                                        }
+                                    }}
+                                    disabled={quizWords.filter(w => learnedWords.has(w.id)).length === 0}
+                                >
+                                    Repeat learned
+                                </Button>
+                            </Stack>
+                        )
+                    }
+                    secondaryRow={
+                        !isTeacher ? (
+                            <Box>
+                                <Tabs
+                                    value={activeTab}
+                                    onChange={(_, newValue) => setActiveTab(newValue)}
+                                    sx={{
+                                        mb: 2,
+                                        '& .MuiTab-root': {
+                                            minWidth: 'auto',
+                                            px: 3,
+                                            py: 1,
+                                            borderRadius: 2,
+                                            mr: 1,
+                                            color: 'text.secondary',
+                                            '&.Mui-selected': {
+                                                color: '#2573ff',
+                                                fontWeight: 600
+                                            }
+                                        },
+                                        '& .MuiTabs-indicator': {
+                                            height: 3,
+                                            borderRadius: 1.5
+                                        }
+                                    }}
+                                >
+                                    <Tab
+                                        value="my-vocabulary"
+                                        label="My Vocabulary"
+                                        icon={<BookmarkIcon />}
+                                        iconPosition="start"
+                                    />
+                                    <Tab
+                                        value="library"
+                                        label="Vocabulary Library"
+                                        icon={<LibraryBooksIcon />}
+                                        iconPosition="start"
+                                    />
+                                </Tabs>
+                                <Typography variant="body2" color="text.secondary">
+                                    {activeTab === 'my-vocabulary'
+                                        ? 'Words assigned to you by your teacher. Practice these to improve your vocabulary.'
+                                        : 'Browse all available vocabulary words. Add interesting words to your personal vocabulary.'}
+                                </Typography>
+                            </Box>
+                        ) : undefined
+                    }
+                />
 
                 {/* Search & Filters */}
                 <Box
@@ -713,8 +692,6 @@ const DictionaryPage: React.FC = () => {
                     </Box>
                 )}
 
-            </motion.div>
-
             {/* Dialogs */}
             <GenerateWordDialog open={genOpen} onClose={() => {
                 setGenOpen(false);
@@ -782,11 +759,11 @@ const DictionaryPage: React.FC = () => {
                 onClose={() => setSnackbarOpen(false)}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
             >
-                <Alert 
-                    onClose={() => setSnackbarOpen(false)} 
+                <Alert
+                    onClose={() => setSnackbarOpen(false)}
                     severity={snackbarSeverity}
                     variant="filled"
-                    sx={{ 
+                    sx={{
                         width: '100%',
                         boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
                         borderRadius: 2
