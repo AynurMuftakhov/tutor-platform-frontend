@@ -64,6 +64,7 @@ const TeacherHomeworkNewPage: React.FC = () => {
   const [taskType, setTaskType] = useState<HomeworkTaskType>('VIDEO');
   const [sourceKind, setSourceKind] = useState<SourceKind>('EXTERNAL_URL');
   const [sourceUrl, setSourceUrl] = useState('');
+  const isVideoTask = taskType === 'VIDEO';
 
   // VOCAB_LIST selection & settings
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -181,6 +182,10 @@ const TeacherHomeworkNewPage: React.FC = () => {
     ]
   ), []);
   const sourceKindOptions: SourceKind[] = ['MATERIAL', 'LESSON_CONTENT', 'EXTERNAL_URL', 'VOCAB_LIST', 'GENERATED_AUDIO'];
+  const effectiveSourceKind: SourceKind = isVideoTask ? 'EXTERNAL_URL' : sourceKind;
+  const availableSourceKinds: SourceKind[] = isVideoTask
+    ? ['EXTERNAL_URL']
+    : sourceKindOptions.filter(s => s !== 'GENERATED_AUDIO');
 
   const formatDurationLabel = (value: number) => {
     const mins = Math.floor(value / 60);
@@ -193,7 +198,8 @@ const TeacherHomeworkNewPage: React.FC = () => {
     create.isPending ||
     !studentId ||
     (isVocabList && isVocabSelectionInvalid) ||
-    (isListeningTask && (!transcriptId || hasUnsavedTranscriptEdits || !listeningWordRequirementMet || !audioContentRef));
+    (isListeningTask && (!transcriptId || hasUnsavedTranscriptEdits || !listeningWordRequirementMet || !audioContentRef)) ||
+    (isVideoTask && !sourceUrl.trim());
 
   const generateTranscriptMutation = useMutation<
     ListeningTranscriptResponse,
@@ -312,6 +318,12 @@ const TeacherHomeworkNewPage: React.FC = () => {
       setSourceKind('EXTERNAL_URL');
     }
   }, [isListeningTask, sourceKind]);
+
+  useEffect(() => {
+    if (isVideoTask) {
+      setSourceKind('EXTERNAL_URL');
+    }
+  }, [isVideoTask]);
 
   useEffect(() => {
     if (!isListeningTask) {
@@ -655,12 +667,17 @@ const TeacherHomeworkNewPage: React.FC = () => {
         vocabWordIds: selectedWordIds,
       });
     } else {
+      if (isVideoTask && !sourceUrl.trim()) {
+        window.alert('Please provide a video URL for the VIDEO task.');
+        return;
+      }
+      const trimmedUrl = sourceUrl.trim();
       tasks.push({
         title: taskTitle,
         type: taskType,
-        sourceKind,
+        sourceKind: effectiveSourceKind,
         instructions: undefined,
-        contentRef: sourceKind === 'EXTERNAL_URL' ? { url: sourceUrl } : {},
+        contentRef: effectiveSourceKind === 'EXTERNAL_URL' ? { url: trimmedUrl } : {},
       });
     }
 
@@ -747,13 +764,20 @@ const TeacherHomeworkNewPage: React.FC = () => {
               {taskTypeOptions.map(t => (<MenuItem key={t} value={t}>{t}</MenuItem>))}
             </TextField>
             {!isListeningTask ? (
-              <TextField select label="Source kind" value={sourceKind} onChange={e => setSourceKind(e.target.value as SourceKind)}>
-                {sourceKindOptions.filter(s => s !== 'GENERATED_AUDIO').map(s => (<MenuItem key={s} value={s}>{s}</MenuItem>))}
+              <TextField
+                select
+                label="Source kind"
+                value={effectiveSourceKind}
+                onChange={e => setSourceKind(e.target.value as SourceKind)}
+                disabled={isVideoTask}
+                helperText={isVideoTask ? 'Video tasks currently support external URLs.' : undefined}
+              >
+                {availableSourceKinds.map(s => (<MenuItem key={s} value={s}>{s}</MenuItem>))}
               </TextField>
             ) : (
               <TextField label="Source kind" value="GENERATED_AUDIO" InputProps={{ readOnly: true }} disabled />
             )}
-            {sourceKind === 'EXTERNAL_URL' && !isListeningTask && (
+            {effectiveSourceKind === 'EXTERNAL_URL' && !isListeningTask && (
               <TextField label="Source URL" value={sourceUrl} onChange={e => setSourceUrl(e.target.value)} fullWidth />
             )}
             {(isVocabList || isListeningTask) && (

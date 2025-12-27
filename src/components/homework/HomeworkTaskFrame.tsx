@@ -4,7 +4,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import type { AssignmentDto, TaskDto, UpdateProgressPayload } from '../../types/homework';
 import useHomeworkTaskLifecycle from '../../hooks/useHomeworkTaskLifecycle';
 import { useQuery } from '@tanstack/react-query';
-import { getLessonContent, getListeningTranscript } from '../../services/api';
+import { getLessonContent, getListeningTranscript, getMaterial } from '../../services/api';
 import StudentRenderer from '../../features/lessonContent/student/StudentRenderer';
 import GrammarPlayer from '../grammar/GrammarPlayer';
 import QuizMode from '../vocabulary/QuizMode';
@@ -12,6 +12,9 @@ import VocabularyRoundSetup from '../vocabulary/VocabularyRoundSetup';
 import { vocabApi } from '../../services/vocabulary.api';
 import VocabularyList from '../vocabulary/VocabularyList';
 import { useAuth } from '../../context/AuthContext';
+import ReactPlayer from 'react-player';
+import type { OnProgressProps } from 'react-player/base';
+import { resolveUrl } from '../../services/assets';
 
 interface Props {
   assignment: AssignmentDto;
@@ -52,9 +55,22 @@ interface VocabListTaskContentProps extends TaskLifecycleHandlers {
 const HomeworkTaskFrame: React.FC<Props> = ({ assignment, task, readOnly }) => {
   const { markStarted, reportProgress, markCompleted } = useHomeworkTaskLifecycle(task.id, { minIntervalMs: 400 });
 
-  // VIDEO handling: either materialId via StudentRenderer video block not directly accessible here.
-  // For simplicity, support EXTERNAL_URL video via HTML5/ReactPlayer-like basic <video>.
-  const url: string | undefined = (task.contentRef as any)?.url;
+  // VIDEO handling: support EXTERNAL_URL and material-based videos by fetching material.sourceUrl
+  const videoRef = (task.contentRef as any) || {};
+  const videoMaterialId: string | undefined = videoRef.materialId;
+  const videoUrlFromRef: string | undefined = typeof videoRef.url === 'string' && videoRef.url ? resolveUrl(videoRef.url) : undefined;
+  const { data: videoMaterial, isLoading: videoMaterialLoading, isError: videoMaterialError } = useQuery({
+    queryKey: ['material', videoMaterialId],
+    queryFn: () => getMaterial(videoMaterialId!),
+    enabled: !!videoMaterialId && task.type === 'VIDEO',
+  });
+  const resolvedVideoUrl: string | undefined = videoUrlFromRef || (videoMaterial?.sourceUrl ? resolveUrl(videoMaterial.sourceUrl) : undefined);
+  const [videoDurationSec, setVideoDurationSec] = useState<number>(0);
+  const [videoError, setVideoError] = useState<string | null>(null);
+  useEffect(() => {
+    setVideoDurationSec(0);
+    setVideoError(null);
+  }, [task.id, task.type]);
 
   // READING: fetch lesson content if lessonContentId provided
   const lessonContentId: string | undefined = (task.contentRef as any)?.lessonContentId;
@@ -94,37 +110,77 @@ const HomeworkTaskFrame: React.FC<Props> = ({ assignment, task, readOnly }) => {
 
   // Render by type
   if (task.type === 'VIDEO') {
-    if (url) {
+    if (videoMaterialLoading) {
+      return (
+        <Card variant="outlined" sx={{ width: '100%' }}>
+          <CardContent sx={{ p: { xs: 2, sm: 2.5 } }}>
+            <Typography variant="subtitle1" sx={{ mb: 1 }}>{task.title}</Typography>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <CircularProgress size={18} />
+              <Typography variant="body2" color="text.secondary">Loading video…</Typography>
+            </Stack>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    if (resolvedVideoUrl) {
       return (
         <Card variant="outlined" sx={{ width: '100%' }}>
           <CardContent sx={{ p: { xs: 2, sm: 2.5 } }}>
             <Typography variant="subtitle1" sx={{ mb: 1 }}>{task.title}</Typography>
             <Box sx={{ position: 'relative', pt: '56.25%' }}>
-              <video
-                src={url}
+              <ReactPlayer
+                url={resolvedVideoUrl}
                 controls
-                style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
+                width="100%"
+                height="100%"
+                style={{ position: 'absolute', top: 0, left: 0 }}
                 onPlay={() => { if (!readOnly) markStarted(); }}
-                onTimeUpdate={(e) => {
-                  const v = e.currentTarget as HTMLVideoElement;
-                  const pct = v.duration ? Math.round((v.currentTime / v.duration) * 100) : 0;
-                  if (!readOnly) reportProgress({ progressPct: pct, meta: { playedSec: Math.floor(v.currentTime), durationSec: Math.floor(v.duration || 0) } });
-                  if (pct >= 90 && !readOnly) {
-                    markCompleted({
-                      progressPct: Math.min(100, pct),
-                      meta: { playedSec: Math.floor(v.currentTime), durationSec: Math.floor(v.duration || 0) }
+                onDuration={(sec) => setVideoDurationSec(sec || 0)}
+                onProgress={(state: OnProgressProps) => {
+                  const duration = videoDurationSec || state.loadedSeconds || 0;
+                  const pct = duration
+                    ? Math.round((state.playedSeconds / duration) * 100)
+                    : Math.round((state.played || 0) * 100);
+                  if (!readOnly) {
+                    reportProgress({
+                      progressPct: pct,
+                      meta: { playedSec: Math.floor(state.playedSeconds), durationSec: Math.floor(duration) },
                     });
+                    if (pct >= 90) {
+                      markCompleted({
+                        progressPct: Math.min(100, pct),
+                        meta: { playedSec: Math.floor(state.playedSeconds), durationSec: Math.floor(duration) },
+                      });
+                    }
                   }
                 }}
+                onEnded={() => {
+                  if (readOnly) return;
+                  const duration = videoDurationSec || 0;
+                  markCompleted({
+                    progressPct: 100,
+                    meta: { playedSec: Math.floor(duration), durationSec: Math.floor(duration) },
+                  });
+                }}
+                onError={() => setVideoError('Unable to load this video source.')}
               />
             </Box>
           </CardContent>
         </Card>
       );
     }
-    // If not EXTERNAL_URL, show fallback
+
+    const videoFallbackMessage = videoError
+      || (videoMaterialError ? 'Failed to load the selected video material.' : videoMaterialId ? 'Video material is missing a playable source URL.' : 'Video source URL is missing.');
     return (
-      <Card variant="outlined"><CardContent><Typography>Video task. Player not available for this source.</Typography></CardContent></Card>
+      <Card variant="outlined">
+        <CardContent>
+          <Typography variant="subtitle1" sx={{ mb: 1 }}>{task.title}</Typography>
+          <Typography color="text.secondary">Video task. Player not available for this source. {videoFallbackMessage}</Typography>
+        </CardContent>
+      </Card>
     );
   }
 
