@@ -798,6 +798,8 @@ const VocabListTaskContent: React.FC<VocabListTaskContentProps> = ({
                   data={pagedWords}
                   readOnly
                   learnedWords={mergedMastered}
+                  wordStreaks={streaks}
+                  masteryStreak={masteryStreak}
                 />
               </Box>
               {totalListPages > 1 && (
@@ -913,6 +915,8 @@ const VocabListTaskContent: React.FC<VocabListTaskContentProps> = ({
           }}
           initialSessionSize={initialSessionSize}
           allowAnyCount={allowAnyCount}
+          wordStreaks={streaks}
+          masteryStreak={masteryStreak}
         />
         {preMastered.size > 0 && (
           <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>

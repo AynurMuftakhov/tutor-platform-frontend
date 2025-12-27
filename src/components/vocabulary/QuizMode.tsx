@@ -45,6 +45,8 @@ interface QuizModeProps {
     initialSessionSize?: number;
     // Allow starting even if fewer than 4 words are available
     allowAnyCount?: boolean;
+    wordStreaks?: Record<string, number>;
+    masteryStreak?: number;
 }
 
  type QuizType = 'translation' | 'definition' | 'listening';
@@ -55,7 +57,7 @@ type QuizQuestion = {
     type: QuizType;
 };
 
-const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords, onAnswer, onComplete, initialSessionSize, allowAnyCount }) => {
+const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords, onAnswer, onComplete, initialSessionSize, allowAnyCount, wordStreaks, masteryStreak }) => {
     const theme = useTheme();
     const [quizType, setQuizType] = useState<QuizType>('translation');
     const [questions, setQuestions] = useState<QuizQuestion[]>([]);
@@ -72,6 +74,7 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords
     const [remainingUniqueCount, setRemainingUniqueCount] = useState<number>(0);
     const [currentRound, setCurrentRound] = useState<number>(1);
     const [hasNextRound, setHasNextRound] = useState<boolean>(false);
+    const [localStreaks, setLocalStreaks] = useState<Record<string, number>>({});
 
     const initializedRef = useRef(false);
     const baseWordsRef = useRef<VocabularyWord[]>([]);
@@ -281,7 +284,14 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords
       seedSession(qWords, chosen);
       setLoading(false);
       initializedRef.current = true;
+      setLocalStreaks(wordStreaks || {});
     }, [open, questionWords, seedSession, words]);
+
+    // Sync streaks when upstream data changes while dialog is open
+    useEffect(() => {
+      if (!open) return;
+      setLocalStreaks(wordStreaks || {});
+    }, [wordStreaks, open]);
 
     // Rebuild when quiz type changes using the locked batch
     useEffect(() => {
@@ -305,9 +315,15 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords
 
       const currentQuestion = questions[currentQuestionIndex];
       if (!currentQuestion) return;
+      const currentWordId = currentQuestion.word.id;
 
       const correct = answer === currentQuestion.correctAnswer;
       setIsAnswered(true);
+      setLocalStreaks((prev) => {
+        const prevVal = prev?.[currentWordId] ?? wordStreaks?.[currentWordId] ?? 0;
+        const nextVal = correct ? prevVal + 1 : 0;
+        return { ...prev, [currentWordId]: nextVal };
+      });
 
       if (correct) {
         setScore(prev => prev + 1);
@@ -387,6 +403,11 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords
             </Dialog>
         );
     }
+
+    const currentWord = questions[currentQuestionIndex]?.word;
+    const neededToMaster = masteryStreak ? Math.max(1, masteryStreak) : undefined;
+    const currentStreak = currentWord ? (localStreaks[currentWord.id] ?? wordStreaks?.[currentWord.id] ?? 0) : 0;
+    const remainingToMaster = neededToMaster !== undefined ? Math.max(0, neededToMaster - currentStreak) : undefined;
 
     return (
         <Dialog
@@ -533,6 +554,22 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords
                                                             <Typography variant="h6" gutterBottom sx={{ color: '#2573ff', fontWeight: 600 }}>
                                                                 {questions[currentQuestionIndex].word.text}
                                                             </Typography>
+
+                                                        {neededToMaster && (
+                                                          <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                                                            <Typography variant="caption" color="text.secondary">
+                                                              {remainingToMaster === 0
+                                                                ? 'Learned for this task'
+                                                                : `Correct answers to master:`}
+                                                            </Typography>
+                                                              <Chip
+                                                                  size="small"
+                                                                  color={remainingToMaster === 0 ? 'success' : 'warning'}
+                                                                  label={`${Math.min(currentStreak, neededToMaster)}/${neededToMaster}`}
+                                                                  sx={{ height: 22 }}
+                                                              />
+                                                          </Stack>
+                                                        )}
 
                                                             {questions[currentQuestionIndex].word.partOfSpeech && (
                                                                 <Chip

@@ -30,6 +30,8 @@ interface VocabularyListProps {
     onToggleLearned?: (id: string) => void;
     onAddToMyVocabulary?: (id: string) => void;
     learnedWords?: Set<string>;
+    wordStreaks?: Record<string, number>;
+    masteryStreak?: number;
     readOnly?: boolean;
     selectionMode?: boolean;
     selectedWords?: string[];
@@ -48,6 +50,8 @@ const VocabularyList: React.FC<VocabularyListProps> = ({
     onToggleLearned,
     onAddToMyVocabulary,
     learnedWords = new Set(),
+    wordStreaks,
+    masteryStreak,
     readOnly = false,
     selectionMode = false,
     selectedWords = [],
@@ -149,6 +153,9 @@ const VocabularyList: React.FC<VocabularyListProps> = ({
                     {data.map((word, index) => {
                         const isLearned = learnedWords.has(word.id);
                         const isSelected = selectedWords.includes(word.id);
+                        const needed = Math.max(1, masteryStreak || 0);
+                        const streakVal = Math.max(0, wordStreaks?.[word.id] || 0);
+                        const showProgress = !isLearned && needed > 0;
 
                         return (
                             <React.Fragment key={word.id}>
@@ -230,6 +237,19 @@ const VocabularyList: React.FC<VocabularyListProps> = ({
                                                         '& .MuiChip-icon': {
                                                             color: theme.palette.success.main
                                                         }
+                                                    }}
+                                                />
+                                            )}
+
+                                            {showProgress && (
+                                                <Chip
+                                                    label={`${Math.min(streakVal, needed)}/${needed}`}
+                                                    size="small"
+                                                    color="warning"
+                                                    sx={{
+                                                        borderRadius: 1.5,
+                                                        bgcolor: alpha(theme.palette.warning.main, 0.1),
+                                                        color: theme.palette.warning.main,
                                                     }}
                                                 />
                                             )}
