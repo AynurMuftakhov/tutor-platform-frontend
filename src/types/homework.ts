@@ -1,3 +1,5 @@
+import { PageResult } from './index';
+
 // Homework domain types matching backend
 
 export type HomeworkTaskType = 'VIDEO' | 'READING' | 'GRAMMAR' | 'VOCAB' | 'LINK' | 'LISTENING';
@@ -90,10 +92,3 @@ export interface UpdateProgressPayload {
   meta?: Record<string, unknown>;
 }
 
-export interface PageResult<T> {
-  content: T[];
-  totalPages: number;
-  totalElements: number;
-  size: number;
-  number: number; // page index
-}

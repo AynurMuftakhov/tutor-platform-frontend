@@ -1,3 +1,11 @@
+export interface PageResult<T> {
+    content: T[];
+    totalPages: number;
+    totalElements: number;
+    size: number;
+    number: number; // current page index, 0-based
+}
+
 export interface VocabularyWordRequest { text: string; translation: string; partOfSpeech?: string; createdByTeacherId?: string; }
 export interface AssignedWordResponse { id: string; vocabularyWordId: string; text: string; translation: string; status: string; repetitionCount: number; lastCheckedDate?: string; }
 export interface AssignWordsRequest { studentId: string; vocabularyWordIds: string[]; }

@@ -18,7 +18,7 @@ import {
     ToggleButtonGroup,
     ToggleButton,
     Tooltip,
-    alpha, Container
+    alpha, Container, CircularProgress
 } from '@mui/material';
 import PageHeader from '../components/PageHeader';
 import SearchIcon from '@mui/icons-material/Search';
@@ -49,6 +49,7 @@ import {VocabularyWord} from '../types';
 import { useAuth } from '../context/AuthContext';
 
 const ITEMS_PER_PAGE = 12;
+const EMPTY_ARRAY: any[] = [];
 
 const DictionaryPage: React.FC = () => {
     const theme = useTheme();
@@ -59,14 +60,21 @@ const DictionaryPage: React.FC = () => {
     // Tab state for student view (My Vocabulary / Vocabulary Library)
     const [activeTab, setActiveTab] = useState<'my-vocabulary' | 'library'>('my-vocabulary');
 
-    // Fetch all vocabulary words
-    const {data: words = [], refetch: refetchWords} = useDictionary();
+    const [search, setSearch] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+    const [page, setPage] = useState(1); // 1-based for Pagination component
+
+    // Debounce search term
+    useEffect(() => {
+        const handler = setTimeout(() => {
+            setDebouncedSearch(search);
+            setPage(1); // Reset to first page on new search
+        }, 500);
+        return () => clearTimeout(handler);
+    }, [search]);
 
     // Fetch words assigned to the student (if user is a student)
-    const {data: assignedWords = []} = useAssignments(user?.id || '');
-
-    // Hook for assigning words to students
-    const assignWords = useAssignWords();
+    const {data: assignedWords = EMPTY_ARRAY} = useAssignments(user?.id || '');
 
     // State to track assigned word IDs for quick lookup
     const [assignedWordIdsState, setAssignedWordIdsState] = useState(new Set<string>());
@@ -82,6 +90,20 @@ const DictionaryPage: React.FC = () => {
     useEffect(() => {
         setAssignedWordIdsState(new Set(assignedWordIds));
     }, [assignedWordIds]);
+
+    // Fetch vocabulary words with server-side pagination and search
+    const {data: wordsPage, isLoading: wordsLoading, refetch: refetchWords} = useDictionary({
+        text: debouncedSearch,
+        page: page - 1,
+        size: ITEMS_PER_PAGE,
+        ids: (!isTeacher && activeTab === 'my-vocabulary') ? Array.from(assignedWordIds) : undefined
+    });
+
+    const words = useMemo(() => wordsPage?.content ?? EMPTY_ARRAY, [wordsPage]);
+    const totalPages = wordsPage?.totalPages || 0;
+
+    // Hook for assigning words to students
+    const assignWords = useAssignWords();
 
     // Create a map of vocabulary word IDs to assignment IDs and statuses
     const assignmentMap = useMemo(() => {
@@ -109,27 +131,21 @@ const DictionaryPage: React.FC = () => {
     // Get words for the current view based on user role and active tab
     const displayWords = useMemo(() => {
         if (isTeacher) {
-            // Teachers see all words
             return words;
         } else {
-            // Students see either assigned words or library words based on active tab
             if (activeTab === 'my-vocabulary') {
-                // Filter words that are assigned to the student
                 return words.filter(word => assignedWordIdsState.has(word.id));
             } else {
-                // Show all words for the library view EXCEPT those already assigned to the student
                 return words.filter(word => !assignedWordIdsState.has(word.id));
             }
         }
     }, [isTeacher, words, activeTab, assignedWordIdsState]);
 
-    // Get words for quiz - for students, always use only assigned words
+    // Get words for quiz
     const quizWords = useMemo(() => {
         if (isTeacher) {
-            // Teachers see all words in quiz
             return words;
         } else {
-            // Students always see only assigned words in quiz
             return words.filter(word => assignedWordIdsState.has(word.id));
         }
     }, [isTeacher, words, assignedWordIdsState]);
@@ -148,12 +164,14 @@ const DictionaryPage: React.FC = () => {
     const [questionWords, setQuestionWords] = useState<VocabularyWord[] | null>(null);
     const [assignOpen, setAssignOpen] = useState(false);
     const [selected, setSelected] = useState<VocabularyWord | null>(null);
-    const [search, setSearch] = useState('');
     const [category, setCategory] = useState<'0' | '1' | '2' | '3' | '4' | '5'>('0');
-    const [page, setPage] = useState(1); // 1-based for Pagination component
     const [filterState, setFilterState] = useState<'all' | 'learned' | 'not-learned'>('all');
     const [learnedWords, setLearnedWords] = useState<Set<string>>(new Set());
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+
+    useEffect(() => {
+        setPage(1);
+    }, [activeTab]);
 
     // State for word selection (for assigning to students)
     const [selectedWords, setSelectedWords] = useState<string[]>([]);
@@ -164,11 +182,11 @@ const DictionaryPage: React.FC = () => {
     const [snackbarMessage, setSnackbarMessage] = useState('');
     const [snackbarSeverity, setSnackbarSeverity] = useState<'success' | 'error'>('success');
 
-    // ------- FILTER + PAGINATE -------
+    // ------- FILTER -------
     const filtered = useMemo(
         () =>
             displayWords.filter(w => {
-                const matchSearch = w.text.toLowerCase().includes(search.toLowerCase());
+                // search is already handled by backend via debouncedSearch
                 const matchCat = category === '0' ? true : w.difficulty?.toString() === category;
                 let matchFilter = true;
                 if (filterState === 'learned') {
@@ -176,15 +194,12 @@ const DictionaryPage: React.FC = () => {
                 } else if (filterState === 'not-learned') {
                     matchFilter = !learnedWords.has(w.id);
                 }
-                return matchSearch && matchCat && matchFilter;
+                return matchCat && matchFilter;
             }),
-        [displayWords, search, category, filterState, learnedWords]
+        [displayWords, category, filterState, learnedWords]
     );
 
-    const paginated = useMemo(
-        () => filtered.slice((page - 1) * ITEMS_PER_PAGE, (page - 1) * ITEMS_PER_PAGE + ITEMS_PER_PAGE),
-        [filtered, page]
-    );
+    const paginated = filtered;
 
     const handleWordEdit = (word: VocabularyWord) => {
         setSelected(word);
@@ -629,10 +644,15 @@ const DictionaryPage: React.FC = () => {
                     flex: 1,
                     minHeight: 0,
                     overflowY: 'auto',
-                    pr: 0.5
+                    pr: 0.5,
+                    mb: 10
                   }}
                 >
-                  {viewMode === 'grid' ? (
+                  {wordsLoading ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+                      <CircularProgress />
+                    </Box>
+                  ) : viewMode === 'grid' ? (
                     <WordGrid
                       data={paginated}
                       onDelete={isTeacher && !selectionMode ? id => deleteWord.mutate(id) : undefined}
@@ -661,7 +681,7 @@ const DictionaryPage: React.FC = () => {
                   )}
                 </Box>
 
-                {filtered.length > 0 && (
+                {totalPages > 1 && (
                     <Box
                         sx={{
                             bottom: 0,
@@ -670,10 +690,11 @@ const DictionaryPage: React.FC = () => {
                             borderTop: '1px solid rgba(0, 0, 0, 0.05)',
                             position: 'fixed',
                             width: '100%',
+                            zIndex: 10
                         }}
                     >
                         <Pagination
-                            count={Math.ceil(filtered.length / ITEMS_PER_PAGE)}
+                            count={totalPages}
                             page={page}
                             onChange={(_, p) => setPage(p)}
                             color="primary"
@@ -681,7 +702,8 @@ const DictionaryPage: React.FC = () => {
                             showFirstButton
                             showLastButton
                             sx={{
-                                ml: '35%',
+                                display: 'flex',
+                                justifyContent: 'center',
                                 '& .MuiPaginationItem-root': { borderRadius: 2 },
                                 '& .Mui-selected': {
                                     bgcolor: '#2573ff !important',

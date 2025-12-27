@@ -33,6 +33,7 @@ const toFiniteNumber = (value: unknown): number | undefined => {
 };
 
 const LIST_PAGE_SIZE = 10;
+const EMPTY_ARRAY: any[] = [];
 const REVEAL_TRANSCRIPT_AFTER_COMPLETION = import.meta.env.VITE_REVEAL_TRANSCRIPT_AFTER_COMPLETION === 'true';
 
 interface TaskLifecycleHandlers {
@@ -643,11 +644,14 @@ const VocabListTaskContent: React.FC<VocabListTaskContentProps> = ({
     setCorrectCount(serverStats?.correctCount ?? 0);
   }, [task.id, serverStats?.attemptedCount, serverStats?.correctCount]);
 
-  const { data: allWords } = useQuery({
-    queryKey: ['vocabulary', 'words'],
-    queryFn: () => vocabApi.listWords(),
+  const { data: wordsPage } = useQuery({
+    queryKey: ['vocabulary', 'words', wordIds],
+    queryFn: () => vocabApi.listWords({ ids: wordIds, size: Math.max(wordIds.length, 1) }),
     staleTime: 60_000,
+    enabled: wordIds.length > 0,
   });
+
+  const allWords = wordsPage?.content ?? EMPTY_ARRAY;
 
   const { data: assignments } = useQuery({
     queryKey: ['vocabulary', 'assignments', studentId],

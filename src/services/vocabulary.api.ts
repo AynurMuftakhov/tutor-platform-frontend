@@ -2,7 +2,7 @@ import ky from 'ky';
 import {
     AssignWordsRequest,
     AssignedWordResponse,
-    VocabularyWord, CreateWordRequest, AudioPart
+    VocabularyWord, CreateWordRequest, AudioPart, PageResult
 } from '../types';
 
 const api = ky.create({
@@ -22,7 +22,24 @@ const api = ky.create({
 
 
 export const vocabApi = {
-    listWords: () => api.get('words').json<VocabularyWord[]>(),
+    listWords: (params: { text?: string; page?: number; size?: number; ids?: string[] } = {}) => {
+        const searchParams = new URLSearchParams();
+        if (params.text) {
+            searchParams.set('text', params.text);
+        }
+        if (params.page !== undefined) {
+            searchParams.set('page', String(params.page));
+        }
+        if (params.size !== undefined) {
+            searchParams.set('size', String(params.size));
+        }
+        if (params.ids && params.ids.length > 0) {
+            params.ids.forEach(id => {
+                if (id) searchParams.append('ids', id);
+            });
+        }
+        return api.get('words', { searchParams }).json<PageResult<VocabularyWord>>();
+    },
     createWord: (dto: CreateWordRequest) =>
         api.post('words/create', { json: dto }).json<VocabularyWord>(),
     updateWord: (id: string, dto: Partial<VocabularyWord>) =>

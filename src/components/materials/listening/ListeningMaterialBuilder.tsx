@@ -66,6 +66,7 @@ interface ListeningMaterialBuilderProps {
 }
 
 const DEFAULT_WORD_TARGET = 160;
+const EMPTY_ARRAY: any[] = [];
 const styleOptions = ['neutral', 'storytelling', 'documentary', 'conversational', 'inspirational'];
 
 const buildFolderOptions = (folders: MaterialFolderTree[], level = 0): React.ReactNode[] =>
@@ -150,11 +151,12 @@ const ListeningMaterialBuilder: React.FC<ListeningMaterialBuilderProps> = ({
     [],
   );
 
-  const { data: allWords = [], isLoading: vocabLoading } = useQuery<VocabularyWord[]>({
+  const { data: wordsPage, isLoading: vocabLoading } = useQuery({
     queryKey: ['vocabulary', 'words'],
-    queryFn: () => vocabApi.listWords(),
+    queryFn: () => vocabApi.listWords({ size: 1000 }),
     staleTime: 60_000,
   });
+  const allWords = wordsPage?.content ?? EMPTY_ARRAY;
 
   const { data: listeningTasks = [], isLoading: listeningTasksLoading } = useQuery<ListeningTask[]>({
     queryKey: ['listening-tasks', materialToEdit?.id ?? ''],

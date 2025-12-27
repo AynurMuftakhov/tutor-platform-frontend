@@ -43,6 +43,8 @@ import type {
 import { ENGLISH_LEVELS } from '../../types/ENGLISH_LEVELS';
 import ListeningAudioGenerationPanel from '../../components/listening/ListeningAudioGenerationPanel';
 
+const EMPTY_ARRAY: any[] = [];
+
 const TeacherHomeworkNewPage: React.FC = () => {
   const { user } = useAuth();
   const [params] = useSearchParams();
@@ -103,11 +105,12 @@ const TeacherHomeworkNewPage: React.FC = () => {
   const isListeningTask = taskType === 'LISTENING';
 
   // Load vocabulary words
-  const { data: allWords = [] } = useQuery<VocabularyWord[]>({
+  const { data: wordsPage } = useQuery({
     queryKey: ['vocabulary', 'words'],
-    queryFn: () => vocabApi.listWords(),
+    queryFn: () => vocabApi.listWords({ size: 1000 }),
     staleTime: 60_000,
   });
+  const allWords = wordsPage?.content ?? EMPTY_ARRAY;
   const assignmentsQuery = useAssignments(studentId);
 
   const assignedWords = useMemo(() => {
@@ -159,7 +162,11 @@ const TeacherHomeworkNewPage: React.FC = () => {
     if (showAllWords) return;
     if (assignmentsQuery.isLoading) return;
     const allowed = new Set(assignedWords.map(w => w.id));
-    setSelectedWordIds(prev => prev.filter(id => allowed.has(id)));
+    setSelectedWordIds(prev => {
+      const next = prev.filter(id => allowed.has(id));
+      if (next.length === prev.length) return prev;
+      return next;
+    });
   }, [showAllWords, assignedWords, assignmentsQuery.isLoading]);
 
   const listeningWordIds = useMemo(
