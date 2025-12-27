@@ -83,6 +83,7 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords
     const incorrectQueueRef = useRef<VocabularyWord[]>([]);
     const incorrectSetRef = useRef<Set<string>>(new Set());
     const lastSeedSizeRef = useRef<number>(10);
+    const audioRef = useRef<HTMLAudioElement | null>(null);
 
     // Auto-advance timer for correct answers
     const autoNextTimerRef = useRef<number | null>(null);
@@ -360,12 +361,34 @@ const QuizMode: React.FC<QuizModeProps> = ({ open, onClose, words, questionWords
       }
     };
 
+    const playAudioUrl = useCallback((audioUrl?: string) => {
+      if (!audioUrl) return;
+      try {
+        if (audioRef.current) {
+          audioRef.current.pause();
+          audioRef.current.currentTime = 0;
+        }
+        const audio = new Audio(audioUrl);
+        audioRef.current = audio;
+        audio.play().catch(() => {});
+      } catch {
+        // ignore playback errors
+      }
+    }, []);
+
     const handlePlayAudio = () => {
         const currentQuestion = questions[currentQuestionIndex];
         if (currentQuestion?.word.audioUrl) {
-            new Audio(currentQuestion.word.audioUrl).play();
+            playAudioUrl(currentQuestion.word.audioUrl);
         }
     };
+
+    useEffect(() => {
+      if (!open) return;
+      const currentQuestion = questions[currentQuestionIndex];
+      if (!currentQuestion?.word.audioUrl) return;
+      playAudioUrl(currentQuestion.word.audioUrl);
+    }, [open, quizType, currentQuestionIndex, questions, playAudioUrl]);
 
     // If we don't have enough words (unless allowed)
     if (!allowAnyCount && words.length < 4) {
