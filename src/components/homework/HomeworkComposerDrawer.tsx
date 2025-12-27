@@ -23,7 +23,7 @@ import ContentPasteIcon from '@mui/icons-material/ContentPaste';
 import {useMutation, useQuery} from '@tanstack/react-query';
 import {useAuth} from '../../context/AuthContext';
 import {useCreateAssignment} from '../../hooks/useHomeworks';
-import {useAssignWords} from '../../hooks/useAssignments';
+import {useAssignWords, useAssignments} from '../../hooks/useAssignments';
 import {CreateAssignmentDto, HomeworkTaskType, SourceKind, AssignmentDto} from '../../types/homework';
 import {toOffsetDateTime} from '../../utils/datetime';
 import {
@@ -83,6 +83,7 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
   // VOCAB_LIST selection & settings
   const [pickerOpen, setPickerOpen] = React.useState(false);
   const [selectedWordIds, setSelectedWordIds] = React.useState<string[]>([]);
+  const [showAllWords, setShowAllWords] = React.useState<boolean>(false);
   const [masteryStreak, setMasteryStreak] = React.useState<number>(2);
   const [masteryStreakInput, setMasteryStreakInput] = React.useState<string>('2');
   const [shuffle, setShuffle] = React.useState<boolean>(true);
@@ -122,11 +123,50 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
     queryFn: () => vocabApi.listWords(),
     staleTime: 60_000,
   });
+  const assignmentsQuery = useAssignments(studentId);
+
+  const assignedWords = React.useMemo(() => {
+    const seen = new Set<string>();
+    return (assignmentsQuery.data ?? []).reduce<VocabularyWord[]>((acc, assignment) => {
+      if (seen.has(assignment.vocabularyWordId)) return acc;
+      const existing = allWords.find(word => word.id === assignment.vocabularyWordId);
+      acc.push(existing ?? {
+        id: assignment.vocabularyWordId,
+        text: assignment.text,
+        translation: assignment.translation,
+        partOfSpeech: null,
+        createdByTeacherId: '',
+        definitionEn: '',
+        synonymsEn: [],
+        phonetic: null,
+        audioUrl: null,
+        exampleSentenceAudioUrl: null,
+      });
+      seen.add(assignment.vocabularyWordId);
+      return acc;
+    }, []);
+  }, [assignmentsQuery.data, allWords]);
+
+  const availableWords = React.useMemo(
+    () => (showAllWords ? allWords : assignedWords),
+    [showAllWords, allWords, assignedWords],
+  );
+
+  const wordLookup = React.useMemo(
+    () => new Map([...allWords, ...assignedWords].map(w => [w.id, w] as const)),
+    [allWords, assignedWords],
+  );
 
   const selectedWordChips = React.useMemo(() => {
-    const map = new Map(allWords.map(w => [w.id, w] as const));
-    return selectedWordIds.map(id => map.get(id)).filter(Boolean) as VocabularyWord[];
-  }, [allWords, selectedWordIds]);
+    return selectedWordIds.map(id => wordLookup.get(id)).filter(Boolean) as VocabularyWord[];
+  }, [selectedWordIds, wordLookup]);
+
+  React.useEffect(() => {
+    if (showAllWords) return;
+    if (assignmentsQuery.isLoading) return;
+    const allowed = new Set(assignedWords.map(w => w.id));
+    setSelectedWordIds(prev => prev.filter(id => allowed.has(id)));
+  }, [showAllWords, assignedWords, assignmentsQuery.isLoading]);
 
   const listeningWordIds = React.useMemo(
     () => selectedWordIds.filter((id) => id && id.trim().length > 0),
@@ -192,6 +232,7 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
       setMasteryStreakInput('2');
       setShuffle(true);
       setTimeLimitMin('');
+      setShowAllWords(false);
       setListeningDurationSecTarget(90);
       setListeningTheme('');
       setListeningLanguage('en-US');
@@ -760,7 +801,7 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
                     <Button variant="outlined" onClick={() => setPickerOpen(true)}>
                       {isListeningTask ? 'Pick focus words' : 'Select words'}
                     </Button>
-                    <Chip
+                  <Chip
                       size="small"
                       color={
                         isVocabList
@@ -772,6 +813,17 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
                     <Typography variant="caption" color="text.secondary">
                       {isVocabList ? 'Choose 5–100 words' : 'Pick 3+ words to anchor the transcript'}
                     </Typography>
+                  </Stack>
+                  <Stack direction="row" gap={1} alignItems="center">
+                    <FormControlLabel
+                      control={<Checkbox checked={showAllWords} onChange={e => setShowAllWords(e.target.checked)} />}
+                      label="Show all words"
+                    />
+                    {!showAllWords && !studentId && (
+                      <Typography variant="caption" color="text.secondary">
+                        Select a student to load assigned words
+                      </Typography>
+                    )}
                   </Stack>
                   {selectedWordChips.length > 0 && (
                     <Stack direction="row" gap={1} useFlexGap flexWrap="wrap">
@@ -1015,10 +1067,10 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
       <VocabularyPickerDialog
         open={pickerOpen}
         onClose={() => setPickerOpen(false)}
-        words={allWords}
+        words={availableWords}
         selectedWordIds={selectedWordIds}
         onChange={(ids) => setSelectedWordIds(ids)}
-        title={isListeningTask ? 'Select focus words' : 'Select vocabulary words'}
+        title={`${isListeningTask ? 'Select focus words' : 'Select vocabulary words'}${showAllWords ? '' : ' (assigned only)'}`}
       />
     </Drawer>
   );

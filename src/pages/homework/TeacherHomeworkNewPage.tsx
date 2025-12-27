@@ -25,7 +25,7 @@ import {
 import { CreateAssignmentDto, HomeworkTaskType, SourceKind } from '../../types/homework';
 import { useAuth } from '../../context/AuthContext';
 import { useCreateAssignment } from '../../hooks/useHomeworks';
-import { useAssignWords } from '../../hooks/useAssignments';
+import { useAssignWords, useAssignments } from '../../hooks/useAssignments';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toOffsetDateTime } from '../../utils/datetime';
 import { fetchStudents, fetchUserById, generateListeningTranscript, updateListeningTranscript, validateListeningTranscript } from '../../services/api';
@@ -69,6 +69,7 @@ const TeacherHomeworkNewPage: React.FC = () => {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [selectedWordIds, setSelectedWordIds] = useState<string[]>([]);
   const [wordSearch, setWordSearch] = useState('');
+  const [showAllWords, setShowAllWords] = useState(false);
   const [masteryStreak, setMasteryStreak] = useState<number>(2);
   const [shuffle, setShuffle] = useState<boolean>(true);
   const [timeLimitMin, setTimeLimitMin] = useState<string>('');
@@ -106,20 +107,59 @@ const TeacherHomeworkNewPage: React.FC = () => {
     queryFn: () => vocabApi.listWords(),
     staleTime: 60_000,
   });
+  const assignmentsQuery = useAssignments(studentId);
+
+  const assignedWords = useMemo(() => {
+    const seen = new Set<string>();
+    const map = new Map(allWords.map(w => [w.id, w] as const));
+    return (assignmentsQuery.data ?? []).reduce<VocabularyWord[]>((acc, assignment) => {
+      if (seen.has(assignment.vocabularyWordId)) return acc;
+      acc.push(map.get(assignment.vocabularyWordId) ?? {
+        id: assignment.vocabularyWordId,
+        text: assignment.text,
+        translation: assignment.translation,
+        partOfSpeech: null,
+        createdByTeacherId: '',
+        definitionEn: '',
+        synonymsEn: [],
+        phonetic: null,
+        audioUrl: null,
+        exampleSentenceAudioUrl: null,
+      });
+      seen.add(assignment.vocabularyWordId);
+      return acc;
+    }, []);
+  }, [assignmentsQuery.data, allWords]);
+
+  const availableWords = useMemo(
+    () => (showAllWords ? allWords : assignedWords),
+    [showAllWords, allWords, assignedWords],
+  );
+
+  const wordLookup = useMemo(
+    () => new Map([...allWords, ...assignedWords].map(w => [w.id, w] as const)),
+    [allWords, assignedWords],
+  );
 
   const filteredWords = React.useMemo(() => {
     const q = wordSearch.trim().toLowerCase();
-    if (!q) return allWords;
-    return allWords.filter(w =>
+    if (!q) return availableWords;
+    return availableWords.filter(w =>
       w.text.toLowerCase().includes(q) ||
       (w.translation || '').toLowerCase().includes(q)
     );
-  }, [allWords, wordSearch]);
+  }, [availableWords, wordSearch]);
 
   const selectedWordChips = React.useMemo(() => {
-    const map = new Map(allWords.map(w => [w.id, w] as const));
-    return selectedWordIds.map(id => map.get(id)).filter(Boolean) as VocabularyWord[];
-  }, [allWords, selectedWordIds]);
+    return selectedWordIds.map(id => wordLookup.get(id)).filter(Boolean) as VocabularyWord[];
+  }, [selectedWordIds, wordLookup]);
+
+  useEffect(() => {
+    if (showAllWords) return;
+    if (assignmentsQuery.isLoading) return;
+    const allowed = new Set(assignedWords.map(w => w.id));
+    setSelectedWordIds(prev => prev.filter(id => allowed.has(id)));
+  }, [showAllWords, assignedWords, assignmentsQuery.isLoading]);
 
   const listeningWordIds = useMemo(
     () => selectedWordIds.filter((id) => id && id.trim().length > 0),
@@ -735,6 +775,17 @@ const TeacherHomeworkNewPage: React.FC = () => {
                     {isVocabList ? 'Choose 5–100 words' : 'Pick 3+ words to anchor the transcript'}
                   </Typography>
                 </Stack>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <FormControlLabel
+                    control={<Checkbox checked={showAllWords} onChange={(e) => setShowAllWords(e.target.checked)} />}
+                    label="Show all words"
+                  />
+                  {!showAllWords && !studentId && (
+                    <Typography variant="caption" color="text.secondary">
+                      Select a student to load assigned words
+                    </Typography>
+                  )}
+                </Stack>
                 {selectedWordChips.length > 0 && (
                   <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
                     {selectedWordChips.slice(0,5).map(w => (
@@ -973,9 +1024,15 @@ const TeacherHomeworkNewPage: React.FC = () => {
       </Box>
 
       <Dialog open={pickerOpen} onClose={() => setPickerOpen(false)} fullWidth maxWidth="md">
-        <DialogTitle>{isListeningTask ? 'Select listening words' : 'Select vocabulary words'}</DialogTitle>
+        <DialogTitle>
+          {`${isListeningTask ? 'Select listening words' : 'Select vocabulary words'}${showAllWords ? '' : ' (assigned only)'}`}
+        </DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              {showAllWords ? 'Showing all vocabulary words.' : 'Showing words assigned to the selected student.'}
+              {!showAllWords && !studentId ? ' Select a student to load assignments.' : ''}
+            </Typography>
             <TextField label="Search" value={wordSearch} onChange={e => setWordSearch(e.target.value)} fullWidth />
             <VocabularyList
               data={filteredWords}

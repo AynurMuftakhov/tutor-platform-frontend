@@ -801,7 +801,7 @@ const StudentPage: React.FC<StudentPageProps> = ({
         flexDirection: "column" as const,
         backgroundColor: isDrawerEmbed ? 'background.paper' : undefined,
       }
-    : { mt: 4, mb: 6 };
+    : { mt: 2, mb: 2, bgcolor: '#fafbfd', height: '100%'};
 
   const bodySx = embedded
     ? {
@@ -936,7 +936,17 @@ const StudentPage: React.FC<StudentPageProps> = ({
   ) : headerBlock;
 
   return (
-    <Container maxWidth={embedded ? false : "lg"} sx={containerSx}>
+      <Box
+          sx={{
+            p: { xs: 2, sm: 2 },
+            bgcolor: '#fafbfd',
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            position: 'relative'
+          }}
+      >
       {headerSection}
 
       <Box sx={bodySx}>
@@ -1033,7 +1043,7 @@ const StudentPage: React.FC<StudentPageProps> = ({
           {snackbarMessage}
         </Alert>
       </Snackbar>
-    </Container>
+    </Box>
   );
 };
 
