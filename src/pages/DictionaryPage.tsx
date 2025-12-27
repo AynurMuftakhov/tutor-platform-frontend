@@ -303,7 +303,7 @@ const DictionaryPage: React.FC = () => {
             sx={{
                 p: { xs: 1, sm: 1 },
                 bgcolor: '#fafbfd',
-                height: '100dvh',
+                height: '100%',
                 display: 'flex',
                 flexDirection: 'column',
                 overflow: 'hidden',
@@ -650,7 +650,7 @@ const DictionaryPage: React.FC = () => {
                     flex: 1,
                     minHeight: 0,
                     overflowY: 'auto',
-                    pr: 0.5, mb: '100px'
+                    pr: 0.5
                   }}
                 >
                   {viewMode === 'grid' ? (

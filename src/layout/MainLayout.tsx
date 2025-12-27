@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
 import {
-    AppBar, Avatar, Badge, Box, Button, CssBaseline, Dialog, DialogActions, DialogContent,
+    Avatar, Badge, Box, Button, CssBaseline, Dialog, DialogActions, DialogContent,
     DialogTitle, Drawer, IconButton, List, ListItem, ListItemButton, Tooltip,
-    ListItemIcon, ListItemText, Menu, MenuItem, MenuList, Toolbar, Typography, useTheme, alpha, GlobalStyles
+    ListItemIcon, ListItemText, Menu, MenuItem, MenuList, Typography, useTheme, alpha
 } from "@mui/material";
 
 import {
@@ -25,6 +25,8 @@ import BookIcon from "@mui/icons-material/Book";
 import GridViewIcon from "@mui/icons-material/GridView";
 import AssignmentIcon from "@mui/icons-material/Assignment";
 import NoteAltOutlinedIcon from "@mui/icons-material/NoteAltOutlined";
+import VideoCallIcon from "@mui/icons-material/VideoCall";
+import SettingsIcon from "@mui/icons-material/Settings";
 import { motion } from "framer-motion";
 import useMediaQuery from '@mui/material/useMediaQuery';
 
@@ -42,7 +44,8 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [mobileOpen, setMobileOpen] = useState(false);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [profileAnchorEl, setProfileAnchorEl] = useState<null | HTMLElement>(null);
-    const { notifications, isPanelOpen, togglePanel, setNotifications } = useNotificationSocket();
+    const [notificationAnchorEl, setNotificationAnchorEl] = useState<null | HTMLElement>(null);
+    const { notifications, setNotifications } = useNotificationSocket();
     const [hasMounted, setHasMounted] = useState(false);
     const [currentLessonId, setCurrentLessonId] = useState<string | null>(null);
 
@@ -80,9 +83,24 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     };
     const handleProfileMenuOpen = (e: React.MouseEvent<HTMLElement>) => setProfileAnchorEl(e.currentTarget);
     const handleProfileMenuClose = () => setProfileAnchorEl(null);
+    const handleNotificationMenuOpen = (e: React.MouseEvent<HTMLElement>) => {
+        setNotificationAnchorEl(e.currentTarget);
+    };
+    const handleNotificationMenuClose = () => {
+        setNotificationAnchorEl(null);
+    };
     const handleProfile = () => {
         handleProfileMenuClose();
         navigate("/profile");
+    };
+    const handleSettings = () => {
+        handleProfileMenuClose();
+        // Safe placeholder for settings until route exists
+        try {
+            navigate("/settings");
+        } catch (e) {
+            console.warn("Settings route not implemented", e);
+        }
     };
     const handleLogout = () => {
         handleProfileMenuClose();
@@ -156,55 +174,118 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
+    const unreadCount = notifications.filter(n => !n.isRead).length;
+
     const drawer = (
         <Box
             sx={{
                 height: "100%",
                 background: `linear-gradient(180deg, ${alpha(theme.palette.primary.light, 0.03)} 0%, ${alpha(theme.palette.background.default, 1)} 100%)`,
-                py: 4,
+                py: 3,
                 display: "flex",
                 flexDirection: "column",
                 borderRight: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
             }}
         >
-            {/* Logo and Slogan */}
-            <Box px={3} mb={4} component={motion.div} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }}>
-                <Box display="flex" alignItems="center" gap={1.5} mb={1}>
-                    <Avatar
-                        sx={{
-                            width: 40,
-                            height: 40,
-                            bgcolor: 'primary.main',
-                            boxShadow: '0 4px 12px rgba(37, 115, 255, 0.2)'
-                        }}
-                    >
-                        <SchoolIcon />
-                    </Avatar>
+            {/* Teacher Identity Row */}
+            <Box
+                px={3}
+                mb={2}
+                component={motion.div}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.4 }}
+                sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1.25,
+                    minHeight: 64,
+                    borderBottom: `1px solid ${alpha(theme.palette.divider, 0.6)}`
+                }}
+            >
+                <Avatar
+                    src={user?.avatar}
+                    sx={{
+                        width: 38,
+                        height: 38,
+                        border: '2px solid white',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        '&:hover': {
+                            transform: 'scale(1.05)',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                        }
+                    }}
+                    onClick={handleProfileMenuOpen}
+                />
+
+                <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Typography
-                        variant="h5"
+                        variant="subtitle1"
                         fontWeight={700}
+                        noWrap
                         sx={{
-                            cursor: "pointer",
-                            background: `linear-gradient(90deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
-                            WebkitBackgroundClip: 'text',
-                            WebkitTextFillColor: 'transparent',
+                            color: 'text.primary',
+                            textOverflow: 'ellipsis',
+                            overflow: 'hidden',
+                            whiteSpace: 'nowrap'
                         }}
-                        onClick={() => navigate("/dashboard")}
                     >
-                        {BRAND_NAME}
+                        {user?.name}
                     </Typography>
                 </Box>
-                <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{
-                        pl: 0.5,
-                        fontStyle: "italic",
-                        opacity: 0.8
-                    }}
-                >
-                    Your personalized English journey
-                </Typography>
+
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                   {/* <Tooltip title="Notifications">
+                        <IconButton
+                            size="small"
+                            onClick={handleNotificationMenuOpen}
+                            sx={{
+                                color: 'text.secondary',
+                                bgcolor: Boolean(notificationAnchorEl) ? alpha(theme.palette.primary.main, 0.1) : 'transparent',
+                                '&:hover': {
+                                    bgcolor: alpha(theme.palette.primary.main, 0.1)
+                                }
+                            }}
+                        >
+                            <Badge
+                                color="error"
+                                badgeContent={unreadCount}
+                                invisible={unreadCount === 0}
+                                sx={{
+                                    '& .MuiBadge-badge': {
+                                        boxShadow: '0 0 0 2px white'
+                                    }
+                                }}
+                            >
+                                <NotificationsNoneIcon fontSize="small" />
+                            </Badge>
+                        </IconButton>
+                    </Tooltip>*/}
+
+                    {currentLessonId && (
+                        <Tooltip title="Join current lesson">
+                            <IconButton
+                                size="small"
+                                color="primary"
+                                onClick={() => {
+                                    navigate('/video-call', {
+                                        state: {
+                                            identity: user?.id,
+                                            roomName: `lesson-${currentLessonId}`,
+                                        },
+                                    });
+                                }}
+                                sx={{
+                                    bgcolor: alpha(theme.palette.primary.main, 0.1),
+                                    '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.2) }
+                                }}
+                            >
+                                <VideoCallIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                    )}
+                </Box>
             </Box>
 
             {/* Navigation */}
@@ -392,11 +473,27 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 </List>
             </Box>)}
 
-            {/* Bottom footer with gradient card */}
-            <Box mt="auto" px={3} mb={3}>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mt: 2 }}>
-                    © 2025 {BRAND_NAME}
-                </Typography>
+            {/* Footer branding (subtle) */}
+            <Box mt="auto" px={3} mb={3} sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'text.secondary', opacity: 0.8 }}>
+                <Avatar
+                    sx={{
+                        width: 28,
+                        height: 28,
+                        bgcolor: alpha(theme.palette.primary.main, 0.12),
+                        color: 'primary.main',
+                        fontSize: 16
+                    }}
+                >
+                    <SchoolIcon fontSize="inherit" />
+                </Avatar>
+                <Box sx={{ minWidth: 0 }}>
+                    <Typography variant="caption" sx={{ display: 'block', lineHeight: 1.2 }}>
+                        {BRAND_NAME}
+                    </Typography>
+                    <Typography variant="caption" color="text.disabled" sx={{ display: 'block', lineHeight: 1.2 }}>
+                        © 2025
+                    </Typography>
+                </Box>
             </Box>
         </Box>
     );
@@ -404,392 +501,35 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return (
         <>
             <NotificationToasterWrapper/>
-            <Box sx={{  display: 'flex', width: '100%', height: '100dvh', overflow: 'hidden' }}>
+            <Box sx={{  display: 'flex', width: '100%', height: '100vh', overflow: 'hidden' }}>
                 <CssBaseline />
-                {!isVideoCallPage && (<AppBar
-                    position="fixed"
-                    elevation={0}
-                    sx={{
-                        width: isVideoCallPage ? '100%' : { md: `calc(100% - ${drawerWidth}px)` },
-                        ml: isVideoCallPage ? 0 : { md: `${drawerWidth}px` },
-                        backgroundColor: "rgba(255, 255, 255, 0.95)",
-                        backdropFilter: "blur(10px)",
-                        color: "text.primary",
-                        borderBottom: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
-                        zIndex: 1201,
-                    }}
-                >
-                    <Toolbar sx={{ display: "flex", justifyContent: "space-between", py: 1 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            {!isVideoCallPage && (
-                                <IconButton
-                                    color="inherit"
-                                    edge="start"
-                                    onClick={handleDrawerToggle}
-                                    sx={{
-                                        mr: 2,
-                                        display: { md: "none" },
-                                        color: 'primary.main'
-                                    }}
-                                >
-                                    <MenuIcon />
-                                </IconButton>
-                            )}
-
-                            {!isVideoCallPage && (
-                                <Box
-                                    component={motion.div}
-                                    initial={{ opacity: 0, y: -10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ duration: 0.3 }}
-                                    sx={{ display: { xs: 'none', sm: 'block' } }}
-                                >
-                                    <Typography
-                                        variant="h6"
-                                        fontWeight={600}
-                                        sx={{
-                                            background: `linear-gradient(90deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
-                                            WebkitBackgroundClip: 'text',
-                                            WebkitTextFillColor: 'transparent',
-                                            display: { xs: 'none', md: 'block' }
-                                        }}
-                                    >
-                                        {BRAND_NAME}
-                                    </Typography>
-                                </Box>
-                            )}
-                        </Box>
-
-                        <Box
-                            component={motion.div}
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            transition={{ duration: 0.5, delay: 0.2 }}
-                            sx={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: { xs: 1, sm: 2 }
-                            }}
+                {!isVideoCallPage && (
+                    <Box
+                        sx={{
+                            display: { xs: 'flex', md: 'none' },
+                            position: 'fixed',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            height: (theme) => theme.mixins.toolbar.minHeight,
+                            px: 1.5,
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            bgcolor: "rgba(255,255,255,0.95)",
+                            borderBottom: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
+                            zIndex: 1201
+                        }}
+                    >
+                        <IconButton
+                            color="inherit"
+                            edge="start"
+                            onClick={handleDrawerToggle}
+                            sx={{ color: 'primary.main' }}
                         >
-                            <Tooltip title="Notifications">
-                                <IconButton
-                                    onClick={togglePanel}
-                                    size="small"
-                                    sx={{
-                                        color: 'text.secondary',
-                                        bgcolor: isPanelOpen ? alpha(theme.palette.primary.main, 0.1) : 'transparent',
-                                        transition: 'all 0.2s ease',
-                                        '&:hover': {
-                                            bgcolor: alpha(theme.palette.primary.main, 0.1),
-                                            transform: 'translateY(-2px)'
-                                        }
-                                    }}
-                                >
-                                    <Badge
-                                        color="error"
-                                        variant="dot"
-                                        invisible={notifications.every(n => n.isRead)}
-                                        sx={{
-                                            '& .MuiBadge-badge': {
-                                                boxShadow: '0 0 0 2px white'
-                                            }
-                                        }}
-                                    >
-                                        <NotificationsNoneIcon />
-                                    </Badge>
-                                </IconButton>
-                            </Tooltip>
-
-                            {currentLessonId && (
-                                <Button
-                                    variant="contained"
-                                    color="primary"
-                                    size="small"
-                                    sx={{ textTransform: 'none' }}
-                                    onClick={() => {
-                                        navigate('/video-call', {
-                                            state: {
-                                                identity: user?.id,
-                                                roomName: `lesson-${currentLessonId}`,
-                                            },
-                                        });
-                                    }}
-                                >
-                                    Join Lesson
-                                </Button>
-                            )}
-
-                            {hasMounted && (
-                                <Menu
-                                    anchorReference="anchorPosition"
-                                    anchorPosition={{ top: 60, left: window.innerWidth - 320 }}
-                                    open={isPanelOpen}
-                                    onClose={togglePanel}
-                                    PaperProps={{
-                                        elevation: 3,
-                                        sx: {
-                                            borderRadius: 3,
-                                            mt: 1,
-                                            bgcolor: "background.paper",
-                                            boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-                                            overflow: 'hidden'
-                                        },
-                                    }}
-                                    TransitionComponent={ MotionDivTransition }
-                                >
-                                    <Box
-                                        sx={{
-                                            p: 2,
-                                            borderBottom: `1px solid ${theme.palette.divider}`,
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'space-between'
-                                        }}
-                                    >
-                                        <Typography variant="subtitle1" fontWeight={600}>
-                                            Notifications
-                                        </Typography>
-                                        <Box>
-                                            <Tooltip title="Mark all as read">
-                                                <IconButton
-                                                    size="small"
-                                                    onClick={handleMarkAllRead}
-                                                    sx={{
-                                                        color: 'primary.main',
-                                                        mr: 0.5
-                                                    }}
-                                                >
-                                                    <CheckIcon fontSize="small" />
-                                                </IconButton>
-                                            </Tooltip>
-                                            <Tooltip title="Clear all">
-                                                <IconButton
-                                                    size="small"
-                                                    onClick={handleClearAll}
-                                                    sx={{
-                                                        color: 'error.main'
-                                                    }}
-                                                >
-                                                    <DeleteOutline fontSize="small" />
-                                                </IconButton>
-                                            </Tooltip>
-                                        </Box>
-                                    </Box>
-
-                                    <MenuList sx={{ width: 380, px: 0, py: 0, overflow: 'auto', maxHeight: '60vh' }}>
-                                        {notifications.length === 0 && (
-                                            <Box
-                                                sx={{
-                                                    px: 2,
-                                                    py: 4,
-                                                    textAlign: "center",
-                                                    color: "text.secondary",
-                                                    display: 'flex',
-                                                    flexDirection: 'column',
-                                                    alignItems: 'center',
-                                                    gap: 1
-                                                }}
-                                            >
-                                                <Box
-                                                    sx={{
-                                                        width: 60,
-                                                        height: 60,
-                                                        borderRadius: '50%',
-                                                        bgcolor: alpha(theme.palette.primary.main, 0.1),
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        mb: 1
-                                                    }}
-                                                >
-                                                    <NotificationsNoneIcon sx={{ color: 'primary.main', fontSize: 30 }} />
-                                                </Box>
-                                                <Typography variant="subtitle2" fontWeight={500}>
-                                                    No notifications
-                                                </Typography>
-                                                <Typography variant="body2">
-                                                    You are all caught up!
-                                                </Typography>
-                                            </Box>
-                                        )}
-
-                                        {notifications.map((notif) => (
-                                            <Box
-                                                component={motion.div}
-                                                initial={{ opacity: 0, y: 10 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                transition={{ duration: 0.2 }}
-                                                key={notif.id}
-                                                onClick={() => {
-                                                    togglePanel();
-                                                    handleMarkAsRead(notif.id);
-                                                    if (notif.type === 'LESSON_RESCHEDULED') {
-                                                        navigate(`/lessons/${notif.targetId}`);
-                                                    }
-                                                }}
-                                                sx={{
-                                                    display: 'flex',
-                                                    flexDirection: 'column',
-                                                    gap: 0.5,
-                                                    px: 2,
-                                                    py: 2,
-                                                    cursor: 'pointer',
-                                                    backgroundColor: notif.isRead ? alpha(theme.palette.background.default, 0.5) : '#fff',
-                                                    borderBottom: `1px solid ${theme.palette.divider}`,
-                                                    transition: 'all 0.2s ease',
-                                                    position: 'relative',
-                                                    '&:hover': {
-                                                        backgroundColor: alpha(theme.palette.primary.main, 0.03),
-                                                    },
-                                                    '&::before': notif.isRead ? {} : {
-                                                        content: '""',
-                                                        position: 'absolute',
-                                                        left: 0,
-                                                        top: 0,
-                                                        bottom: 0,
-                                                        width: 3,
-                                                        backgroundColor: 'primary.main',
-                                                        borderRadius: '0 2px 2px 0'
-                                                    }
-                                                }}
-                                            >
-                                                <Box display="flex" alignItems="center" justifyContent="space-between">
-                                                    <Typography variant="subtitle2" fontWeight={600} color={notif.isRead ? 'text.secondary' : 'text.primary'}>
-                                                        {notif.title}
-                                                    </Typography>
-                                                    {!notif.isRead && (
-                                                        <Box
-                                                            component={motion.span}
-                                                            initial={{ scale: 0 }}
-                                                            animate={{ scale: 1 }}
-                                                            transition={{ duration: 0.2 }}
-                                                            sx={{
-                                                                width: 8,
-                                                                height: 8,
-                                                                bgcolor: 'primary.main',
-                                                                borderRadius: '50%',
-                                                                ml: 1,
-                                                                boxShadow: '0 0 0 2px white'
-                                                            }}
-                                                        />
-                                                    )}
-                                                </Box>
-                                                <Typography
-                                                    variant="body2"
-                                                    sx={{
-                                                        color: notif.isRead ? 'text.secondary' : 'text.primary',
-                                                        whiteSpace: 'normal',
-                                                        wordBreak: 'break-word',
-                                                        opacity: notif.isRead ? 0.8 : 1
-                                                    }}
-                                                >
-                                                    {notif.body}
-                                                </Typography>
-                                            </Box>
-                                        ))}
-                                    </MenuList>
-                                </Menu>
-                            )}
-
-                            <Box
-                                sx={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 1.5,
-                                    ml: 1,
-                                    background: alpha(theme.palette.primary.main, 0.05),
-                                    py: 0.5,
-                                    px: { xs: 1, sm: 2 },
-                                    borderRadius: 6
-                                }}
-                            >
-                                <Typography
-                                    variant="body2"
-                                    sx={{
-                                        fontWeight: 500,
-                                        display: { xs: 'none', sm: 'block' }
-                                    }}
-                                >
-                                    {user?.name || "Tutor"}
-                                </Typography>
-
-                                <Avatar
-                                    src={user?.avatar}
-                                    sx={{
-                                        width: 38,
-                                        height: 38,
-                                        border: '2px solid white',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.2s ease',
-                                        '&:hover': {
-                                            transform: 'scale(1.05)',
-                                            boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
-                                        }
-                                    }}
-                                    onClick={handleProfileMenuOpen}
-                                />
-
-                                <Menu
-                                    anchorEl={profileAnchorEl}
-                                    open={isProfileMenuOpen}
-                                    onClose={handleProfileMenuClose}
-                                    anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-                                    transformOrigin={{ vertical: "top", horizontal: "right" }}
-                                    PaperProps={{
-                                        elevation: 3,
-                                        sx: {
-                                            mt: 1.5,
-                                            borderRadius: 2,
-                                            minWidth: 180,
-                                            boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
-                                            '& .MuiMenuItem-root': {
-                                                py: 1.5
-                                            }
-                                        }
-                                    }}
-                                >
-                                    <Box sx={{ px: 2, py: 1.5, borderBottom: `1px solid ${theme.palette.divider}` }}>
-                                        <Typography variant="subtitle2" fontWeight={600}>
-                                            {user?.name || "Tutor"}
-                                        </Typography>
-                                    </Box>
-
-                                    <MenuItem
-                                        onClick={handleProfile}
-                                        sx={{
-                                            transition: 'all 0.2s ease',
-                                            '&:hover': {
-                                                bgcolor: alpha(theme.palette.primary.main, 0.08),
-                                                '& .MuiSvgIcon-root': {
-                                                    color: 'primary.main'
-                                                }
-                                            }
-                                        }}
-                                    >
-                                        <PersonIcon fontSize="small" sx={{ mr: 1.5, color: 'text.secondary' }} />
-                                        <Typography variant="body2">My Profile</Typography>
-                                    </MenuItem>
-
-                                    <MenuItem
-                                        onClick={openDialog}
-                                        sx={{
-                                            transition: 'all 0.2s ease',
-                                            '&:hover': {
-                                                bgcolor: alpha(theme.palette.error.main, 0.08),
-                                                '& .MuiSvgIcon-root': {
-                                                    color: 'error.main'
-                                                }
-                                            }
-                                        }}
-                                    >
-                                        <LogoutIcon fontSize="small" sx={{ mr: 1.5, color: 'text.secondary' }} />
-                                        <Typography variant="body2">Logout</Typography>
-                                    </MenuItem>
-                                </Menu>
-                            </Box>
-                        </Box>
-                    </Toolbar>
-                </AppBar>)}
+                            <MenuIcon />
+                        </IconButton>
+                    </Box>
+                )}
 
                 {!isVideoCallPage && (
                     <>
@@ -803,8 +543,8 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                                 "& .MuiDrawer-paper": {
                                     boxSizing: "border-box",
                                     width: drawerWidth,
-                                    top: (theme) => theme.mixins.toolbar.minHeight,
-                                    height: (theme) => `calc(100% - ${theme.mixins.toolbar.minHeight}px)`,
+                                    top: 0,
+                                    height: '100%',
                                     position: 'fixed'
                                 },
                             }}
@@ -827,6 +567,261 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                     </>
                 )}
 
+                {hasMounted && (
+                    <Menu
+                        anchorEl={notificationAnchorEl}
+                        open={Boolean(notificationAnchorEl)}
+                        onClose={handleNotificationMenuClose}
+                        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                        PaperProps={{
+                            elevation: 3,
+                            sx: {
+                                borderRadius: 3,
+                                mt: 1,
+                                bgcolor: "background.paper",
+                                boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                                overflow: 'hidden'
+                            },
+                        }}
+                        TransitionComponent={ MotionDivTransition }
+                    >
+                        <Box
+                            sx={{
+                                p: 2,
+                                borderBottom: `1px solid ${theme.palette.divider}`,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between'
+                            }}
+                        >
+                            <Typography variant="subtitle1" fontWeight={600}>
+                                Notifications
+                            </Typography>
+                            <Box>
+                                <Tooltip title="Mark all as read">
+                                    <IconButton
+                                        size="small"
+                                        onClick={handleMarkAllRead}
+                                        sx={{
+                                            color: 'primary.main',
+                                            mr: 0.5
+                                        }}
+                                    >
+                                        <CheckIcon fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                                <Tooltip title="Clear all">
+                                    <IconButton
+                                        size="small"
+                                        onClick={handleClearAll}
+                                        sx={{
+                                            color: 'error.main'
+                                        }}
+                                    >
+                                        <DeleteOutline fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                            </Box>
+                        </Box>
+
+                        <MenuList sx={{ width: 380, px: 0, py: 0, overflow: 'auto', maxHeight: '60vh' }}>
+                            {notifications.length === 0 && (
+                                <Box
+                                    sx={{
+                                        px: 2,
+                                        py: 4,
+                                        textAlign: "center",
+                                        color: "text.secondary",
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        gap: 1
+                                    }}
+                                >
+                                    <Box
+                                        sx={{
+                                            width: 60,
+                                            height: 60,
+                                            borderRadius: '50%',
+                                            bgcolor: alpha(theme.palette.primary.main, 0.1),
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            mb: 1
+                                        }}
+                                    >
+                                        <NotificationsNoneIcon sx={{ color: 'primary.main', fontSize: 30 }} />
+                                    </Box>
+                                    <Typography variant="subtitle2" fontWeight={500}>
+                                        No notifications
+                                    </Typography>
+                                    <Typography variant="body2">
+                                        You are all caught up!
+                                    </Typography>
+                                </Box>
+                            )}
+
+                            {notifications.map((notif) => (
+                                <Box
+                                    component={motion.div}
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ duration: 0.2 }}
+                                    key={notif.id}
+                                    onClick={() => {
+                                        handleNotificationMenuClose();
+                                        handleMarkAsRead(notif.id);
+                                        if (notif.type === 'LESSON_RESCHEDULED') {
+                                            navigate(`/lessons/${notif.targetId}`);
+                                        }
+                                    }}
+                                    sx={{
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: 0.5,
+                                        px: 2,
+                                        py: 2,
+                                        cursor: 'pointer',
+                                        backgroundColor: notif.isRead ? alpha(theme.palette.background.default, 0.5) : '#fff',
+                                        borderBottom: `1px solid ${theme.palette.divider}`,
+                                        transition: 'all 0.2s ease',
+                                        position: 'relative',
+                                        '&:hover': {
+                                            backgroundColor: alpha(theme.palette.primary.main, 0.03),
+                                        },
+                                        '&::before': notif.isRead ? {} : {
+                                            content: '""',
+                                            position: 'absolute',
+                                            left: 0,
+                                            top: 0,
+                                            bottom: 0,
+                                            width: 3,
+                                            backgroundColor: 'primary.main',
+                                            borderRadius: '0 2px 2px 0'
+                                        }
+                                    }}
+                                >
+                                    <Box display="flex" alignItems="center" justifyContent="space-between">
+                                        <Typography variant="subtitle2" fontWeight={600} color={notif.isRead ? 'text.secondary' : 'text.primary'}>
+                                            {notif.title}
+                                        </Typography>
+                                        {!notif.isRead && (
+                                            <Box
+                                                component={motion.span}
+                                                initial={{ scale: 0 }}
+                                                animate={{ scale: 1 }}
+                                                transition={{ duration: 0.2 }}
+                                                sx={{
+                                                    width: 8,
+                                                    height: 8,
+                                                    bgcolor: 'primary.main',
+                                                    borderRadius: '50%',
+                                                    ml: 1,
+                                                    boxShadow: '0 0 0 2px white'
+                                                }}
+                                            />
+                                        )}
+                                    </Box>
+                                    <Typography
+                                        variant="body2"
+                                        sx={{
+                                            color: notif.isRead ? 'text.secondary' : 'text.primary',
+                                            whiteSpace: 'normal',
+                                            wordBreak: 'break-word',
+                                            opacity: notif.isRead ? 0.8 : 1
+                                        }}
+                                    >
+                                        {notif.body}
+                                    </Typography>
+                                </Box>
+                            ))}
+                        </MenuList>
+                    </Menu>
+                )}
+
+                <Menu
+                    anchorEl={profileAnchorEl}
+                    open={isProfileMenuOpen}
+                    onClose={handleProfileMenuClose}
+                    anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+                    transformOrigin={{ vertical: "top", horizontal: "right" }}
+                    PaperProps={{
+                        elevation: 3,
+                        sx: {
+                            mt: 1.5,
+                            borderRadius: 2,
+                            minWidth: 180,
+                            boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+                            '& .MuiMenuItem-root': {
+                                py: 1.5
+                            }
+                        }
+                    }}
+                >
+                    <Box sx={{ px: 2, py: 1.5, borderBottom: `1px solid ${theme.palette.divider}` }}>
+                        <Typography variant="subtitle2" fontWeight={600}>
+                            {user?.name || "Tutor"}
+                        </Typography>
+                        {user?.email && (
+                            <Typography variant="caption" color="text.secondary" noWrap>
+                                {user.email}
+                            </Typography>
+                        )}
+                    </Box>
+
+                    <MenuItem
+                        onClick={handleProfile}
+                        sx={{
+                            transition: 'all 0.2s ease',
+                            '&:hover': {
+                                bgcolor: alpha(theme.palette.primary.main, 0.08),
+                                '& .MuiSvgIcon-root': {
+                                    color: 'primary.main'
+                                }
+                            }
+                        }}
+                    >
+                        <PersonIcon fontSize="small" sx={{ mr: 1.5, color: 'text.secondary' }} />
+                        <Typography variant="body2">My Profile</Typography>
+                    </MenuItem>
+
+                    <MenuItem
+                        onClick={handleSettings}
+                        sx={{
+                            transition: 'all 0.2s ease',
+                            '&:hover': {
+                                bgcolor: alpha(theme.palette.primary.main, 0.08),
+                                '& .MuiSvgIcon-root': {
+                                    color: 'primary.main'
+                                }
+                            }
+                        }}
+                    >
+                        <SettingsIcon fontSize="small" sx={{ mr: 1.5, color: 'text.secondary' }} />
+                        <Typography variant="body2">Settings</Typography>
+                    </MenuItem>
+
+                    <MenuItem
+                        onClick={() => {
+                            openDialog();
+                            handleProfileMenuClose();
+                        }}
+                        sx={{
+                            transition: 'all 0.2s ease',
+                            '&:hover': {
+                                bgcolor: alpha(theme.palette.error.main, 0.08),
+                                '& .MuiSvgIcon-root': {
+                                    color: 'error.main'
+                                }
+                            }
+                        }}
+                    >
+                        <LogoutIcon fontSize="small" sx={{ mr: 1.5, color: 'text.secondary' }} />
+                        <Typography variant="body2">Logout</Typography>
+                    </MenuItem>
+                </Menu>
+
                 <Box
                     component="main"
                     sx={{
@@ -835,11 +830,11 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                         flexDirection: "column",
                         minWidth: 0,
                         minHeight: 0,
-                        pt: isMobile ? `${theme.mixins.toolbar.minHeight}px` : isVideoCallPage ? '0' : '64px',
+                        pt: isMobile && !isVideoCallPage ? `${theme.mixins.toolbar.minHeight}px` : '0',
                         background: `linear-gradient(180deg, ${alpha(theme.palette.background.default, 0.8)} 0%, ${alpha(theme.palette.background.default, 1)} 100%)`,
                         position: 'relative',
                         width: isVideoCallPage ? '100%' : 'auto',
-                        overflowY: 'auto',
+                        overflowY: 'hidden',
                         overflowX: 'hidden',
                         overscrollBehaviorY: 'contain',
                         '&::before': {
@@ -927,7 +922,8 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                             zIndex: 1,
                             flexGrow: 1,
                             minHeight: 0,
-                            overflow: 'visible',
+                        height: '100%',
+                        overflow: 'auto',
                         }}
                     >
                         {children}

@@ -104,7 +104,7 @@ const LessonContentsLibraryPage: React.FC = () => {
   return (
     <Box p={3}  sx={{
         bgcolor: '#fafbfd',
-        height: '100dvh',
+        height: '100%',
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',

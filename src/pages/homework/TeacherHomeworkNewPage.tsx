@@ -656,7 +656,7 @@ const TeacherHomeworkNewPage: React.FC = () => {
           sx={{
               p: { xs: 1, sm: 1 },
               bgcolor: '#fafbfd',
-              height: '100dvh',
+              height: '100%',
               display: 'flex',
               flexDirection: 'column',
               overflow: 'hidden',

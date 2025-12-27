@@ -448,7 +448,7 @@ const MyStudentsPage: React.FC = () => {
                 </Box>
 
                 {/* DataGrid */}
-                <Box sx={{ width: '100%', overflowX: 'auto', overflowY: 'auto', maxHeight: { xs: 'calc(100dvh - 240px)', md: 'calc(100dvh - 260px)' }, backgroundColor: (theme) => theme.palette.background.paper }}>
+                <Box sx={{ width: '100%', overflowX: 'auto', overflowY: 'auto', maxHeight: { xs: 'calc(100% - 240px)', md: 'calc(100% - 260px)' }, backgroundColor: (theme) => theme.palette.background.paper }}>
                   <Box sx={{ minWidth: 600 }}>
                     <DataGrid<Student>
                         rows={students}

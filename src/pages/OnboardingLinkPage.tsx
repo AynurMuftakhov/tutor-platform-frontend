@@ -199,7 +199,7 @@ const OnboardingLinkPage: React.FC = () => {
 
   return (
     <Fade in timeout={400}>
-      <Container maxWidth="sm" sx={{ display: 'flex', minHeight: '100dvh', alignItems: 'center' }}>
+      <Container maxWidth="sm" sx={{ display: 'flex', minHeight: '100%', alignItems: 'center' }}>
         <Box sx={{ width: '100%' }}>
           {status === 'checking' && (
             <Paper elevation={1} sx={{ p: 4, borderRadius: 3, textAlign: 'center' }}>

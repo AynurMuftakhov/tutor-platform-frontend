@@ -145,11 +145,11 @@ const Dashboard = () => {
             sx={{
                 p: { xs: 2, sm: 3, md: 4 },
                 bgcolor: '#fafbfd',
-                minHeight: '100dvh',
+                minHeight: '100%',
                 width: '100%',
                 overflowX: 'hidden',
                 overflow: 'hidden',
-                position: 'fixed',
+                position: 'relative',
             }}
         >
             {/* Header Section with Greeting */}
