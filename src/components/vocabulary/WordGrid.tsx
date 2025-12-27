@@ -1,7 +1,7 @@
 import React from 'react';
 import { Grid, Box, Typography, Button } from '@mui/material';
 import { VocabularyWord } from '../../types';
-import WordCard from './WordCard';
+import WordCard, { CardDensity } from './WordCard';
 import SchoolIcon from '@mui/icons-material/School';
 import { motion } from 'framer-motion';
 
@@ -16,6 +16,8 @@ interface WordGridProps {
     selectionMode?: boolean;
     selectedWords?: string[];
     onToggleSelection?: (id: string) => void;
+    /** Controls the visual density of cards. 'compact' shows more cards with reduced padding */
+    density?: CardDensity;
 }
 
 const WordGrid: React.FC<WordGridProps> = ({ 
@@ -28,8 +30,12 @@ const WordGrid: React.FC<WordGridProps> = ({
     readOnly = false,
     selectionMode = false,
     selectedWords = [],
-    onToggleSelection
+    onToggleSelection,
+    density = 'compact'
 }) => {
+    // Determine grid column sizing based on density
+    // Compact mode shows more columns to fit more items on screen
+    const isCompact = density === 'compact';
 // Empty state when no words are available
     if (data.length === 0) {
         return (
@@ -78,11 +84,20 @@ const WordGrid: React.FC<WordGridProps> = ({
     return (
         <Grid
             container
-            columnSpacing={{ xs: 2, md: 3 }}
-            rowSpacing={{ xs: 3, md: 4 }}
+            columnSpacing={{ xs: isCompact ? 1.5 : 2, md: isCompact ? 2 : 3 }}
+            rowSpacing={{ xs: isCompact ? 2 : 3, md: isCompact ? 2 : 4 }}
         >
             {data.map((word) => (
-                <Grid size={{ xs:12, sm: 6, md:4 }} key={word.id} sx={{ px: 1 }}>
+                <Grid 
+                    size={{ 
+                        xs: 12, 
+                        sm: 6, 
+                        md: isCompact ? 3 : 4,  // Compact: 4 columns, Comfortable: 3 columns
+                        lg: isCompact ? 2.4 : 4  // Compact: 5 columns on large screens
+                    }} 
+                    key={word.id} 
+                    sx={{ px: isCompact ? 0.5 : 1 }}
+                >
                     <WordCard
                         word={word}
                         onDelete={!readOnly ? onDelete : undefined}
@@ -94,6 +109,7 @@ const WordGrid: React.FC<WordGridProps> = ({
                         isSelected={selectedWords.includes(word.id)}
                         onToggleSelection={onToggleSelection}
                         readOnly={readOnly}
+                        density={density}
                     />
                 </Grid>
             ))}

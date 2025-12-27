@@ -18,8 +18,11 @@ import {
     ToggleButtonGroup,
     ToggleButton,
     Tooltip,
-    alpha, Container, CircularProgress
+    alpha,
+    CircularProgress
 } from '@mui/material';
+import ViewModuleIcon from '@mui/icons-material/ViewModule';
+import ViewListIcon from '@mui/icons-material/ViewList';
 import PageHeader from '../components/PageHeader';
 import SearchIcon from '@mui/icons-material/Search';
 import AddIcon from '@mui/icons-material/Add';
@@ -28,8 +31,6 @@ import FilterListIcon from '@mui/icons-material/FilterList';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
 import BookmarkIcon from '@mui/icons-material/Bookmark';
-import ViewModuleIcon from '@mui/icons-material/ViewModule';
-import ViewListIcon from '@mui/icons-material/ViewList';
 import {
     useDictionary,
     useDeleteWord,
@@ -544,6 +545,7 @@ const DictionaryPage: React.FC = () => {
                             }}
                         />
 
+                        {/* View mode toggle (grid/list) */}
                         <ToggleButtonGroup
                             value={viewMode}
                             exclusive
@@ -664,6 +666,7 @@ const DictionaryPage: React.FC = () => {
                       selectionMode={selectionMode}
                       selectedWords={selectedWords}
                       onToggleSelection={handleToggleSelection}
+                      density="compact"
                     />
                   ) : (
                     <VocabularyList
@@ -677,6 +680,7 @@ const DictionaryPage: React.FC = () => {
                       selectionMode={selectionMode}
                       selectedWords={selectedWords}
                       onToggleSelection={handleToggleSelection}
+                      density="compact"
                     />
                   )}
                 </Box>
