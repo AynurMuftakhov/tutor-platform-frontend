@@ -42,6 +42,7 @@ import { getNotesUIMode } from '../features/notes/utils/modeSelectors';
 import type { LessonNoteFormat } from '../types/lessonNotes';
 import type { LessonNoteStatus } from '../features/notes/components/CurrentLessonNote';
 import { useLessonContentLinks } from '../hooks/useLessonContentLinks';
+import VideoQualityControl from '../components/rtc/VideoQualityControl';
 
 interface VideoCallPageProps {
     identity?: string;
@@ -1406,6 +1407,7 @@ const DailyCallLayout: React.FC<{
             </Tooltip>
 
             {callAndNotesLayout}
+            <VideoQualityControl />
 
         </Box>
     );
