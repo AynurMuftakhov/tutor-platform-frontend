@@ -32,6 +32,7 @@ import TeacherHomeworkNewPage from './pages/homework/TeacherHomeworkNewPage';
 import TeacherStudentActivityPage from './pages/TeacherStudentActivityPage';
 import StudentsActivityOverviewPage from './pages/StudentsActivityOverviewPage';
 import RoleGuard from './components/RoleGuard';
+import PaymentsPage from './pages/PaymentsPage';
 
 const App: React.FC = () => {
     const { isLoading } = useAuth();
@@ -283,6 +284,18 @@ const App: React.FC = () => {
                                     <AppWrapper>
                                         <RoleGuard allow="TEACHER">
                                             <TeacherStudentActivityPage />
+                                        </RoleGuard>
+                                    </AppWrapper>
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/payments"
+                            element={
+                                <PrivateRoute>
+                                    <AppWrapper>
+                                        <RoleGuard allow="TEACHER">
+                                            <PaymentsPage />
                                         </RoleGuard>
                                     </AppWrapper>
                                 </PrivateRoute>

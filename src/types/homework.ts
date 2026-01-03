@@ -1,4 +1,4 @@
-import { PageResult } from './index';
+export type { PageResult } from './index';
 
 // Homework domain types matching backend
 

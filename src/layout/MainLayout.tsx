@@ -27,6 +27,7 @@ import AssignmentIcon from "@mui/icons-material/Assignment";
 import NoteAltOutlinedIcon from "@mui/icons-material/NoteAltOutlined";
 import VideoCallIcon from "@mui/icons-material/VideoCall";
 import SettingsIcon from "@mui/icons-material/Settings";
+import PaymentsIcon from "@mui/icons-material/Payments";
 import { motion } from "framer-motion";
 import useMediaQuery from '@mui/material/useMediaQuery';
 
@@ -65,6 +66,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             ? [
                 { label: "Students", icon: <PeopleIcon />, path: "/my-students" },
                 { label: "Students Activity", icon: <GridViewIcon />, path: "/teacher/students/activity" },
+                { label: "Payments", icon: <PaymentsIcon />, path: "/payments" },
               ]
             : []),
         { label: "Homework", icon: <AssignmentIcon />, path: (user?.role === "tutor") ? "/t/homework" : "/homework" },

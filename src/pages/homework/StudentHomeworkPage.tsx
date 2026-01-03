@@ -4,6 +4,7 @@ import {
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useStudentAssignments } from '../../hooks/useHomeworks';
+import { AssignmentListItemDto } from '../../types/homework';
 import { Link as RouterLink } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import FiltersBar, { FiltersState } from '../../components/homework/FiltersBar';
@@ -133,7 +134,7 @@ const StudentHomeworkPage: React.FC = () => {
       <Box sx={{ flex: 1, overflowY: 'auto', pr: 0.5, scrollbarWidth: 'none', msOverflowStyle: 'none', '&::-webkit-scrollbar': { display: 'none' } }}>
           <Grid container spacing={2}>
               {visible && visible.length > 0 ? (
-                  visible.map(a => {
+                  visible.map((a: AssignmentListItemDto) => {
                       const total = a.totalTasks;
                       const completed = a.completedTasks;
                       const inProgress = a.inProgressTasks;

@@ -10,7 +10,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { useQuery } from '@tanstack/react-query';
-import {AssignmentDto} from "../../types/homework";
+import {AssignmentDto, AssignmentListItemDto} from "../../types/homework";
 import FiltersBar, { FiltersState } from '../../components/homework/FiltersBar';
 import AddIcon from '@mui/icons-material/Add';
 import { Fab } from '@mui/material';
@@ -253,7 +253,7 @@ const TeacherHomeworkPage: React.FC = () => {
       <Box sx={{ flex: 1, overflowY: 'auto', pr: 0.5,  pb: { xs: 8, sm: 0 },   scrollbarWidth: 'none', msOverflowStyle: 'none', '&::-webkit-scrollbar': { display: 'none' } }}>
         <Grid container spacing={2}>
             {visible && visible.length > 0 ? (
-                visible.map(a => {
+                visible.map((a: AssignmentListItemDto) => {
                     const total = a.totalTasks;
                     const completed = a.completedTasks;
                     const inProgress = a.inProgressTasks;
