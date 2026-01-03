@@ -21,7 +21,6 @@ import { BillingStudent } from '../../types/billing';
 
 interface StudentCardProps {
     student: BillingStudent;
-    currency: string;
     onQuickPay: (student: BillingStudent) => void;
     onClick: (student: BillingStudent) => void;
     onEditPlan: (student: BillingStudent) => void;
@@ -38,7 +37,6 @@ function formatMoney(amount: number, currency: string): string {
 
 const StudentCard: React.FC<StudentCardProps> = ({
     student,
-    currency,
     onQuickPay,
     onClick,
     onEditPlan,
@@ -52,9 +50,9 @@ const StudentCard: React.FC<StudentCardProps> = ({
         : 0;
     
     const quickPayLessons = hasDebt ? student.lessonsOutstanding : student.packageSize;
-    // ratePerLesson stores package rate, calculate per-lesson rate
-    const perLessonRate = student.packageSize > 0 ? student.ratePerLesson / student.packageSize : 0;
+    const perLessonRate = student.ratePerLesson || 0;
     const quickPayAmount = quickPayLessons * perLessonRate;
+    const displayCurrency = student.currency || 'USD';
 
     return (
         <Card
@@ -101,12 +99,12 @@ const StudentCard: React.FC<StudentCardProps> = ({
                         </Typography>
                         <Box display="flex" alignItems="center" gap={0.5}>
                             <Tooltip 
-                                title={`Package: ${student.packageSize} lessons for ${formatMoney(student.ratePerLesson, currency)}`}
+                                title={`Package: ${student.packageSize} lessons • ${formatMoney(perLessonRate, displayCurrency)}`}
                                 arrow
                             >
                                 <Chip
                                     icon={<SchoolIcon sx={{ fontSize: 14 }} />}
-                                    label={`${student.packageSize} lessons • ${formatMoney(student.ratePerLesson, currency)}`}
+                                    label={`${student.packageSize} lessons • ${formatMoney(perLessonRate, displayCurrency)}`}
                                     size="small"
                                     sx={{
                                         height: 22,
@@ -227,7 +225,7 @@ const StudentCard: React.FC<StudentCardProps> = ({
                             fontWeight={700}
                             textAlign="center"
                         >
-                            Owed: {formatMoney(student.outstandingAmount, currency)}
+                            Owed: {formatMoney(student.outstandingAmount, displayCurrency)}
                         </Typography>
                     </Box>
                 )}
@@ -249,7 +247,7 @@ const StudentCard: React.FC<StudentCardProps> = ({
                             fontWeight={700}
                             textAlign="center"
                         >
-                            Credit: {formatMoney(Math.abs(student.outstandingAmount), currency)}
+                            Credit: {formatMoney(Math.abs(student.outstandingAmount), displayCurrency)}
                         </Typography>
                     </Box>
                 )}
@@ -292,7 +290,7 @@ const StudentCard: React.FC<StudentCardProps> = ({
                             fontWeight: 600,
                         }}
                     >
-                        {`Pay for ${quickPayLessons} lesson${quickPayLessons !== 1 ? 's' : ''} (${formatMoney(quickPayAmount, currency)})`}
+                        {`Pay for ${quickPayLessons} lesson${quickPayLessons !== 1 ? 's' : ''} (${formatMoney(quickPayAmount, displayCurrency)})`}
                     </Button>
                 ) : (
                     <Box textAlign="center">

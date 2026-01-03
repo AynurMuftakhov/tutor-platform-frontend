@@ -140,11 +140,12 @@ const BillingStudentsTable: React.FC<BillingStudentsTableProps> = ({
 
     const getBalanceBadge = (student: BillingStudent) => {
         const { lessonsOutstanding, outstandingAmount } = student;
-        
+        const displayCurrency = student.currency || currency;
+
         if (lessonsOutstanding > 0) {
             return (
                 <Chip
-                    label={`Owes ${formatMoney(outstandingAmount, currency)}`}
+                    label={`Owes ${formatMoney(outstandingAmount, displayCurrency)}`}
                     size="small"
                     sx={{
                         bgcolor: alpha(theme.palette.error.main, 0.1),
@@ -161,7 +162,7 @@ const BillingStudentsTable: React.FC<BillingStudentsTableProps> = ({
         if (lessonsOutstanding < 0) {
             return (
                 <Chip
-                    label={`Credit ${formatMoney(Math.abs(outstandingAmount), currency)}`}
+                    label={`Credit ${formatMoney(Math.abs(outstandingAmount), displayCurrency)}`}
                     size="small"
                     sx={{
                         bgcolor: alpha(theme.palette.success.main, 0.1),
@@ -192,9 +193,9 @@ const BillingStudentsTable: React.FC<BillingStudentsTableProps> = ({
     const getQuickPayButton = (student: BillingStudent) => {
         const hasDebt = student.lessonsOutstanding > 0;
         const quickPayLessons = hasDebt ? student.lessonsOutstanding : student.packageSize;
-        // ratePerLesson stores package rate, calculate per-lesson rate
-        const perLessonRate = student.packageSize > 0 ? student.ratePerLesson / student.packageSize : 0;
+        const perLessonRate = student.ratePerLesson || 0;
         const quickPayAmount = quickPayLessons * perLessonRate;
+        const displayCurrency = student.currency || currency;
 
         return (
             <Tooltip 
@@ -221,7 +222,7 @@ const BillingStudentsTable: React.FC<BillingStudentsTableProps> = ({
                     }}
                 >
                     {hasDebt 
-                        ? `${quickPayLessons} • ${formatMoney(quickPayAmount, currency)}`
+                        ? `${quickPayLessons} • ${formatMoney(quickPayAmount, displayCurrency)}`
                         : 'Pay'
                     }
                 </Button>

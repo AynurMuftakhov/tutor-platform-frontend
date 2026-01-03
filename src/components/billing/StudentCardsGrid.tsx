@@ -16,7 +16,6 @@ import StudentCard from './StudentCard';
 interface StudentCardsGridProps {
     students: BillingStudent[];
     loading: boolean;
-    currency: string;
     onCardClick: (student: BillingStudent) => void;
     onQuickPay: (student: BillingStudent) => void;
     onEditPlan: (student: BillingStudent) => void;
@@ -25,7 +24,6 @@ interface StudentCardsGridProps {
 const StudentCardsGrid: React.FC<StudentCardsGridProps> = ({
     students,
     loading,
-    currency,
     onCardClick,
     onQuickPay,
     onEditPlan,
@@ -132,7 +130,6 @@ const StudentCardsGrid: React.FC<StudentCardsGridProps> = ({
                     <Grid size={{xs:12, sm:5,  md:6, lg:4, xl:2 }} key={student.studentId}>
                         <StudentCard
                             student={student}
-                            currency={currency}
                             onClick={onCardClick}
                             onQuickPay={onQuickPay}
                             onEditPlan={onEditPlan}
