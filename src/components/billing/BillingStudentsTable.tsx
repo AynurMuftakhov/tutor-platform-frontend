@@ -192,7 +192,9 @@ const BillingStudentsTable: React.FC<BillingStudentsTableProps> = ({
     const getQuickPayButton = (student: BillingStudent) => {
         const hasDebt = student.lessonsOutstanding > 0;
         const quickPayLessons = hasDebt ? student.lessonsOutstanding : student.packageSize;
-        const quickPayAmount = quickPayLessons * student.ratePerLesson;
+        // ratePerLesson stores package rate, calculate per-lesson rate
+        const perLessonRate = student.packageSize > 0 ? student.ratePerLesson / student.packageSize : 0;
+        const quickPayAmount = quickPayLessons * perLessonRate;
 
         return (
             <Tooltip 
@@ -252,7 +254,7 @@ const BillingStudentsTable: React.FC<BillingStudentsTableProps> = ({
                             {params.row.studentName}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                            {params.row.packageSize} lessons • {formatMoney(params.row.ratePerLesson, currency)}/lesson
+                            {params.row.packageSize} lessons • {formatMoney(params.row.ratePerLesson, currency)}
                         </Typography>
                         <Button
                             size="small"

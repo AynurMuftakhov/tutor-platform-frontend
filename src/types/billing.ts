@@ -39,13 +39,13 @@ export interface BillingStudent {
     chargedInPeriod: number;
     // Package info
     packageSize: number;          // e.g., 8 lessons
-    ratePerLesson: number;        // e.g., 7.5 EUR
+    ratePerLesson: number;        // Package rate, e.g., 400 EUR for the package (UI divides by packageSize for per-lesson rate)
     // Lesson counts
     lessonsCompleted: number;     // conducted
     lessonsPaid: number;          // paid
     lessonsOutstanding: number;   // completed - paid
     // Money
-    outstandingAmount: number;    // lessonsOutstanding * ratePerLesson
+    outstandingAmount: number;    // lessonsOutstanding * (ratePerLesson / packageSize)
     lastPaymentDate: string | null;
     currency: string;
 }

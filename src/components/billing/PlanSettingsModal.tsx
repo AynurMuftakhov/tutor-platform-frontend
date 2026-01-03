@@ -82,7 +82,7 @@ const PlanSettingsModal: React.FC<PlanSettingsModalProps> = ({
             <DialogContent>
                 <Stack spacing={2} sx={{ mt: 1 }}>
                     <Typography variant="body2" color="text.secondary">
-                        Set the student&apos;s lesson rate and package size. This is used to calculate outstanding lessons and quick-pay amounts.
+                        Set the student&apos;s package rate and size. This is used to calculate outstanding lessons and quick-pay amounts.
                     </Typography>
                     <TextField
                         select
@@ -98,14 +98,14 @@ const PlanSettingsModal: React.FC<PlanSettingsModalProps> = ({
                         ))}
                     </TextField>
                     <TextField
-                        label="Rate per lesson"
+                        label="Package rate"
                         type="number"
                         value={rate}
                         onChange={(e) => setRate(e.target.value)}
                         size="small"
                         inputProps={{ min: 0, step: 0.01 }}
                         error={Boolean(validation.rateError)}
-                        helperText={validation.rateError}
+                        helperText={validation.rateError || 'Total price for the package'}
                     />
                     <TextField
                         label="Package size (lessons)"

@@ -52,7 +52,9 @@ const StudentCard: React.FC<StudentCardProps> = ({
         : 0;
     
     const quickPayLessons = hasDebt ? student.lessonsOutstanding : student.packageSize;
-    const quickPayAmount = quickPayLessons * student.ratePerLesson;
+    // ratePerLesson stores package rate, calculate per-lesson rate
+    const perLessonRate = student.packageSize > 0 ? student.ratePerLesson / student.packageSize : 0;
+    const quickPayAmount = quickPayLessons * perLessonRate;
 
     return (
         <Card
@@ -99,12 +101,12 @@ const StudentCard: React.FC<StudentCardProps> = ({
                         </Typography>
                         <Box display="flex" alignItems="center" gap={0.5}>
                             <Tooltip 
-                                title={`${formatMoney(student.ratePerLesson, currency)} per lesson`}
+                                title={`Package: ${student.packageSize} lessons for ${formatMoney(student.ratePerLesson, currency)}`}
                                 arrow
                             >
                                 <Chip
                                     icon={<SchoolIcon sx={{ fontSize: 14 }} />}
-                                    label={`${student.packageSize} lessons • ${formatMoney(student.packageSize * student.ratePerLesson, currency)}`}
+                                    label={`${student.packageSize} lessons • ${formatMoney(student.ratePerLesson, currency)}`}
                                     size="small"
                                     sx={{
                                         height: 22,
@@ -311,7 +313,7 @@ const StudentCard: React.FC<StudentCardProps> = ({
                                 },
                             }}
                         >
-                            + Add optional payment
+                            + Make prepayment
                         </Link>
                     </Box>
                 )}

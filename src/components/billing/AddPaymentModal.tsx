@@ -79,18 +79,23 @@ const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
     // Smart defaults based on preselected student
     const smartDefaults = useMemo(() => {
         if (!preselectedStudent) {
-            return { lessonsCount: 1, amount: 0, ratePerLesson: 0, hasOutstanding: false };
+            return { lessonsCount: 1, amount: 0, perLessonRate: 0, packageRate: 0, hasOutstanding: false };
         }
         
         const outstanding = preselectedStudent.lessonsOutstanding;
         const hasOutstanding = outstanding > 0;
         const defaultLessons = hasOutstanding ? outstanding : preselectedStudent.packageSize;
-        const ratePerLesson = preselectedStudent.ratePerLesson || 0;
+        // ratePerLesson stores package rate, calculate per-lesson rate
+        const packageRate = preselectedStudent.ratePerLesson || 0;
+        const perLessonRate = preselectedStudent.packageSize > 0 
+            ? packageRate / preselectedStudent.packageSize 
+            : 0;
         
         return {
             lessonsCount: defaultLessons,
-            amount: defaultLessons * ratePerLesson,
-            ratePerLesson,
+            amount: defaultLessons * perLessonRate,
+            perLessonRate,
+            packageRate,
             hasOutstanding,
         };
     }, [preselectedStudent]);
@@ -99,7 +104,12 @@ const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
     useEffect(() => {
         if (!amountManuallySet && preselectedStudent && lessonsCount) {
             const lessons = parseFloat(lessonsCount) || 0;
-            const calculatedAmount = lessons * (preselectedStudent.ratePerLesson || 0);
+            // ratePerLesson stores package rate, calculate per-lesson rate
+            const packageRate = preselectedStudent.ratePerLesson || 0;
+            const perLessonRate = preselectedStudent.packageSize > 0 
+                ? packageRate / preselectedStudent.packageSize 
+                : 0;
+            const calculatedAmount = lessons * perLessonRate;
             setAmount(String(calculatedAmount));
         }
     }, [lessonsCount, preselectedStudent, amountManuallySet]);
@@ -213,7 +223,7 @@ const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
         }
     };
 
-    const showSmartDefaultsInfo = preselectedStudent && smartDefaults.ratePerLesson > 0;
+    const showSmartDefaultsInfo = preselectedStudent && smartDefaults.perLessonRate > 0;
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
@@ -284,7 +294,7 @@ const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
                                     : `Paying for full package (${smartDefaults.lessonsCount} lessons)`
                                 }
                                 {' • '}
-                                Rate: {formatMoney(smartDefaults.ratePerLesson, currency)}/lesson
+                                Package: {formatMoney(smartDefaults.packageRate, currency)}
                             </Typography>
                         </Box>
                     )}
