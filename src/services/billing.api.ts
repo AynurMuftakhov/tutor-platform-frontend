@@ -23,6 +23,7 @@ export const updateBillingAccount = async (
     payload: {
         defaultCurrency?: string;
         ratePerLesson?: number;
+        pricePerPackage?: number;
         packageSize?: number;
         notes?: string;
     }
@@ -45,27 +46,43 @@ const mapBillingSummary = (data: any, fallbackCurrency?: string): BillingSummary
     };
 };
 
-const mapBillingStudent = (student: any): BillingStudent => ({
-    studentId: student.studentId,
-    studentName: student.studentName,
-    studentAvatar: student.studentAvatar,
-    // Legacy fields
-    balanceToday: Number(student.balanceToday ?? student.outstandingAmount ?? 0),
-    paidInPeriod: Number(student.paidInPeriod ?? 0),
-    chargedInPeriod: Number(student.chargedInPeriod ?? 0),
-    // New package fields
-    packageSize: Number(student.packageSize ?? 8),
-    ratePerLesson: Number(student.ratePerLesson ?? 0),
-    // Lesson counts
-    lessonsCompleted: Number(student.lessonsCompleted ?? 0),
-    lessonsPaid: Number(student.lessonsPaid ?? 0),
-    lessonsOutstanding: Number(student.lessonsOutstanding ?? 
-        (student.lessonsCompleted ?? 0) - (student.lessonsPaid ?? 0)),
-    // Money
-    outstandingAmount: Number(student.outstandingAmount ?? student.balanceToday ?? 0),
-    lastPaymentDate: student.lastPaymentDate ?? null,
-    currency: student.currency ?? 'USD',
-});
+const mapBillingStudent = (student: any): BillingStudent => {
+    const packageSize = Number(student.packageSize ?? 0) || 1;
+    const pricePerPackage = Number(student.pricePerPackage ?? 0);
+    // ratePerLesson from backend, or fallback to calculated per-lesson rate
+    const ratePerLesson = Number(student.ratePerLesson) || (packageSize > 0 ? pricePerPackage / packageSize : 0);
+
+    return {
+        studentId: student.studentId,
+        studentName: student.studentName,
+        studentAvatar: student.studentAvatar,
+
+        // Package info
+        packageSize,
+        ratePerLesson,
+        pricePerPackage,
+
+        // ALL-TIME balance - trust backend values directly
+        lessonsCompleted: Number(student.lessonsCompleted ?? 0),
+        lessonsPaid: Number(student.lessonsPaid ?? 0),
+        lessonsOutstanding: Number(student.lessonsOutstanding ?? 0),
+        outstandingAmount: Number(student.outstandingAmount ?? 0),
+        outstandingPackages: Number(student.outstandingPackages ?? 0),
+        packageDue: Boolean(student.packageDue),
+        hasCredit: Boolean(student.hasCredit),
+
+        // PERIOD-SPECIFIC
+        periodLessonsCompleted: Number(student.periodLessonsCompleted ?? 0),
+        periodLessonsPaid: Number(student.periodLessonsPaid ?? 0),
+        periodEarned: Number(student.periodEarned ?? 0),
+        periodReceived: Number(student.periodReceived ?? 0),
+
+        // Other fields
+        lastPaymentDate: student.lastPaymentDate ?? null,
+        currency: student.currency ?? 'USD',
+        isActive: student.isActive ?? true,
+    };
+};
 
 const mapLedgerEntry = (entry: any): LedgerEntry => ({
     id: entry.id,
@@ -110,8 +127,10 @@ const mapMonthlyDataPoint = (point: any): MonthlyDataPoint => ({
 });
 
 const mapBillingAnalytics = (data: any): BillingAnalytics => ({
-    earnedThisMonth: Number(data?.earnedThisMonth ?? 0),
-    receivedThisMonth: Number(data?.receivedThisMonth ?? 0),
+    // Period-specific (based on date filter)
+    earnedInPeriod: Number(data?.earnedInPeriod ?? data?.earnedThisMonth ?? 0),
+    receivedInPeriod: Number(data?.receivedInPeriod ?? data?.receivedThisMonth ?? 0),
+    // All-time (always cumulative)
     outstandingTotal: Number(data?.outstandingTotal ?? 0),
     monthlyData: (data?.monthlyData ?? []).map(mapMonthlyDataPoint),
 });
@@ -136,9 +155,10 @@ export const getBillingStudents = async (
     from: string,
     to: string,
     currency: string,
-    sort: string = 'balance_desc'
+    sort: string = 'balance_desc',
+    activeOnly = false
 ): Promise<BillingStudentsResponse> => {
-    const params = new URLSearchParams({ from, to, currency, sort });
+    const params = new URLSearchParams({ from, to, currency, sort, activeOnly: String(activeOnly) });
     const response = await api.get(`${BILLING_BASE}/students?${params}`);
     const data = response.data;
     const studentsArray = Array.isArray(data) ? data : data?.students ?? [];
@@ -233,9 +253,9 @@ export const getUnifiedStudentLedger = async (
             lessonsCompleted: Number(summarySource.lessonsCompleted ?? 0),
             lessonsPaid: Number(summarySource.lessonsPaid ?? 0),
             lessonsOutstanding: Number(summarySource.lessonsOutstanding ?? 0),
-            outstandingAmount: Number(summarySource.outstandingAmount ?? 0),
+            outstandingAmount: Number(summarySource.balanceToday ?? summarySource.outstandingAmount ?? 0),
             paidInPeriod: Number(summarySource.paidInPeriod ?? 0),
-            earnedInPeriod: Number(summarySource.earnedInPeriod ?? 0),
+            earnedInPeriod: Number(summarySource.chargedInPeriod ?? summarySource.earnedInPeriod ?? 0),
         },
     };
 };

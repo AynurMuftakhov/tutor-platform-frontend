@@ -17,9 +17,14 @@ export interface BillingSummary {
 
 // Extended analytics response
 export interface BillingAnalytics {
-    earnedThisMonth: number;
-    receivedThisMonth: number;
-    outstandingTotal: number;
+    // Period-specific (based on date filter)
+    earnedInPeriod: number;       // Amount earned in selected period
+    receivedInPeriod: number;     // Amount received in selected period
+    
+    // All-time (always cumulative)
+    outstandingTotal: number;     // Total outstanding across all students (all time)
+    
+    // Monthly breakdown for chart
     monthlyData: MonthlyDataPoint[];
 }
 
@@ -33,21 +38,31 @@ export interface BillingStudent {
     studentId: string;
     studentName: string;
     studentAvatar?: string;
-    // Legacy fields (backward compatibility)
-    balanceToday: number;
-    paidInPeriod: number;
-    chargedInPeriod: number;
+    
     // Package info
-    packageSize: number;          // e.g., 8 lessons
-    ratePerLesson: number;        // Package rate, e.g., 400 EUR for the package (UI divides by packageSize for per-lesson rate)
-    // Lesson counts
-    lessonsCompleted: number;     // conducted
-    lessonsPaid: number;          // paid
-    lessonsOutstanding: number;   // completed - paid
-    // Money
-    outstandingAmount: number;    // lessonsOutstanding * (ratePerLesson / packageSize)
+    packageSize: number;          // e.g., 8 lessons per package
+    ratePerLesson: number;        // Actual rate per lesson (pricePerPackage / packageSize)
+    pricePerPackage: number;      // Total price for the package
+
+    // === ALL-TIME BALANCE (always cumulative, regardless of date filter) ===
+    lessonsCompleted: number;     // Total lessons conducted (all time)
+    lessonsPaid: number;          // Total lessons paid for (all time)
+    lessonsOutstanding: number;   // lessonsCompleted - lessonsPaid (all time)
+    outstandingAmount: number;    // Outstanding packages * package price (all time)
+    outstandingPackages: number;  // floor(completed/pkgSize) - floor(paid/pkgSize) (all time)
+    packageDue: boolean;          // true when outstandingPackages > 0
+    hasCredit: boolean;           // true when outstandingPackages < 0 (prepayment)
+    
+    // === PERIOD-SPECIFIC (filtered by date range, for analytics display) ===
+    periodLessonsCompleted?: number;  // Lessons conducted in selected period
+    periodLessonsPaid?: number;       // Lessons paid for in selected period
+    periodEarned?: number;            // Amount earned in period
+    periodReceived?: number;          // Amount received in period
+    
+    // Other fields
     lastPaymentDate: string | null;
     currency: string;
+    isActive?: boolean;           // Whether student is active
 }
 
 // Legacy ledger entry (backward compatibility)
@@ -161,6 +176,7 @@ export interface BillingFilters {
     currency: string;
     preset: DateRangePreset;
     sortBy: BillingSortOption;
+    activeOnly: boolean;
 }
 
 // Common currencies

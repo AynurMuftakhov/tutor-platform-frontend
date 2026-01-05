@@ -24,6 +24,7 @@ interface StudentCardProps {
     onQuickPay: (student: BillingStudent) => void;
     onClick: (student: BillingStudent) => void;
     onEditPlan: (student: BillingStudent) => void;
+    filterCurrency?: string; // Top filter currency to compare with student's native currency
 }
 
 function formatMoney(amount: number, currency: string): string {
@@ -40,19 +41,30 @@ const StudentCard: React.FC<StudentCardProps> = ({
     onQuickPay,
     onClick,
     onEditPlan,
+    filterCurrency,
 }) => {
     const theme = useTheme();
     
-    const hasDebt = student.lessonsOutstanding > 0;
-    const hasCredit = student.lessonsOutstanding < 0;
-    const progress = student.packageSize > 0 
-        ? Math.min((student.lessonsCompleted / student.packageSize) * 100, 100)
-        : 0;
-    
-    const quickPayLessons = hasDebt ? student.lessonsOutstanding : student.packageSize;
-    const perLessonRate = student.ratePerLesson || 0;
-    const quickPayAmount = quickPayLessons * perLessonRate;
+    const packageSize = student.packageSize > 0 ? student.packageSize : 1;
+    const packagePrice = student.pricePerPackage || 0;
     const displayCurrency = student.currency || 'USD';
+    
+    // Check if student currency differs from top filter currency
+    const currencyDiffers = filterCurrency && filterCurrency !== displayCurrency;
+    
+    // Use backend-provided values (all-time, not affected by date filter)
+    const outstandingPackages = student.outstandingPackages;
+    const outstandingAmount = student.outstandingAmount;
+    const hasDebt = student.packageDue;
+    const hasCredit = student.hasCredit;
+    
+    // Lessons within current package (all-time)
+    const lessonsInCurrentPackage = student.lessonsCompleted % packageSize;
+    const currentPackageProgress = (lessonsInCurrentPackage / packageSize) * 100;
+    
+    // Quick pay = always full package price (default to 1 package if no debt)
+    const quickPayPackages = hasDebt ? outstandingPackages : 1;
+    const quickPayAmount = quickPayPackages * packagePrice;
 
     return (
         <Card
@@ -98,13 +110,13 @@ const StudentCard: React.FC<StudentCardProps> = ({
                             {student.studentName}
                         </Typography>
                         <Box display="flex" alignItems="center" gap={0.5}>
-                            <Tooltip 
-                                title={`Package: ${student.packageSize} lessons • ${formatMoney(perLessonRate, displayCurrency)}`}
+                        <Tooltip 
+                                title={`Package: ${packageSize} lessons • ${formatMoney(packagePrice, displayCurrency)} total`}
                                 arrow
                             >
                                 <Chip
                                     icon={<SchoolIcon sx={{ fontSize: 14 }} />}
-                                    label={`${student.packageSize} lessons • ${formatMoney(perLessonRate, displayCurrency)}`}
+                                    label={`${packageSize} lessons • ${formatMoney(packagePrice, displayCurrency)}`}
                                     size="small"
                                     sx={{
                                         height: 22,
@@ -138,26 +150,26 @@ const StudentCard: React.FC<StudentCardProps> = ({
                     </Box>
                 </Box>
 
-                {/* Progress: Lessons completed/paid */}
+                {/* Progress: Current package progress (all-time) */}
                 <Box mb={2.5}>
                     <Box display="flex" justifyContent="space-between" mb={0.5}>
                         <Typography variant="caption" color="text.secondary">
-                            Progress
+                            Current package <Typography component="span" variant="caption" color="text.disabled">(all-time)</Typography>
                         </Typography>
                         <Typography variant="caption" fontWeight={600}>
-                            {student.lessonsCompleted}/{student.packageSize} lessons
+                            {lessonsInCurrentPackage}/{packageSize} lessons
                         </Typography>
                     </Box>
                     <LinearProgress
                         variant="determinate"
-                        value={progress}
+                        value={currentPackageProgress}
                         sx={{
                             height: 6,
                             borderRadius: 3,
                             bgcolor: alpha(theme.palette.primary.main, 0.1),
                             '& .MuiLinearProgress-bar': {
                                 borderRadius: 3,
-                                bgcolor: progress >= 100 
+                                bgcolor: currentPackageProgress >= 100 
                                     ? theme.palette.success.main 
                                     : theme.palette.primary.main,
                             },
@@ -165,7 +177,7 @@ const StudentCard: React.FC<StudentCardProps> = ({
                     />
                 </Box>
 
-                {/* Stats: Completed / Paid / Outstanding */}
+                {/* Stats: Period-specific lessons - Completed / Paid / Balance */}
                 <Box 
                     display="flex" 
                     gap={1} 
@@ -177,34 +189,49 @@ const StudentCard: React.FC<StudentCardProps> = ({
                         border: `1px solid ${alpha(theme.palette.grey[500], 0.08)}`,
                     }}
                 >
-                    <Box flex={1} textAlign="center">
-                        <Typography variant="h6" fontWeight={700} color="info.main">
-                            {student.lessonsCompleted}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                            Completed
-                        </Typography>
-                    </Box>
-                    <Box flex={1} textAlign="center">
-                        <Typography variant="h6" fontWeight={700} color="success.main">
-                            {student.lessonsPaid}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                            Paid
-                        </Typography>
-                    </Box>
-                    <Box flex={1} textAlign="center">
-                        <Typography 
-                            variant="h6" 
-                            fontWeight={700}
-                            color={hasDebt ? 'error.main' : hasCredit ? 'success.main' : 'text.secondary'}
-                        >
-                            {Math.abs(student.lessonsOutstanding)}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                            {hasCredit ? 'Credit' : 'Unpaid'}
-                        </Typography>
-                    </Box>
+                    <Tooltip title="Lessons completed in selected period" arrow>
+                        <Box flex={1} textAlign="center">
+                            <Typography variant="h6" fontWeight={700} color="info.main">
+                                {student.periodLessonsCompleted ?? 0}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.2 }}>
+                                Completed
+                            </Typography>
+                            <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.6rem' }}>
+                                (in period)
+                            </Typography>
+                        </Box>
+                    </Tooltip>
+                    <Tooltip title="Lessons paid for in selected period" arrow>
+                        <Box flex={1} textAlign="center">
+                            <Typography variant="h6" fontWeight={700} color="success.main">
+                                {student.periodLessonsPaid ?? 0}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.2 }}>
+                                Paid
+                            </Typography>
+                            <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.6rem' }}>
+                                (in period)
+                            </Typography>
+                        </Box>
+                    </Tooltip>
+                    <Tooltip title="Lessons completed minus lessons paid (all-time, ignores date filter)" arrow>
+                        <Box flex={1} textAlign="center">
+                            <Typography 
+                                variant="h6" 
+                                fontWeight={700}
+                                color={hasDebt ? 'error.main' : hasCredit ? 'success.main' : 'text.secondary'}
+                            >
+                                {Math.abs(student.lessonsOutstanding)}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.2 }}>
+                                {hasCredit ? 'Credit' : 'Unpaid'}
+                            </Typography>
+                            <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.6rem' }}>
+                                (all-time)
+                            </Typography>
+                        </Box>
+                    </Tooltip>
                 </Box>
 
                 {/* Outstanding amount - with stronger visual distinction */}
@@ -219,14 +246,28 @@ const StudentCard: React.FC<StudentCardProps> = ({
                             borderLeft: `4px solid ${theme.palette.error.main}`,
                         }}
                     >
-                        <Typography 
-                            variant="body2" 
-                            color="error.main"
-                            fontWeight={700}
-                            textAlign="center"
-                        >
-                            Owed: {formatMoney(student.outstandingAmount, displayCurrency)}
-                        </Typography>
+                        <Box display="flex" alignItems="center" justifyContent="center" gap={1}>
+                            <Typography 
+                                variant="body2" 
+                                color="error.main"
+                                fontWeight={700}
+                            >
+                                Owed: {formatMoney(outstandingAmount, displayCurrency)}
+                            </Typography>
+                            {currencyDiffers && (
+                                <Chip
+                                    label={displayCurrency}
+                                    size="small"
+                                    sx={{
+                                        height: 18,
+                                        fontSize: '0.6rem',
+                                        fontWeight: 600,
+                                        bgcolor: alpha(theme.palette.grey[500], 0.15),
+                                        color: theme.palette.text.secondary,
+                                    }}
+                                />
+                            )}
+                        </Box>
                     </Box>
                 )}
 
@@ -241,14 +282,15 @@ const StudentCard: React.FC<StudentCardProps> = ({
                             borderLeft: `4px solid ${theme.palette.success.main}`,
                         }}
                     >
-                        <Typography 
-                            variant="body2" 
-                            color="success.main"
-                            fontWeight={700}
-                            textAlign="center"
-                        >
-                            Credit: {formatMoney(Math.abs(student.outstandingAmount), displayCurrency)}
-                        </Typography>
+                        <Box display="flex" alignItems="center" justifyContent="center" gap={1}>
+                            <Typography 
+                                variant="body2" 
+                                color="success.main"
+                                fontWeight={700}
+                            >
+                                Credit: {Math.abs(outstandingPackages)} pkg ({formatMoney(Math.abs(outstandingAmount), displayCurrency)})
+                            </Typography>
+                        </Box>
                     </Box>
                 )}
 
@@ -290,7 +332,7 @@ const StudentCard: React.FC<StudentCardProps> = ({
                             fontWeight: 600,
                         }}
                     >
-                        {`Pay for ${quickPayLessons} lesson${quickPayLessons !== 1 ? 's' : ''} (${formatMoney(quickPayAmount, displayCurrency)})`}
+                        {`Pay for ${quickPayPackages} package${quickPayPackages !== 1 ? 's' : ''} (${formatMoney(quickPayAmount, displayCurrency)})`}
                     </Button>
                 ) : (
                     <Box textAlign="center">

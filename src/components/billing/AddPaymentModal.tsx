@@ -8,8 +8,11 @@ import {
     DialogActions,
     DialogContent,
     DialogTitle,
+    FormControlLabel,
     InputAdornment,
     MenuItem,
+    Radio,
+    RadioGroup,
     Stack,
     TextField,
     Tooltip,
@@ -21,6 +24,7 @@ import {
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import dayjs, { Dayjs } from 'dayjs';
 import { useAuth } from '../../context/AuthContext';
 import { fetchStudents } from '../../services/api';
@@ -61,6 +65,8 @@ const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
     // Form state
     const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
     const [currency, setCurrency] = useState(defaultCurrency);
+    const [paymentType, setPaymentType] = useState<'full' | 'partial'>('full');
+    const [packagesCount, setPackagesCount] = useState('1');
     const [lessonsCount, setLessonsCount] = useState('');
     const [amount, setAmount] = useState('');
     const [amountManuallySet, setAmountManuallySet] = useState(false);
@@ -76,52 +82,65 @@ const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // Smart defaults based on preselected student
+    // Smart defaults based on preselected student (package-based)
     const smartDefaults = useMemo(() => {
         if (!preselectedStudent) {
-            return { lessonsCount: 1, amount: 0, perLessonRate: 0, packageRate: 0, hasOutstanding: false };
+            return { 
+                packagesOutstanding: 0, 
+                packageSize: 1, 
+                packageRate: 0, 
+                hasOutstanding: false,
+            };
         }
         
-        const outstanding = preselectedStudent.lessonsOutstanding;
-        const hasOutstanding = outstanding > 0;
-        const defaultLessons = hasOutstanding ? outstanding : preselectedStudent.packageSize;
-        // ratePerLesson stores package rate, calculate per-lesson rate
-        const packageRate = preselectedStudent.ratePerLesson || 0;
-        const perLessonRate = preselectedStudent.packageSize > 0 
-            ? packageRate / preselectedStudent.packageSize 
-            : 0;
+        const packageSize = preselectedStudent.packageSize || 1;
+        const packageRate = preselectedStudent.pricePerPackage || 0;
+        
+        // Calculate outstanding packages
+        const completedPackages = Math.floor(preselectedStudent.lessonsCompleted / packageSize);
+        const paidPackages = Math.floor(preselectedStudent.lessonsPaid / packageSize);
+        const packagesOutstanding = completedPackages - paidPackages;
+        const hasOutstanding = packagesOutstanding > 0;
         
         return {
-            lessonsCount: defaultLessons,
-            amount: defaultLessons * perLessonRate,
-            perLessonRate,
+            packagesOutstanding,
+            packageSize,
             packageRate,
             hasOutstanding,
         };
     }, [preselectedStudent]);
 
-    // Calculate amount when lessons count changes (if not manually set)
+    // Calculate amount when payment changes (if not manually set)
     useEffect(() => {
-        if (!amountManuallySet && preselectedStudent && lessonsCount) {
-            const lessons = parseFloat(lessonsCount) || 0;
-            // ratePerLesson stores package rate, calculate per-lesson rate
-            const packageRate = preselectedStudent.ratePerLesson || 0;
-            const perLessonRate = preselectedStudent.packageSize > 0 
-                ? packageRate / preselectedStudent.packageSize 
-                : 0;
-            const calculatedAmount = lessons * perLessonRate;
-            setAmount(String(calculatedAmount));
+        if (!amountManuallySet && preselectedStudent) {
+            const { packageRate, packageSize } = smartDefaults;
+            
+            if (paymentType === 'full') {
+                // Full package payment
+                const packages = parseFloat(packagesCount) || 1;
+                const calculatedAmount = packages * packageRate;
+                const calculatedLessons = packages * packageSize;
+                setAmount(String(calculatedAmount));
+                setLessonsCount(String(calculatedLessons));
+            } else {
+                // Partial payment - calculate based on lessons
+                const lessons = parseFloat(lessonsCount) || 0;
+                const perLessonRate = packageSize > 0 ? packageRate / packageSize : 0;
+                const calculatedAmount = lessons * perLessonRate;
+                setAmount(String(calculatedAmount));
+            }
         }
-    }, [lessonsCount, preselectedStudent, amountManuallySet]);
+    }, [paymentType, packagesCount, lessonsCount, preselectedStudent, amountManuallySet, smartDefaults]);
 
     // Reset form when opening
     useEffect(() => {
         if (open) {
-            setCurrency(defaultCurrency);
+            setCurrency(preselectedStudent?.currency || defaultCurrency);
             setDate(dayjs());
             setComment('');
             setError(null);
             setAmountManuallySet(false);
+            setPaymentType('full');
 
             if (preselectedStudent) {
                 setSelectedStudent({
@@ -131,12 +150,17 @@ const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
                     level: 'Intermediate',
                     homeworkDone: false,
                 } as Student);
-                // Set smart defaults
-                setLessonsCount(String(smartDefaults.lessonsCount));
-                setAmount(String(smartDefaults.amount));
+                // Set smart defaults - default to outstanding packages or 1
+                const defaultPackages = smartDefaults.hasOutstanding 
+                    ? smartDefaults.packagesOutstanding 
+                    : 1;
+                setPackagesCount(String(defaultPackages));
+                setLessonsCount(String(defaultPackages * smartDefaults.packageSize));
+                setAmount(String(defaultPackages * smartDefaults.packageRate));
             } else {
                 setSelectedStudent(null);
-                setLessonsCount('1');
+                setPackagesCount('1');
+                setLessonsCount('');
                 setAmount('');
             }
         }
@@ -172,14 +196,31 @@ const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
         }
     }, [open, preselectedStudent, searchStudents]);
 
+    const handlePackagesChange = (value: string) => {
+        setPackagesCount(value);
+        setAmountManuallySet(false);
+    };
+
     const handleLessonsChange = (value: string) => {
         setLessonsCount(value);
-        setAmountManuallySet(false); // Reset manual flag when changing lessons
+        setAmountManuallySet(false);
     };
 
     const handleAmountChange = (value: string) => {
         setAmount(value);
-        setAmountManuallySet(true); // Mark as manually set
+        setAmountManuallySet(true);
+    };
+
+    const handlePaymentTypeChange = (type: 'full' | 'partial') => {
+        setPaymentType(type);
+        setAmountManuallySet(false);
+        if (type === 'full') {
+            // Reset to 1 package
+            setPackagesCount('1');
+        } else {
+            // Reset lessons for partial
+            setLessonsCount('1');
+        }
     };
 
     const handleSubmit = async () => {
@@ -223,7 +264,7 @@ const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
         }
     };
 
-    const showSmartDefaultsInfo = preselectedStudent && smartDefaults.perLessonRate > 0;
+    const showSmartDefaultsInfo = preselectedStudent && smartDefaults.packageRate > 0;
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
@@ -285,46 +326,98 @@ const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
                             <Box display="flex" alignItems="center" gap={1} mb={0.5}>
                                 <InfoOutlinedIcon sx={{ fontSize: 16, color: 'info.main' }} />
                                 <Typography variant="caption" color="info.main" fontWeight={600}>
-                                    Smart defaults applied
+                                    Package billing
                                 </Typography>
                             </Box>
                             <Typography variant="caption" color="text.secondary">
                                 {smartDefaults.hasOutstanding 
-                                    ? `Paying for ${smartDefaults.lessonsCount} outstanding lesson${smartDefaults.lessonsCount !== 1 ? 's' : ''}`
-                                    : `Paying for full package (${smartDefaults.lessonsCount} lessons)`
+                                    ? `${smartDefaults.packagesOutstanding} package${smartDefaults.packagesOutstanding !== 1 ? 's' : ''} outstanding`
+                                    : 'No outstanding packages'
                                 }
                                 {' • '}
-                                Package: {formatMoney(smartDefaults.packageRate, currency)}
+                                Package: {smartDefaults.packageSize} lessons for {formatMoney(smartDefaults.packageRate, currency)}
                             </Typography>
                         </Box>
                     )}
 
-                    {/* Lessons count */}
-                    <TextField
-                        label="Number of lessons"
-                        type="number"
-                        value={lessonsCount}
-                        onChange={(e) => handleLessonsChange(e.target.value)}
-                        required
-                        size="small"
-                        fullWidth
-                        inputProps={{ min: 0.5, step: 0.5 }}
-                        InputProps={{
-                            endAdornment: preselectedStudent && (
-                                <InputAdornment position="end">
-                                    <Chip
-                                        label={`of ${preselectedStudent.packageSize}`}
-                                        size="small"
-                                        sx={{ 
-                                            height: 20, 
-                                            fontSize: '0.7rem',
-                                            bgcolor: alpha(theme.palette.grey[500], 0.1),
-                                        }}
-                                    />
-                                </InputAdornment>
-                            ),
-                        }}
-                    />
+                    {/* Payment type toggle */}
+                    {preselectedStudent && (
+                        <Box>
+                            <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+                                Payment type
+                            </Typography>
+                            <RadioGroup
+                                row
+                                value={paymentType}
+                                onChange={(e) => handlePaymentTypeChange(e.target.value as 'full' | 'partial')}
+                            >
+                                <FormControlLabel
+                                    value="full"
+                                    control={<Radio size="small" />}
+                                    label={
+                                        <Typography variant="body2">
+                                            Full package ({formatMoney(smartDefaults.packageRate, currency)})
+                                        </Typography>
+                                    }
+                                />
+                                <FormControlLabel
+                                    value="partial"
+                                    control={<Radio size="small" />}
+                                    label={
+                                        <Typography variant="body2" color="text.secondary">
+                                            Partial (per lesson)
+                                        </Typography>
+                                    }
+                                />
+                            </RadioGroup>
+                        </Box>
+                    )}
+
+                    {/* Packages count (for full payment type) */}
+                    {paymentType === 'full' && preselectedStudent && (
+                        <TextField
+                            label="Number of packages"
+                            type="number"
+                            value={packagesCount}
+                            onChange={(e) => handlePackagesChange(e.target.value)}
+                            required
+                            size="small"
+                            fullWidth
+                            inputProps={{ min: 1, step: 1 }}
+                            helperText={`= ${parseFloat(packagesCount) * smartDefaults.packageSize || 0} lessons`}
+                        />
+                    )}
+
+                    {/* Lessons count (for partial payment type or no preselected student) */}
+                    {(paymentType === 'partial' || !preselectedStudent) && (
+                        <>
+                            <TextField
+                                label="Number of lessons"
+                                type="number"
+                                value={lessonsCount}
+                                onChange={(e) => handleLessonsChange(e.target.value)}
+                                required
+                                size="small"
+                                fullWidth
+                                inputProps={{ min: 0.5, step: 0.5 }}
+                                InputProps={{
+                                    endAdornment: preselectedStudent && (
+                                        <InputAdornment position="end">
+                                            <Chip
+                                                label={`of ${preselectedStudent.packageSize}`}
+                                                size="small"
+                                                sx={{ 
+                                                    height: 20, 
+                                                    fontSize: '0.7rem',
+                                                    bgcolor: alpha(theme.palette.grey[500], 0.1),
+                                                }}
+                                            />
+                                        </InputAdornment>
+                                    ),
+                                }}
+                            />
+                        </>
+                    )}
 
                     <Stack direction="row" spacing={2}>
                         {/* Currency */}

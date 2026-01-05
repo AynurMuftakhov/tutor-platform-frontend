@@ -157,34 +157,24 @@ const StudentLedgerDrawer: React.FC<StudentLedgerDrawerProps> = ({
         return entries;
     }, [entries, ledgerFilterTab]);
 
-    // Calculate summary totals from entries
-    const summaryTotals = useMemo(() => {
-        const totalCharged = entries
-            .filter(e => e.kind === 'LESSON')
-            .reduce((sum, e) => sum + e.amount, 0);
-        const totalPaid = entries
-            .filter(e => e.kind === 'PAYMENT')
-            .reduce((sum, e) => sum + e.amount, 0);
-        return { totalCharged, totalPaid };
-    }, [entries]);
+    // Use ledger summary directly from backend (period-filtered)
+    const summaryTotals = useMemo(() => ({
+        totalCharged: ledgerData?.summary?.earnedInPeriod ?? 0,
+        totalPaid: ledgerData?.summary?.paidInPeriod ?? 0,
+    }), [ledgerData?.summary]);
 
-    // Use student prop for KPIs (already has correct values from students list)
-    const lessonsCompleted = student?.lessonsCompleted ?? 0;
-    const lessonsPaid = student?.lessonsPaid ?? 0;
-    const lessonsOutstanding = student?.lessonsOutstanding ?? 0;
+    // Use backend-provided student values (all-time, not affected by date filter)
+    const displayCurrency = student?.currency || currency;
+    const outstandingPackages = student?.outstandingPackages ?? 0;
     const outstandingAmount = student?.outstandingAmount ?? 0;
-
-    const hasDebt = lessonsOutstanding > 0;
-    const hasCredit = lessonsOutstanding < 0;
+    const hasDebt = student?.packageDue ?? false;
+    const hasCredit = student?.hasCredit ?? false;
 
     const getBalanceBadge = () => {
-        const outstanding = lessonsOutstanding;
-        const amount = outstandingAmount;
-        
-        if (outstanding > 0) {
+        if (outstandingPackages > 0) {
             return (
                 <Chip
-                    label={`Owes ${outstanding} lesson${outstanding !== 1 ? 's' : ''} (${formatMoney(amount, currency)})`}
+                    label={`Owes ${outstandingPackages} pkg (${formatMoney(outstandingAmount, displayCurrency)})`}
                     size="small"
                     sx={{
                         bgcolor: alpha(theme.palette.error.main, 0.1),
@@ -194,10 +184,10 @@ const StudentLedgerDrawer: React.FC<StudentLedgerDrawerProps> = ({
                 />
             );
         }
-        if (outstanding < 0) {
+        if (outstandingPackages < 0) {
             return (
                 <Chip
-                    label={`Credit ${Math.abs(outstanding)} lesson${Math.abs(outstanding) !== 1 ? 's' : ''} (${formatMoney(Math.abs(amount), currency)})`}
+                    label={`Credit ${Math.abs(outstandingPackages)} pkg (${formatMoney(Math.abs(outstandingAmount), displayCurrency)})`}
                     size="small"
                     sx={{
                         bgcolor: alpha(theme.palette.success.main, 0.1),
@@ -254,8 +244,11 @@ const StudentLedgerDrawer: React.FC<StudentLedgerDrawerProps> = ({
                 </IconButton>
             </Box>
 
-            {/* Mini KPIs */}
+            {/* Mini KPIs - Period-specific + all-time balance */}
             <Box sx={{ p: 2 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+                    In selected period:
+                </Typography>
                 <Grid container spacing={2}>
                     <Grid size={{ xs:4 }}>
                         <Card
@@ -273,7 +266,7 @@ const StudentLedgerDrawer: React.FC<StudentLedgerDrawerProps> = ({
                                     <Skeleton width={40} height={24} />
                                 ) : (
                                     <Typography variant="subtitle1" fontWeight={700} color="info.main">
-                                        {lessonsCompleted}
+                                        {student?.periodLessonsCompleted ?? 0}
                                     </Typography>
                                 )}
                             </CardContent>
@@ -295,7 +288,7 @@ const StudentLedgerDrawer: React.FC<StudentLedgerDrawerProps> = ({
                                     <Skeleton width={40} height={24} />
                                 ) : (
                                     <Typography variant="subtitle1" fontWeight={700} color="success.main">
-                                        {lessonsPaid}
+                                        {student?.periodLessonsPaid ?? 0}
                                     </Typography>
                                 )}
                             </CardContent>
@@ -319,7 +312,7 @@ const StudentLedgerDrawer: React.FC<StudentLedgerDrawerProps> = ({
                         >
                             <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
                                 <Typography variant="caption" color="text.secondary">
-                                    Unpaid
+                                    Balance
                                 </Typography>
                                 {loading ? (
                                     <Skeleton width={60} height={24} />
@@ -336,7 +329,7 @@ const StudentLedgerDrawer: React.FC<StudentLedgerDrawerProps> = ({
                                                     : theme.palette.text.primary,
                                             }}
                                         >
-                                            {Math.abs(lessonsOutstanding)}
+                                            {hasDebt ? '-' : hasCredit ? '+' : ''}{Math.abs(student?.lessonsOutstanding ?? 0)}
                                         </Typography>
                                     </Box>
                                 )}

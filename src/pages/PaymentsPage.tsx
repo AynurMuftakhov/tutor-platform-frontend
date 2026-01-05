@@ -54,8 +54,8 @@ const PaymentsPage: React.FC = () => {
         data: studentsData,
         isLoading: studentsLoading,
     } = useQuery({
-        queryKey: ['billing-students', filters.from, filters.to, filters.currency, filters.sortBy],
-        queryFn: () => getBillingStudents(filters.from, filters.to, filters.currency, filters.sortBy),
+        queryKey: ['billing-students', filters.from, filters.to, filters.currency, filters.sortBy, filters.activeOnly],
+        queryFn: () => getBillingStudents(filters.from, filters.to, filters.currency, filters.sortBy, filters.activeOnly),
     });
 
     // Ledger query (only when drawer is open)
@@ -63,10 +63,11 @@ const PaymentsPage: React.FC = () => {
         data: ledgerData,
         isLoading: ledgerLoading,
     } = useQuery({
-        queryKey: ['billing-ledger', selectedStudent?.studentId, filters.from, filters.to, filters.currency],
+        queryKey: ['billing-ledger', selectedStudent?.studentId, filters.from, filters.to, selectedStudent?.currency ?? filters.currency],
         queryFn: () => {
             if (!selectedStudent) return null;
-            return getUnifiedStudentLedger(selectedStudent.studentId, filters.from, filters.to, filters.currency);
+            const ledgerCurrency = selectedStudent.currency ?? filters.currency;
+            return getUnifiedStudentLedger(selectedStudent.studentId, filters.from, filters.to, ledgerCurrency);
         },
         enabled: !!selectedStudent && drawerOpen,
     });
@@ -193,10 +194,10 @@ const PaymentsPage: React.FC = () => {
                 <StudentCardsGrid
                     students={students}
                     loading={studentsLoading}
-                    currency={filters.currency}
                     onCardClick={handleRowClick}
                     onQuickPay={handleQuickPay}
                     onEditPlan={handleOpenPlan}
+                    filterCurrency={filters.currency}
                 />
             </Box>
 
@@ -207,7 +208,7 @@ const PaymentsPage: React.FC = () => {
                 student={selectedStudent}
                 ledgerData={ledgerData ?? null}
                 loading={ledgerLoading}
-                currency={filters.currency}
+                currency={selectedStudent?.currency ?? filters.currency}
                 onAddPayment={handleAddPaymentFromDrawer}
                 onEditPayment={handleEditPayment}
                 onDeletePayment={handleDeletePayment}

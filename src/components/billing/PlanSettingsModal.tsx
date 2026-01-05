@@ -29,44 +29,48 @@ const PlanSettingsModal: React.FC<PlanSettingsModalProps> = ({
     onSaved,
 }) => {
     const [currency, setCurrency] = useState(defaultCurrency);
-    const [rate, setRate] = useState('');
     const [packageSize, setPackageSize] = useState('');
+    const [packagePrice, setPackagePrice] = useState('');
     const [notes, setNotes] = useState('');
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
         if (student && open) {
             setCurrency(student.currency || defaultCurrency);
-            setRate(student.ratePerLesson ? String(student.ratePerLesson) : '');
             setPackageSize(student.packageSize ? String(student.packageSize) : '');
+            setPackagePrice(student.pricePerPackage ? String(student.pricePerPackage) : '');
         }
     }, [student, open, defaultCurrency]);
 
     // Validation
     const validation = useMemo(() => {
-        const rateNum = rate ? Number(rate) : null;
+        const priceNum = packagePrice ? Number(packagePrice) : null;
         const packageNum = packageSize ? Number(packageSize) : null;
         
-        const rateError = rateNum !== null && rateNum < 0 
-            ? 'Rate cannot be negative' 
+        const priceError = priceNum !== null && priceNum < 0 
+            ? 'Price cannot be negative' 
             : null;
         const packageError = packageNum !== null && packageNum < 1 
             ? 'Package size must be at least 1' 
             : null;
         
-        const hasErrors = Boolean(rateError || packageError);
+        const hasErrors = Boolean(priceError || packageError);
         
-        return { rateError, packageError, hasErrors };
-    }, [rate, packageSize]);
+        return { priceError, packageError, hasErrors };
+    }, [packagePrice, packageSize]);
 
     const handleSave = async () => {
         if (!student || validation.hasErrors) return;
+        const pkgSizeNum = packageSize ? Number(packageSize) : 0;
+        const pkgPriceNum = packagePrice ? Number(packagePrice) : 0;
+        const perLessonRate = pkgSizeNum > 0 && pkgPriceNum > 0 ? pkgPriceNum / pkgSizeNum : undefined;
         setSaving(true);
         try {
             await updateBillingAccount(student.studentId, {
                 defaultCurrency: currency,
-                ratePerLesson: rate ? Number(rate) : undefined,
-                packageSize: packageSize ? Number(packageSize) : undefined,
+                pricePerPackage: pkgPriceNum || undefined,
+                ratePerLesson: perLessonRate,
+                packageSize: pkgSizeNum || undefined,
                 notes: notes || undefined,
             });
             onSaved();
@@ -98,16 +102,6 @@ const PlanSettingsModal: React.FC<PlanSettingsModalProps> = ({
                         ))}
                     </TextField>
                     <TextField
-                        label="Package rate"
-                        type="number"
-                        value={rate}
-                        onChange={(e) => setRate(e.target.value)}
-                        size="small"
-                        inputProps={{ min: 0, step: 0.01 }}
-                        error={Boolean(validation.rateError)}
-                        helperText={validation.rateError || 'Total price for the package'}
-                    />
-                    <TextField
                         label="Package size (lessons)"
                         type="number"
                         value={packageSize}
@@ -116,6 +110,16 @@ const PlanSettingsModal: React.FC<PlanSettingsModalProps> = ({
                         inputProps={{ min: 1, step: 1 }}
                         error={Boolean(validation.packageError)}
                         helperText={validation.packageError}
+                    />
+                    <TextField
+                        label="Package price (total)"
+                        type="number"
+                        value={packagePrice}
+                        onChange={(e) => setPackagePrice(e.target.value)}
+                        size="small"
+                        inputProps={{ min: 0, step: 0.01 }}
+                        error={Boolean(validation.priceError)}
+                        helperText={validation.priceError || 'Will be divided by package size to get per-lesson rate'}
                     />
                     <TextField
                         label="Notes"

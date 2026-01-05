@@ -72,6 +72,10 @@ const BillingStudentsTable: React.FC<BillingStudentsTableProps> = ({
 }) => {
     const theme = useTheme();
 
+    const resolvePackagePrice = (student: BillingStudent) => {
+        return student.pricePerPackage || 0;
+    };
+
     // Check if all students are settled
     const allSettled = students.length > 0 && students.every(s => s.lessonsOutstanding <= 0);
 
@@ -82,7 +86,7 @@ const BillingStudentsTable: React.FC<BillingStudentsTableProps> = ({
 
         return (
             <Stack direction="row" spacing={0.5} alignItems="center">
-                <Tooltip title="Conducted">
+                <Tooltip title="Lessons completed">
                     <Chip
                         label={lessonsCompleted}
                         size="small"
@@ -97,7 +101,7 @@ const BillingStudentsTable: React.FC<BillingStudentsTableProps> = ({
                     />
                 </Tooltip>
                 <Typography variant="caption" color="text.disabled">/</Typography>
-                <Tooltip title="Paid">
+                <Tooltip title="Lessons paid">
                     <Chip
                         label={lessonsPaid}
                         size="small"
@@ -112,7 +116,7 @@ const BillingStudentsTable: React.FC<BillingStudentsTableProps> = ({
                     />
                 </Tooltip>
                 <Typography variant="caption" color="text.disabled">/</Typography>
-                <Tooltip title={hasCredit ? 'Credit' : 'Outstanding'}>
+                <Tooltip title={hasCredit ? 'Lessons credit' : 'Lessons outstanding'}>
                     <Chip
                         label={Math.abs(lessonsOutstanding)}
                         size="small"
@@ -139,13 +143,20 @@ const BillingStudentsTable: React.FC<BillingStudentsTableProps> = ({
     };
 
     const getBalanceBadge = (student: BillingStudent) => {
-        const { lessonsOutstanding, outstandingAmount } = student;
+        const packageSize = student.packageSize || 1;
+        const packageRate = student.pricePerPackage || 0;
         const displayCurrency = student.currency || currency;
+        
+        // Calculate packages
+        const completedPackages = Math.floor(student.lessonsCompleted / packageSize);
+        const paidPackages = Math.floor(student.lessonsPaid / packageSize);
+        const outstandingPackages = completedPackages - paidPackages;
+        const owedAmount = outstandingPackages * packageRate;
 
-        if (lessonsOutstanding > 0) {
+        if (outstandingPackages > 0) {
             return (
                 <Chip
-                    label={`Owes ${formatMoney(outstandingAmount, displayCurrency)}`}
+                    label={`Owes ${outstandingPackages} pkg (${formatMoney(owedAmount, displayCurrency)})`}
                     size="small"
                     sx={{
                         bgcolor: alpha(theme.palette.error.main, 0.1),
@@ -159,10 +170,10 @@ const BillingStudentsTable: React.FC<BillingStudentsTableProps> = ({
                 />
             );
         }
-        if (lessonsOutstanding < 0) {
+        if (outstandingPackages < 0) {
             return (
                 <Chip
-                    label={`Credit ${formatMoney(Math.abs(outstandingAmount), displayCurrency)}`}
+                    label={`Credit ${Math.abs(outstandingPackages)} pkg (${formatMoney(Math.abs(owedAmount), displayCurrency)})`}
                     size="small"
                     sx={{
                         bgcolor: alpha(theme.palette.success.main, 0.1),
@@ -191,16 +202,23 @@ const BillingStudentsTable: React.FC<BillingStudentsTableProps> = ({
     };
 
     const getQuickPayButton = (student: BillingStudent) => {
-        const hasDebt = student.lessonsOutstanding > 0;
-        const quickPayLessons = hasDebt ? student.lessonsOutstanding : student.packageSize;
-        const perLessonRate = student.ratePerLesson || 0;
-        const quickPayAmount = quickPayLessons * perLessonRate;
+        const packageSize = student.packageSize || 1;
+        const packageRate = student.pricePerPackage || 0;
         const displayCurrency = student.currency || currency;
+        
+        // Calculate packages
+        const completedPackages = Math.floor(student.lessonsCompleted / packageSize);
+        const paidPackages = Math.floor(student.lessonsPaid / packageSize);
+        const outstandingPackages = completedPackages - paidPackages;
+        
+        const hasDebt = outstandingPackages > 0;
+        const quickPayPackages = hasDebt ? outstandingPackages : 1;
+        const quickPayAmount = quickPayPackages * packageRate;
 
         return (
             <Tooltip 
                 title={hasDebt 
-                    ? `Pay for ${quickPayLessons} outstanding lesson${quickPayLessons !== 1 ? 's' : ''}`
+                    ? `Pay for ${quickPayPackages} package${quickPayPackages !== 1 ? 's' : ''}`
                     : 'Record payment'
                 }
             >
@@ -222,7 +240,7 @@ const BillingStudentsTable: React.FC<BillingStudentsTableProps> = ({
                     }}
                 >
                     {hasDebt 
-                        ? `${quickPayLessons} • ${formatMoney(quickPayAmount, displayCurrency)}`
+                        ? `${quickPayPackages} pkg • ${formatMoney(quickPayAmount, displayCurrency)}`
                         : 'Pay'
                     }
                 </Button>
@@ -255,7 +273,7 @@ const BillingStudentsTable: React.FC<BillingStudentsTableProps> = ({
                             {params.row.studentName}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                            {params.row.packageSize} lessons • {formatMoney(params.row.ratePerLesson, currency)}
+                            {params.row.packageSize} lessons • {formatMoney(resolvePackagePrice(params.row), params.row.currency || currency)} package
                         </Typography>
                         <Button
                             size="small"

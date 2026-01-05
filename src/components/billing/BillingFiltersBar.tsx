@@ -23,10 +23,7 @@ import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import SortIcon from '@mui/icons-material/Sort';
 import SortByAlphaIcon from '@mui/icons-material/SortByAlpha';
 import dayjs, { Dayjs } from 'dayjs';
-import utc from 'dayjs/plugin/utc';
 import { DateRangePreset, BillingFilters, BillingSortOption, DEFAULT_BILLING_CURRENCY, CURRENCIES } from '../../types/billing';
-
-dayjs.extend(utc);
 
 interface BillingFiltersBarProps {
     filters: BillingFilters;
@@ -35,7 +32,7 @@ interface BillingFiltersBarProps {
 }
 
 function toYMD(d: Dayjs): string {
-    return d.utc().format('YYYY-MM-DD');
+    return d.format('YYYY-MM-DD');
 }
 
 function formatDateRange(from: string, to: string): string {
@@ -92,6 +89,7 @@ export function getDefaultFilters(): BillingFilters {
         currency: DEFAULT_BILLING_CURRENCY,
         preset: 'thisMonth',
         sortBy: 'outstanding_desc',
+        activeOnly: true,
     };
 }
 
@@ -136,6 +134,10 @@ const BillingFiltersBar: React.FC<BillingFiltersBarProps> = ({
         setCustomFrom(dayjs(filters.from));
         setCustomTo(dayjs(filters.to));
         setCustomOpen(true);
+    };
+
+    const toggleActiveOnly = () => {
+        onFiltersChange({ ...filters, activeOnly: !filters.activeOnly });
     };
 
     const applyCustom = () => {
@@ -233,6 +235,20 @@ const BillingFiltersBar: React.FC<BillingFiltersBarProps> = ({
                             </MenuItem>
                         ))}
                     </TextField>
+
+                    <ToggleButton
+                        value="activeOnly"
+                        selected={filters.activeOnly}
+                        onChange={toggleActiveOnly}
+                        size="small"
+                        aria-label="active only"
+                        sx={{
+                            textTransform: 'none',
+                            borderRadius: 2,
+                        }}
+                    >
+                        {filters.activeOnly ? 'Active only' : 'All students'}
+                    </ToggleButton>
 
                     {/* Sort toggle */}
                     <ToggleButtonGroup

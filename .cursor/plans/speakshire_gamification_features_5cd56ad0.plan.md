@@ -905,4 +905,3 @@ What makes Speakshire different from self-learning apps like Duolingo:
 1. **Human Connection First** - Technology enhances, not replaces, the teacher
 2. **Personalized Curriculum** - Teacher adapts based on student needs
 3. **Real Conversation Practice** - Live interaction, not just exercises
-4. **Accountability** - Regular lessons create commitment

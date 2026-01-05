@@ -41,8 +41,10 @@ const BillingKPICards: React.FC<BillingKPICardsProps> = ({ analytics, loading, c
     const theme = useTheme();
     const [chartExpanded, setChartExpanded] = React.useState(true);
 
-    const earned = analytics?.earnedThisMonth ?? 0;
-    const received = analytics?.receivedThisMonth ?? 0;
+    // Period-specific (based on date filter)
+    const earned = analytics?.earnedInPeriod ?? 0;
+    const received = analytics?.receivedInPeriod ?? 0;
+    // All-time (always cumulative)
     const outstanding = analytics?.outstandingTotal ?? 0;
     const hasOutstanding = outstanding > 0;
 
@@ -73,9 +75,9 @@ const BillingKPICards: React.FC<BillingKPICardsProps> = ({ analytics, loading, c
                                             color="text.secondary"
                                             sx={{ fontWeight: 500 }}
                                         >
-                                            Earned this month
+                                            Earned
                                         </Typography>
-                                        <Tooltip title="Total value of lessons conducted this month based on your set rates. This reflects how much you've earned through teaching." arrow>
+                                        <Tooltip title="Sum of lesson charges in the selected period. Reflects teaching value delivered." arrow>
                                             <InfoOutlinedIcon 
                                                 sx={{ 
                                                     fontSize: 14, 
@@ -143,9 +145,9 @@ const BillingKPICards: React.FC<BillingKPICardsProps> = ({ analytics, loading, c
                                             color="text.secondary"
                                             sx={{ fontWeight: 500 }}
                                         >
-                                            Received this month
+                                            Received
                                         </Typography>
-                                        <Tooltip title="Actual payments received from students this month. This is the cash that has been collected." arrow>
+                                        <Tooltip title="Actual payments collected from students in the selected period." arrow>
                                             <InfoOutlinedIcon 
                                                 sx={{ 
                                                     fontSize: 14, 
@@ -213,7 +215,7 @@ const BillingKPICards: React.FC<BillingKPICardsProps> = ({ analytics, loading, c
                         <CardContent sx={{ p: 2.5 }}>
                             <Box display="flex" alignItems="flex-start" justifyContent="space-between">
                                 <Box>
-                                    <Box display="flex" alignItems="center" gap={0.5} mb={1}>
+                                    <Box display="flex" alignItems="center" gap={0.5} mb={0.5}>
                                         <Typography
                                             variant="body2"
                                             color="text.secondary"
@@ -221,7 +223,7 @@ const BillingKPICards: React.FC<BillingKPICardsProps> = ({ analytics, loading, c
                                         >
                                             Owed total
                                         </Typography>
-                                        <Tooltip title="Cumulative unpaid balance across all students to date. This is the total amount students still owe you." arrow>
+                                        <Tooltip title="Total package-based debt across all students (all-time). A student owes a package only after completing more lessons than paid packages cover." arrow>
                                             <InfoOutlinedIcon 
                                                 sx={{ 
                                                     fontSize: 14, 
@@ -314,7 +316,7 @@ const BillingKPICards: React.FC<BillingKPICardsProps> = ({ analytics, loading, c
                         }}
                     >
                         <Typography variant="subtitle2" fontWeight={600}>
-                            12-Month Overview
+                            Overview
                         </Typography>
                         <IconButton
                             size="small"

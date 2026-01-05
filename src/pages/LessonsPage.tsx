@@ -44,6 +44,10 @@ import { EventInput, DateSelectArg, EventClickArg, EventContentArg } from '@full
 const DAY_COLUMN_MIN_WIDTH = 136;
 const TIME_COLUMN_WIDTH = 64;
 
+// Session storage keys for persisting calendar state
+const CALENDAR_DATE_KEY = 'lessons_calendar_date';
+const CALENDAR_VIEW_KEY = 'lessons_calendar_view';
+
 const LessonsPage = () => {
     const [lessons, setLessons] = useState<any[]>([]);
     const { user } = useAuth();
@@ -58,9 +62,14 @@ const LessonsPage = () => {
     const [busyEvents, setBusyEvents] = useState<EventInput[]>([]);
     const theme = useTheme();
     const isCompactLayout = useMediaQuery(theme.breakpoints.down('lg'));
-    const [calendarView, setCalendarView] = useState<'timeGridDay' | 'timeGridWeek' | 'dayGridMonth'>(() =>
-        isCompactLayout ? 'timeGridDay' : 'timeGridWeek'
-    );
+    const [calendarView, setCalendarView] = useState<'timeGridDay' | 'timeGridWeek' | 'dayGridMonth'>(() => {
+        // Restore view from session storage, or use default based on screen size
+        const savedView = sessionStorage.getItem(CALENDAR_VIEW_KEY) as 'timeGridDay' | 'timeGridWeek' | 'dayGridMonth' | null;
+        if (savedView && ['timeGridDay', 'timeGridWeek', 'dayGridMonth'].includes(savedView)) {
+            return savedView;
+        }
+        return isCompactLayout ? 'timeGridDay' : 'timeGridWeek';
+    });
     // Auto-scroll to the current time and center it in the view when calendarView changes
     useEffect(() => {
         const timeout = setTimeout(() => {
@@ -84,8 +93,28 @@ const LessonsPage = () => {
         setCalendarView('timeGridDay');
         api.changeView('timeGridDay');
     }, [isCompactLayout]);
-    const [selectedDate, setSelectedDate] = useState<dayjs.Dayjs>(dayjs());
+
+    const [selectedDate, setSelectedDate] = useState<dayjs.Dayjs>(() => {
+        // Restore date from session storage, or use current date
+        const savedDate = sessionStorage.getItem(CALENDAR_DATE_KEY);
+        if (savedDate) {
+            const parsed = dayjs(savedDate);
+            if (parsed.isValid()) {
+                return parsed;
+            }
+        }
+        return dayjs();
+    });
     const calendarRef = useRef<any>(null);
+
+    // Persist calendar date and view to session storage
+    useEffect(() => {
+        sessionStorage.setItem(CALENDAR_DATE_KEY, selectedDate.toISOString());
+    }, [selectedDate]);
+
+    useEffect(() => {
+        sessionStorage.setItem(CALENDAR_VIEW_KEY, calendarView);
+    }, [calendarView]);
     const calendarViewportRef = useRef<HTMLDivElement | null>(null);
     const [calendarViewportHeight, setCalendarViewportHeight] = useState<number | null>(null);
     const suppressNextAutoSelect = useRef(false);
@@ -662,6 +691,7 @@ const LessonsPage = () => {
                                         ref={calendarRef}
                                         plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
                                         initialView={calendarView}
+                                        initialDate={selectedDate.toDate()}
                                         headerToolbar={false} // We're creating our own header
                                         firstDay={1}
                                         events={lessonsToEvents()}
@@ -725,7 +755,7 @@ const LessonsPage = () => {
                                         eventTimeFormat={{
                                             hour: '2-digit',
                                             minute: '2-digit',
-                                            meridiem: false
+                                            hour12: false
                                         }}
                                         slotLabelFormat={{
                                             hour: '2-digit',
