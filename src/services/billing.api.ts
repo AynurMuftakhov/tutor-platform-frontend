@@ -14,6 +14,11 @@ import type {
     CreatePaymentPayload,
     UpdatePaymentPayload,
     LedgerKind,
+    PackageAdjustmentPayload,
+    PackageAdjustmentEntry,
+    PackageState,
+    PackageLessonSlot,
+    PackageAdjustmentType,
 } from '../types/billing';
 
 const BILLING_BASE = 'users-service/api/billing';
@@ -286,4 +291,69 @@ export const updatePayment = async (
  */
 export const deletePayment = async (id: string): Promise<void> => {
     await api.delete(`${BILLING_BASE}/payments/${id}`);
+};
+
+// ============================================
+// Package State Management API
+// ============================================
+
+const mapPackageAdjustmentEntry = (entry: any): PackageAdjustmentEntry => ({
+    id: entry.id,
+    studentId: entry.studentId,
+    type: entry.type as PackageAdjustmentType,
+    value: entry.value ?? null,
+    effectiveDate: entry.effectiveDate,
+    comment: entry.comment ?? null,
+    createdAt: entry.createdAt,
+    createdBy: entry.createdBy ?? undefined,
+});
+
+const mapPackageLessonSlot = (slot: any): PackageLessonSlot => ({
+    slotNumber: Number(slot.slotNumber),
+    lessonId: slot.lessonId ?? undefined,
+    lessonDate: slot.lessonDate ?? undefined,
+    lessonTitle: slot.lessonTitle ?? undefined,
+    status: slot.status ?? 'empty',
+});
+
+const mapPackageState = (data: any): PackageState => ({
+    currentPackageStart: Number(data.currentPackageStart ?? 1),
+    lessonsInPackage: Number(data.lessonsInPackage ?? 0),
+    packageSize: Number(data.packageSize ?? 1),
+    packageLessons: (data.packageLessons ?? []).map(mapPackageLessonSlot),
+    adjustments: (data.adjustments ?? []).map(mapPackageAdjustmentEntry),
+});
+
+/**
+ * Get the current package state for a student
+ * Includes lesson slots and adjustment history
+ */
+export const getPackageState = async (studentId: string): Promise<PackageState> => {
+    const response = await api.get(`${BILLING_BASE}/students/${studentId}/package-state`);
+    return mapPackageState(response.data);
+};
+
+/**
+ * Create a package adjustment
+ * Used to reset package, adjust lesson counts, or set package start point
+ */
+export const createPackageAdjustment = async (
+    studentId: string,
+    payload: PackageAdjustmentPayload
+): Promise<PackageAdjustmentEntry> => {
+    const response = await api.post(
+        `${BILLING_BASE}/students/${studentId}/package-adjustments`,
+        payload
+    );
+    return mapPackageAdjustmentEntry(response.data);
+};
+
+/**
+ * Delete a package adjustment
+ */
+export const deletePackageAdjustment = async (
+    studentId: string,
+    adjustmentId: string
+): Promise<void> => {
+    await api.delete(`${BILLING_BASE}/students/${studentId}/package-adjustments/${adjustmentId}`);
 };

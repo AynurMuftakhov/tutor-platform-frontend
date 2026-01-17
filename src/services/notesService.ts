@@ -12,18 +12,20 @@ const normalizeFormat = (format?: LessonNoteFormat | string | null): LessonNoteF
 };
 
 const normalizeNote = (
-    raw: LessonNote | (LessonNote & Record<string, unknown>) | null | undefined
+    raw: LessonNote | (LessonNote & Record<string, unknown>) | { note?: LessonNote | null } | null | undefined
 ): LessonNote | null => {
     if (!raw) {
         return null;
     }
 
+    const payload = (raw as { note?: LessonNote | null }).note ?? raw;
+
     return {
-        lessonId: String(raw.lessonId),
-        content: raw.content,
-        format: normalizeFormat((raw as LessonNote).format),
-        updatedAt: raw.updatedAt,
-        updatedBy: (raw as LessonNote).updatedBy,
+        lessonId: String((payload as LessonNote).lessonId),
+        content: (payload as LessonNote).content,
+        format: normalizeFormat((payload as LessonNote).format),
+        updatedAt: (payload as LessonNote).updatedAt,
+        updatedBy: (payload as LessonNote).updatedBy,
     };
 };
 
@@ -44,7 +46,7 @@ const toServiceError = (error: unknown): NotesServiceError => {
 
 export const getLessonNote = async (lessonId: string): Promise<LessonNote | null> => {
     try {
-        const response = await api.get<LessonNote>(`lessons-service/api/lessons/${encodeURIComponent(lessonId)}/notes`);
+        const response = await api.get<LessonNote | { note?: LessonNote | null }>(`lessons-service/api/lessons/${encodeURIComponent(lessonId)}/notes`);
         return normalizeNote(response.data);
     } catch (error) {
         if (isAxiosError(error) && error.response?.status === 404) {
@@ -59,7 +61,7 @@ export const putLessonNote = async (
     payload: LessonNotePayload
 ): Promise<LessonNote | null> => {
     try {
-        const response = await api.put<LessonNote | undefined>(
+        const response = await api.put<LessonNote | { note?: LessonNote | null } | undefined>(
             `lessons-service/api/lessons/${encodeURIComponent(lessonId)}/notes`,
             {
                 content: payload.content,
@@ -71,11 +73,7 @@ export const putLessonNote = async (
             return null;
         }
 
-        if (response.data) {
-            return normalizeNote(response.data);
-        }
-
-        return null;
+        return normalizeNote(response.data);
     } catch (error) {
         throw toServiceError(error);
     }

@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
     Avatar,
     Box,
     Button,
+    ButtonBase,
     Card,
     CardContent,
     Chip,
@@ -17,13 +18,17 @@ import {
 import PaymentIcon from '@mui/icons-material/Payment';
 import SchoolIcon from '@mui/icons-material/School';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import { useQuery } from '@tanstack/react-query';
 import { BillingStudent } from '../../types/billing';
+import { getPackageState } from '../../services/billing.api';
+import PackageLessonsPopover from './PackageLessonsPopover';
 
 interface StudentCardProps {
     student: BillingStudent;
     onQuickPay: (student: BillingStudent) => void;
     onClick: (student: BillingStudent) => void;
     onEditPlan: (student: BillingStudent) => void;
+    onPackageChanged?: () => void;
     filterCurrency?: string; // Top filter currency to compare with student's native currency
 }
 
@@ -41,11 +46,52 @@ const StudentCard: React.FC<StudentCardProps> = ({
     onQuickPay,
     onClick,
     onEditPlan,
+    onPackageChanged,
     filterCurrency,
 }) => {
     const theme = useTheme();
     
-    const packageSize = student.packageSize > 0 ? student.packageSize : 1;
+    // Popover state for package lessons
+    const [popoverAnchorEl, setPopoverAnchorEl] = useState<HTMLElement | null>(null);
+    const popoverOpen = Boolean(popoverAnchorEl);
+
+    // Fetch package state from API
+    const { data: packageState, refetch: refetchPackageState } = useQuery({
+        queryKey: ['package-state', student.studentId],
+        queryFn: () => getPackageState(student.studentId),
+        staleTime: 30000, // Cache for 30 seconds
+    });
+
+    const handleProgressClick = (event: React.MouseEvent<HTMLElement>) => {
+        event.stopPropagation();
+        event.preventDefault();
+        setPopoverAnchorEl(event.currentTarget);
+    };
+
+    const handleProgressMouseDown = (event: React.MouseEvent<HTMLElement>) => {
+        // Stop propagation on mouseDown to prevent card click
+        event.stopPropagation();
+    };
+
+    const handleProgressKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            event.stopPropagation();
+            setPopoverAnchorEl(event.currentTarget);
+        }
+    };
+
+    const handlePopoverClose = () => {
+        setPopoverAnchorEl(null);
+    };
+
+    const handlePackageChanged = () => {
+        // Refetch package state when changes are made
+        refetchPackageState();
+        onPackageChanged?.();
+    };
+    
+    const packageSize = packageState?.packageSize ?? (student.packageSize > 0 ? student.packageSize : 1);
     const packagePrice = student.pricePerPackage || 0;
     const displayCurrency = student.currency || 'USD';
     
@@ -58,8 +104,8 @@ const StudentCard: React.FC<StudentCardProps> = ({
     const hasDebt = student.packageDue;
     const hasCredit = student.hasCredit;
     
-    // Lessons within current package (all-time)
-    const lessonsInCurrentPackage = student.lessonsCompleted % packageSize;
+    // Lessons within current package - use packageState if available, fallback to calculated
+    const lessonsInCurrentPackage = packageState?.lessonsInPackage ?? (student.lessonsCompleted % packageSize);
     const currentPackageProgress = (lessonsInCurrentPackage / packageSize) * 100;
     
     // Quick pay = always full package price (default to 1 package if no debt)
@@ -150,32 +196,67 @@ const StudentCard: React.FC<StudentCardProps> = ({
                     </Box>
                 </Box>
 
-                {/* Progress: Current package progress (all-time) */}
-                <Box mb={2.5}>
-                    <Box display="flex" justifyContent="space-between" mb={0.5}>
-                        <Typography variant="caption" color="text.secondary">
-                            Current package <Typography component="span" variant="caption" color="text.disabled">(all-time)</Typography>
-                        </Typography>
-                        <Typography variant="caption" fontWeight={600}>
-                            {lessonsInCurrentPackage}/{packageSize} lessons
-                        </Typography>
-                    </Box>
-                    <LinearProgress
-                        variant="determinate"
-                        value={currentPackageProgress}
+                {/* Progress: Current package progress (all-time) - Clickable */}
+                <Tooltip title="Click to view lesson dates" arrow>
+                    <ButtonBase
+                        onClick={handleProgressClick}
+                        onMouseDown={handleProgressMouseDown}
+                        onKeyDown={handleProgressKeyDown}
+                        aria-label={`View package progress: ${lessonsInCurrentPackage} of ${packageSize} lessons completed`}
+                        aria-haspopup="true"
+                        aria-expanded={popoverOpen}
                         sx={{
-                            height: 6,
-                            borderRadius: 3,
-                            bgcolor: alpha(theme.palette.primary.main, 0.1),
-                            '& .MuiLinearProgress-bar': {
-                                borderRadius: 3,
-                                bgcolor: currentPackageProgress >= 100 
-                                    ? theme.palette.success.main 
-                                    : theme.palette.primary.main,
+                            display: 'block',
+                            width: '100%',
+                            textAlign: 'left',
+                            mb: 2.5,
+                            p: 1,
+                            mx: -1,
+                            borderRadius: 2,
+                            transition: 'all 0.15s ease',
+                            '&:hover': {
+                                bgcolor: alpha(theme.palette.primary.main, 0.04),
+                            },
+                            '&:focus-visible': {
+                                outline: `2px solid ${theme.palette.primary.main}`,
+                                outlineOffset: 2,
                             },
                         }}
-                    />
-                </Box>
+                    >
+                        <Box display="flex" justifyContent="space-between" mb={0.5}>
+                            <Typography variant="caption" color="text.secondary">
+                                Current package <Typography component="span" variant="caption" color="text.disabled">(all-time)</Typography>
+                            </Typography>
+                            <Typography variant="caption" fontWeight={600}>
+                                {lessonsInCurrentPackage}/{packageSize} lessons
+                            </Typography>
+                        </Box>
+                        <LinearProgress
+                            variant="determinate"
+                            value={currentPackageProgress}
+                            sx={{
+                                height: 6,
+                                borderRadius: 3,
+                                bgcolor: alpha(theme.palette.primary.main, 0.1),
+                                '& .MuiLinearProgress-bar': {
+                                    borderRadius: 3,
+                                    bgcolor: currentPackageProgress >= 100 
+                                        ? theme.palette.success.main 
+                                        : theme.palette.primary.main,
+                                },
+                            }}
+                        />
+                    </ButtonBase>
+                </Tooltip>
+
+                {/* Package Lessons Popover */}
+                <PackageLessonsPopover
+                    student={student}
+                    anchorEl={popoverAnchorEl}
+                    open={popoverOpen}
+                    onClose={handlePopoverClose}
+                    onPackageChanged={handlePackageChanged}
+                />
 
                 {/* Stats: Period-specific lessons - Completed / Paid / Balance */}
                 <Box 

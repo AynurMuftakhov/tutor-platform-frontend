@@ -197,3 +197,52 @@ export const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
     { value: 'transfer', label: 'Transfer' },
     { value: 'other', label: 'Other' },
 ];
+
+// ============================================
+// Package State Management Types
+// ============================================
+
+export type PackageAdjustmentType = 
+    | 'RESET_PACKAGE'      // Start a new package from scratch
+    | 'ADJUST_LESSONS'     // Add or remove lessons from current package count
+    | 'SET_PACKAGE_START'; // Set which lesson starts the current package
+
+export interface PackageAdjustmentPayload {
+    type: PackageAdjustmentType;
+    value?: number;           // For ADJUST_LESSONS: +/- count
+    lessonId?: string;        // For SET_PACKAGE_START: the lesson ID to start from
+    effectiveDate: string;    // ISO date string (YYYY-MM-DD)
+    comment?: string;         // Reason for adjustment
+}
+
+export interface PackageAdjustmentEntry {
+    id: string;
+    studentId: string;
+    type: PackageAdjustmentType;
+    value: number | null;
+    effectiveDate: string;
+    comment: string | null;
+    createdAt: string;
+    createdBy?: string;       // Tutor ID who made the adjustment
+}
+
+export interface PackageState {
+    // Current package info (after applying adjustments)
+    currentPackageStart: number;      // Lesson index where current package starts (1-based)
+    lessonsInPackage: number;         // Lessons completed in current package
+    packageSize: number;              // Total lessons per package
+    
+    // Lesson details for current package
+    packageLessons: PackageLessonSlot[];
+    
+    // Adjustment history
+    adjustments: PackageAdjustmentEntry[];
+}
+
+export interface PackageLessonSlot {
+    slotNumber: number;               // 1 to packageSize
+    lessonId?: string;                // If filled, the lesson ID
+    lessonDate?: string;              // If filled, the lesson date (YYYY-MM-DD)
+    lessonTitle?: string;             // If filled, lesson title/topic
+    status: 'completed' | 'scheduled' | 'empty';
+}

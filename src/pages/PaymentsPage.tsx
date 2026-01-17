@@ -197,6 +197,7 @@ const PaymentsPage: React.FC = () => {
                     onCardClick={handleRowClick}
                     onQuickPay={handleQuickPay}
                     onEditPlan={handleOpenPlan}
+                    onPackageChanged={refreshAll}
                     filterCurrency={filters.currency}
                 />
             </Box>

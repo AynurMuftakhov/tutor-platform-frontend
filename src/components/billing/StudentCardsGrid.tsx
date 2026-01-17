@@ -19,6 +19,7 @@ interface StudentCardsGridProps {
     onCardClick: (student: BillingStudent) => void;
     onQuickPay: (student: BillingStudent) => void;
     onEditPlan: (student: BillingStudent) => void;
+    onPackageChanged?: () => void;
     filterCurrency?: string; // Top filter currency to show badge when student currency differs
 }
 
@@ -28,6 +29,7 @@ const StudentCardsGrid: React.FC<StudentCardsGridProps> = ({
     onCardClick,
     onQuickPay,
     onEditPlan,
+    onPackageChanged,
     filterCurrency,
 }) => {
     const theme = useTheme();
@@ -135,6 +137,7 @@ const StudentCardsGrid: React.FC<StudentCardsGridProps> = ({
                             onClick={onCardClick}
                             onQuickPay={onQuickPay}
                             onEditPlan={onEditPlan}
+                            onPackageChanged={onPackageChanged}
                             filterCurrency={filterCurrency}
                         />
                     </Grid>

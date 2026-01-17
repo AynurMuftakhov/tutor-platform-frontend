@@ -7,3 +7,4 @@ export { default as StudentCard } from './StudentCard';
 export { default as StudentCardsGrid } from './StudentCardsGrid';
 export { default as LedgerEntryRow } from './LedgerEntryRow';
 export { default as AnalyticsMiniChart } from './AnalyticsMiniChart';
+export { default as PackageLessonsPopover } from './PackageLessonsPopover';
