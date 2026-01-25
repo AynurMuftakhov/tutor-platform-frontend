@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
     Avatar,
     Box,
@@ -15,30 +15,58 @@ import {
     Drawer,
     Grid,
     IconButton,
+    LinearProgress,
     Paper,
     Skeleton,
     Stack,
     Tab,
     Tabs,
     TextField,
+    Tooltip,
     Typography,
     useMediaQuery,
     useTheme,
     alpha,
+    Menu,
+    MenuItem,
+    ListItemIcon,
+    ListItemText,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import AddIcon from '@mui/icons-material/Add';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import HomeIcon from '@mui/icons-material/Home';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import dayjs, { Dayjs } from 'dayjs';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
     BillingStudent,
     UnifiedLedgerEntry,
     UnifiedLedgerResponse,
+    PackageState,
+    PackageLessonSlot,
+    PackageHistoryResponse,
+    HistoricalPackage,
 } from '../../types/billing';
 import LedgerEntryRow from './LedgerEntryRow';
+import {
+    getPackageState,
+    createPackageAdjustment,
+    getPackageHistory,
+} from '../../services/billing.api';
 
-type LedgerFilterTab = 'all' | 'lessons' | 'payments';
+type DrawerTab = 'package' | 'payments' | 'audit';
 
 interface StudentLedgerDrawerProps {
     open: boolean;
@@ -51,6 +79,8 @@ interface StudentLedgerDrawerProps {
     onEditPayment: (entry: UnifiedLedgerEntry) => Promise<void>;
     onDeletePayment: (entry: UnifiedLedgerEntry) => Promise<void>;
     onViewLesson?: (lessonId: string) => void;
+    onEditPlan?: (student: BillingStudent) => void;
+    onOpenSetup?: (student: BillingStudent) => void;
 }
 
 function formatMoney(amount: number, currency: string): string {
@@ -73,6 +103,8 @@ const StudentLedgerDrawer: React.FC<StudentLedgerDrawerProps> = ({
     onEditPayment,
     onDeletePayment,
     onViewLesson,
+    onEditPlan,
+    onOpenSetup,
 }) => {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -91,8 +123,147 @@ const StudentLedgerDrawer: React.FC<StudentLedgerDrawerProps> = ({
     const [deletingEntry, setDeletingEntry] = useState<UnifiedLedgerEntry | null>(null);
     const [deleteLoading, setDeleteLoading] = useState(false);
 
-    // Ledger filter tab state
-    const [ledgerFilterTab, setLedgerFilterTab] = useState<LedgerFilterTab>('all');
+    // Drawer tab state
+    const [activeTab, setActiveTab] = useState<DrawerTab>('package');
+
+    const queryClient = useQueryClient();
+
+    // Package Navigation State
+    const [viewingPackageNumber, setViewingPackageNumber] = useState<number | null>(null); // null = current
+
+    // Package History Data
+    const { data: packageHistory, isLoading: loadingPackageHistory } = useQuery({
+        queryKey: ['package-history', student?.studentId],
+        queryFn: () => getPackageHistory(student!.studentId),
+        enabled: !!student?.studentId && open,
+        staleTime: 0,
+    });
+
+    // Get current package data (either historical or current)
+    const currentViewPackage: HistoricalPackage | null = packageHistory
+        ? packageHistory.packages.find(pkg =>
+            viewingPackageNumber ? pkg.packageNumber === viewingPackageNumber : pkg.isCurrent
+          ) || null
+        : null;
+
+    const isViewingCurrent = !viewingPackageNumber || viewingPackageNumber === packageHistory?.currentPackageNumber;
+    const isViewingHistorical = !isViewingCurrent;
+
+    // Package State Data (fallback for compatibility, until backend has history endpoint)
+    const { data: packageState, isLoading: loadingPackageState, refetch: refetchPackageState } = useQuery({
+        queryKey: ['package-state', student?.studentId],
+        queryFn: () => getPackageState(student!.studentId),
+        enabled: !!student?.studentId && open && !packageHistory, // Only use as fallback
+        staleTime: 0,
+    });
+
+    // Slot Menu State
+    const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+    const [selectedSlot, setSelectedSlot] = useState<PackageLessonSlot | null>(null);
+
+    // Reset Package Confirmation State
+    const [confirmResetOpen, setConfirmResetOpen] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
+
+    // Package Navigation Handlers
+    const handlePreviousPackage = () => {
+        if (!packageHistory) return;
+        const currentNum = viewingPackageNumber || packageHistory.currentPackageNumber;
+        if (currentNum > 1) {
+            setViewingPackageNumber(currentNum - 1);
+        }
+    };
+
+    const handleNextPackage = () => {
+        if (!packageHistory) return;
+        const currentNum = viewingPackageNumber || packageHistory.currentPackageNumber;
+        if (currentNum < packageHistory.totalPackages) {
+            setViewingPackageNumber(currentNum + 1);
+        }
+    };
+
+    const handleReturnToCurrent = () => {
+        setViewingPackageNumber(null);
+    };
+
+    const handleSlotClick = (event: React.MouseEvent<HTMLElement>, slot: PackageLessonSlot) => {
+        setAnchorEl(event.currentTarget);
+        setSelectedSlot(slot);
+    };
+
+    const handleCloseMenu = () => {
+        setAnchorEl(null);
+        setSelectedSlot(null);
+    };
+
+    // Apply adjustment and refresh
+    const applyAdjustment = async (
+        type: 'RESET_PACKAGE' | 'ADJUST_LESSONS' | 'SET_PACKAGE_START',
+        options: { value?: number; lessonId?: string; comment?: string } = {}
+    ) => {
+        if (!student) return;
+        setSubmitting(true);
+
+        try {
+            await createPackageAdjustment(student.studentId, {
+                type,
+                value: options.value,
+                lessonId: options.lessonId,
+                effectiveDate: new Date().toISOString().split('T')[0],
+                comment: options.comment,
+            });
+
+            // Invalidate caches
+            queryClient.invalidateQueries({ queryKey: ['package-state', student.studentId] });
+            queryClient.invalidateQueries({ queryKey: ['package-history', student.studentId] });
+            queryClient.invalidateQueries({ queryKey: ['billing-students'] });
+
+            // Refetch to update the UI
+            await refetchPackageState();
+        } catch (err) {
+            console.error('Failed to apply adjustment:', err);
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    // Reset package
+    const handleResetClick = () => {
+        setConfirmResetOpen(true);
+    };
+
+    const handleResetConfirm = () => {
+        setConfirmResetOpen(false);
+        applyAdjustment('RESET_PACKAGE', { comment: 'Package reset' });
+    };
+
+    const handleResetCancel = () => {
+        setConfirmResetOpen(false);
+    };
+
+    // Remove lesson from package (adjust -1)
+    const handleRemoveLesson = (slot: PackageLessonSlot) => {
+        applyAdjustment('ADJUST_LESSONS', {
+            value: -1,
+            comment: `Removed lesson #${slot.slotNumber}${slot.lessonId ? ` (${slot.lessonId})` : ''}`,
+        });
+        setAnchorEl(null);
+        setSelectedSlot(null);
+    };
+
+    // Set package start from this lesson
+    const handleSetStartFromLesson = (slot: PackageLessonSlot) => {
+        if (!slot.lessonId) {
+            console.error('Cannot set package start: no lessonId for slot', slot);
+            return;
+        }
+        applyAdjustment('SET_PACKAGE_START', {
+            lessonId: slot.lessonId,
+            comment: `Package starts from lesson #${slot.slotNumber}`,
+        });
+        setAnchorEl(null);
+        setSelectedSlot(null);
+    };
 
     const handleOpenEdit = (entry: UnifiedLedgerEntry) => {
         setEditingEntry(entry);
@@ -148,14 +319,13 @@ const StudentLedgerDrawer: React.FC<StudentLedgerDrawerProps> = ({
     };
 
     const entries = ledgerData?.entries ?? [];
-
-    // Filter entries based on selected tab
-    const filteredEntries = useMemo(() => {
-        if (ledgerFilterTab === 'all') return entries;
-        if (ledgerFilterTab === 'lessons') return entries.filter(e => e.kind === 'LESSON');
-        if (ledgerFilterTab === 'payments') return entries.filter(e => e.kind === 'PAYMENT');
-        return entries;
-    }, [entries, ledgerFilterTab]);
+    const paymentEntries = useMemo(() => entries.filter(e => e.kind === 'PAYMENT'), [entries]);
+    const lessonEntries = useMemo(
+        () => entries.filter((e) => e.kind === 'LESSON').slice().sort(
+            (a, b) => new Date(a.entryDate).getTime() - new Date(b.entryDate).getTime()
+        ),
+        [entries]
+    );
 
     // Use ledger summary directly from backend (period-filtered)
     const summaryTotals = useMemo(() => ({
@@ -163,12 +333,39 @@ const StudentLedgerDrawer: React.FC<StudentLedgerDrawerProps> = ({
         totalPaid: ledgerData?.summary?.paidInPeriod ?? 0,
     }), [ledgerData?.summary]);
 
+    const packageSize = student?.packageSize || 1;
+    const packageLessonsCompleted = student?.currentPackageLessonsCompleted ?? ((student?.lessonsCompleted ?? 0) % packageSize);
+    const packageLessonsPaid = student?.currentPackageLessonsPaid ?? ((student?.lessonsPaid ?? 0) % packageSize);
+    const packageBalanceLessons = student?.currentPackageBalanceLessons ?? (packageLessonsCompleted - packageLessonsPaid);
+    const packageProgressLessons = student?.currentPackageProgressInLessons ?? packageLessonsCompleted;
+    const packageProgressPercent = packageSize > 0 ? Math.min((packageProgressLessons / packageSize) * 100, 100) : 0;
+    const packageStatus = student?.currentPackageStatus ?? (packageBalanceLessons > 0 ? 'Owed' : packageBalanceLessons < 0 ? 'Credit' : 'Settled');
+    const completedSlotsCount = Math.max(0, Math.min(packageLessonsCompleted, packageSize));
+    const packageSlots = useMemo(() => {
+        const recentLessons = lessonEntries.slice(-completedSlotsCount);
+        return Array.from({ length: packageSize }, (_, idx) => {
+            const lesson = recentLessons[idx];
+            const label = lesson?.entryDate ? dayjs(lesson.entryDate).format('MMM D') : 'Completed lesson';
+            return {
+                slotNumber: idx + 1,
+                completed: idx < completedSlotsCount,
+                label: idx < completedSlotsCount ? label : 'Open slot',
+            };
+        });
+    }, [lessonEntries, completedSlotsCount, packageSize]);
+    const packagesOwedFull = student?.packagesOwedFull ?? Math.max(student?.outstandingPackages ?? 0, 0);
+    const outstandingFullAmount = student?.outstandingAmountFullPackages ?? student?.outstandingAmount ?? 0;
+
     // Use backend-provided student values (all-time, not affected by date filter)
     const displayCurrency = student?.currency || currency;
     const outstandingPackages = student?.outstandingPackages ?? 0;
     const outstandingAmount = student?.outstandingAmount ?? 0;
     const hasDebt = student?.packageDue ?? false;
     const hasCredit = student?.hasCredit ?? false;
+
+    useEffect(() => {
+        if (open) setActiveTab('package');
+    }, [open, student?.studentId]);
 
     const getBalanceBadge = () => {
         if (outstandingPackages > 0) {
@@ -210,6 +407,46 @@ const StudentLedgerDrawer: React.FC<StudentLedgerDrawerProps> = ({
         );
     };
 
+    const getStateChip = () => {
+        if (!student) return getBalanceBadge();
+
+        let label = '';
+        let color: 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning' = 'default';
+
+        // Determine status based on student data
+        // Priority order: Credit > Owes > Ready to Settle > In Progress
+
+        if (student.hasCredit) {
+            // Student has prepaid lessons
+            label = 'Prepaid';
+            color = 'info';
+        } else if (student.packageDue || (student.owesPackageCount ?? 0) > 0) {
+            // Student owes money (use packageDue or owesPackageCount as source of truth)
+            label = 'Owes package';
+            color = 'error';
+        } else if (student.packagePhase === 'READY_TO_SETTLE' || student.packagesToSettle) {
+            // Package complete, ready for settlement (no debt)
+            label = 'Ready';
+            color = 'success';
+        } else if (student.packagePhase === 'IN_PROGRESS') {
+            // Still working on current package
+            label = 'In progress';
+            color = 'primary';
+        } else {
+            // Fallback to balance badge logic
+            return getBalanceBadge();
+        }
+
+        return (
+            <Chip
+                label={label}
+                size="small"
+                color={color}
+                sx={{ fontWeight: 600 }}
+            />
+        );
+    };
+
     const drawerContent = (
         <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             {/* Header */}
@@ -244,204 +481,499 @@ const StudentLedgerDrawer: React.FC<StudentLedgerDrawerProps> = ({
                 </IconButton>
             </Box>
 
-            {/* Mini KPIs - Period-specific + all-time balance */}
-            <Box sx={{ p: 2 }}>
-                <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
-                    In selected period:
-                </Typography>
-                <Grid container spacing={2}>
-                    <Grid size={{ xs:4 }}>
-                        <Card
+            {/* Tabs */}
+            <Tabs
+                value={activeTab}
+                onChange={(_, newValue) => setActiveTab(newValue as DrawerTab)}
+                variant="fullWidth"
+                sx={{
+                    borderBottom: `1px solid ${theme.palette.divider}`,
+                    '& .MuiTab-root': {
+                        textTransform: 'none',
+                        fontWeight: 600,
+                    },
+                }}
+            >
+                <Tab label="Package" value="package" />
+                <Tab label="Payments" value="payments" />
+                <Tab label="Audit trail" value="audit" />
+            </Tabs>
+
+            <Box sx={{ flex: 1, overflowY: 'auto', p: 2 }}>
+                {activeTab === 'package' && (
+                    <Stack spacing={2}>
+                        {/* Tracker Header */}
+                        <Paper
                             elevation={0}
                             sx={{
-                                bgcolor: alpha(theme.palette.info.main, 0.05),
-                                border: `1px solid ${alpha(theme.palette.info.main, 0.2)}`,
+                                p: 2,
+                                borderRadius: 3,
+                                border: `1px solid ${theme.palette.divider}`,
+                                bgcolor: alpha(theme.palette.primary.main, 0.02),
                             }}
                         >
-                            <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-                                <Typography variant="caption" color="text.secondary">
-                                    Completed
-                                </Typography>
-                                {loading ? (
-                                    <Skeleton width={40} height={24} />
-                                ) : (
-                                    <Typography variant="subtitle1" fontWeight={700} color="info.main">
-                                        {student?.periodLessonsCompleted ?? 0}
+                            <Box display="flex" alignItems="flex-start" justifyContent="space-between" mb={1.5}>
+                                <Box flex={1}>
+                                    {/* Package Navigation Header */}
+                                    <Box display="flex" alignItems="center" gap={1} mb={0.5}>
+                                        <Tooltip title="Previous package" arrow>
+                                            <span>
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={handlePreviousPackage}
+                                                    disabled={!packageHistory || (viewingPackageNumber || packageHistory.currentPackageNumber) <= 1}
+                                                    sx={{ p: 0.5 }}
+                                                >
+                                                    <ArrowBackIcon sx={{ fontSize: 18 }} />
+                                                </IconButton>
+                                            </span>
+                                        </Tooltip>
+
+                                        <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700 }}>
+                                            {packageHistory
+                                                ? `Package #${viewingPackageNumber || packageHistory.currentPackageNumber}`
+                                                : 'Current package'}
+                                            {isViewingCurrent && <Typography component="span" color="primary.main" sx={{ ml: 0.5 }}>(Current)</Typography>}
+                                            {currentViewPackage?.status === 'PAID' && <Chip label="PAID" size="small" color="success" sx={{ ml: 1, height: 18, fontSize: '0.65rem' }} />}
+                                            {currentViewPackage?.status === 'COMPLETED' && <Chip label="COMPLETE" size="small" color="info" sx={{ ml: 1, height: 18, fontSize: '0.65rem' }} />}
+                                        </Typography>
+
+                                        <Tooltip title="Next package" arrow>
+                                            <span>
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={handleNextPackage}
+                                                    disabled={!packageHistory || (viewingPackageNumber || packageHistory.currentPackageNumber) >= packageHistory.totalPackages}
+                                                    sx={{ p: 0.5 }}
+                                                >
+                                                    <ArrowForwardIcon sx={{ fontSize: 18 }} />
+                                                </IconButton>
+                                            </span>
+                                        </Tooltip>
+
+                                        {isViewingHistorical && (
+                                            <Tooltip title="Return to current package" arrow>
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={handleReturnToCurrent}
+                                                    color="primary"
+                                                    sx={{ p: 0.5, ml: 0.5 }}
+                                                >
+                                                    <HomeIcon sx={{ fontSize: 18 }} />
+                                                </IconButton>
+                                            </Tooltip>
+                                        )}
+                                    </Box>
+
+                                    <Typography variant="h5" fontWeight={900} sx={{ mt: 0.5 }}>
+                                        {currentViewPackage?.lessonsCompleted ?? packageState?.lessonsInPackage ?? packageLessonsCompleted}/
+                                        {currentViewPackage?.packageSize ?? packageState?.packageSize ?? packageSize}
+                                        <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1, fontWeight: 500 }}>
+                                            lessons
+                                        </Typography>
                                     </Typography>
-                                )}
-                            </CardContent>
-                        </Card>
-                    </Grid>
-                    <Grid size={{ xs:4 }}>
-                        <Card
+
+                                    {/* Show dates for historical packages */}
+                                    {currentViewPackage && (
+                                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                                            {currentViewPackage.startDate && `Started: ${dayjs(currentViewPackage.startDate).format('MMM D, YYYY')}`}
+                                            {currentViewPackage.endDate && ` • Completed: ${dayjs(currentViewPackage.endDate).format('MMM D, YYYY')}`}
+                                            {currentViewPackage.paidDate && ` • Paid: ${dayjs(currentViewPackage.paidDate).format('MMM D, YYYY')}`}
+                                        </Typography>
+                                    )}
+                                </Box>
+                                {getStateChip()}
+                            </Box>
+
+                            <LinearProgress
+                                variant="determinate"
+                                value={
+                                    currentViewPackage
+                                        ? (currentViewPackage.lessonsCompleted / currentViewPackage.packageSize) * 100
+                                        : packageState
+                                        ? (packageState.lessonsInPackage / packageState.packageSize) * 100
+                                        : packageProgressPercent
+                                }
+                                sx={{
+                                    height: 10,
+                                    borderRadius: 5,
+                                    bgcolor: alpha(theme.palette.primary.main, 0.1),
+                                    '& .MuiLinearProgress-bar': {
+                                        borderRadius: 5,
+                                        bgcolor: theme.palette.primary.main,
+                                    },
+                                    mb: 1.5,
+                                }}
+                            />
+
+                            <Box display="flex" justifyContent="space-between" alignItems="center">
+                                <Typography variant="caption" color="text.secondary" fontWeight={500}>
+                                    Plan: {currentViewPackage?.packageSize ?? packageState?.packageSize ?? packageSize} lessons • {formatMoney(student?.pricePerPackage ?? 0, displayCurrency)}
+                                </Typography>
+                                <Stack direction="row" spacing={0.5}>
+                                    {onOpenSetup && student && (
+                                        <Button size="small" onClick={() => onOpenSetup(student)} sx={{ textTransform: 'none', fontWeight: 600 }}>
+                                            Set state
+                                        </Button>
+                                    )}
+                                    {onEditPlan && student && (
+                                        <Button size="small" onClick={() => onEditPlan(student)} sx={{ textTransform: 'none', fontWeight: 600 }}>
+                                            Edit plan
+                                        </Button>
+                                    )}
+                                </Stack>
+                            </Box>
+                        </Paper>
+
+                        {/* Package Lessons List */}
+                        <Paper
                             elevation={0}
+                            data-testid="package-tracker-container"
                             sx={{
-                                bgcolor: alpha(theme.palette.success.main, 0.05),
-                                border: `1px solid ${alpha(theme.palette.success.main, 0.2)}`,
+                                p: 2,
+                                borderRadius: 3,
+                                border: `1px solid ${theme.palette.divider}`,
+                                bgcolor: isViewingHistorical ? alpha(theme.palette.grey[500], 0.02) : 'background.paper',
                             }}
                         >
-                            <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-                                <Typography variant="caption" color="text.secondary">
-                                    Paid
-                                </Typography>
-                                {loading ? (
-                                    <Skeleton width={40} height={24} />
-                                ) : (
-                                    <Typography variant="subtitle1" fontWeight={700} color="success.main">
-                                        {student?.periodLessonsPaid ?? 0}
+                            {isViewingHistorical && (
+                                <Box
+                                    sx={{
+                                        mb: 2,
+                                        p: 1,
+                                        borderRadius: 1,
+                                        bgcolor: alpha(theme.palette.info.main, 0.08),
+                                        border: `1px solid ${alpha(theme.palette.info.main, 0.2)}`,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 1,
+                                    }}
+                                >
+                                    <InfoOutlinedIcon sx={{ fontSize: 16, color: theme.palette.info.main }} />
+                                    <Typography variant="caption" color="text.secondary">
+                                        Viewing historical package. Editing is disabled.
                                     </Typography>
-                                )}
-                            </CardContent>
-                        </Card>
-                    </Grid>
-                    <Grid size={{ xs:4 }}>
-                        <Card
-                            elevation={0}
-                            sx={{
-                                bgcolor: hasDebt 
-                                    ? alpha(theme.palette.error.main, 0.05)
-                                    : hasCredit
-                                    ? alpha(theme.palette.success.main, 0.05)
-                                    : alpha(theme.palette.grey[500], 0.05),
-                                border: `1px solid ${hasDebt 
-                                    ? alpha(theme.palette.error.main, 0.2)
-                                    : hasCredit
-                                    ? alpha(theme.palette.success.main, 0.2)
-                                    : theme.palette.divider}`,
-                            }}
-                        >
-                            <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-                                <Typography variant="caption" color="text.secondary">
-                                    Balance
+                                </Box>
+                            )}
+                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                                <Typography variant="subtitle2" fontWeight={800}>
+                                    Package Lessons
                                 </Typography>
-                                {loading ? (
-                                    <Skeleton width={60} height={24} />
-                                ) : (
-                                    <Box display="flex" alignItems="center" gap={0.5}>
-                                        <Typography
-                                            variant="subtitle1"
-                                            fontWeight={700}
+                                <Tooltip title={isViewingHistorical ? "Cannot edit historical packages" : "Reset package to 0"} arrow>
+                                    <span>
+                                        <Button
+                                            size="small"
+                                            variant="outlined"
+                                            color="warning"
+                                            startIcon={<RestartAltIcon sx={{ fontSize: 14 }} />}
+                                            onClick={handleResetClick}
+                                            disabled={submitting || isViewingHistorical || !packageState || packageState.lessonsInPackage === 0}
                                             sx={{
-                                                color: hasDebt
-                                                    ? theme.palette.error.main
-                                                    : hasCredit
-                                                    ? theme.palette.success.main
-                                                    : theme.palette.text.primary,
+                                                textTransform: 'none',
+                                                fontSize: '0.7rem',
+                                                py: 0.25,
+                                                px: 1,
+                                                minWidth: 'auto',
+                                                borderColor: alpha(theme.palette.warning.main, 0.5),
+                                                '&:hover': {
+                                                    borderColor: theme.palette.warning.main,
+                                                    bgcolor: alpha(theme.palette.warning.main, 0.08),
+                                                },
                                             }}
                                         >
-                                            {hasDebt ? '-' : hasCredit ? '+' : ''}{Math.abs(student?.lessonsOutstanding ?? 0)}
-                                        </Typography>
-                                    </Box>
-                                )}
-                            </CardContent>
-                        </Card>
-                    </Grid>
-                </Grid>
+                                            Reset
+                                        </Button>
+                                    </span>
+                                </Tooltip>
+                            </Box>
 
-                {/* Balance badge */}
-                <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
-                    {!loading && getBalanceBadge()}
-                </Box>
+                            {loadingPackageState || loadingPackageHistory ? (
+                                <Box
+                                    sx={{
+                                        border: `1px solid ${theme.palette.divider}`,
+                                        borderRadius: 2,
+                                        overflow: 'hidden',
+                                    }}
+                                >
+                                    {[...Array(Math.min(packageSize, 6))].map((_, i) => (
+                                        <Box
+                                            key={i}
+                                            sx={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: 1,
+                                                py: 1,
+                                                px: 1.5,
+                                                borderBottom: i < packageSize - 1 ? `1px solid ${theme.palette.divider}` : 'none',
+                                            }}
+                                        >
+                                            <Skeleton variant="circular" width={24} height={24} />
+                                            <Skeleton variant="circular" width={18} height={18} />
+                                            <Skeleton variant="text" width={20} />
+                                            <Skeleton variant="text" width={80} sx={{ ml: 'auto' }} />
+                                        </Box>
+                                    ))}
+                                </Box>
+                            ) : (
+                                <Box
+                                    sx={{
+                                        border: `1px solid ${theme.palette.divider}`,
+                                        borderRadius: 2,
+                                        overflow: 'hidden',
+                                    }}
+                                >
+                                    {(currentViewPackage?.packageLessons ?? packageState?.packageLessons ?? []).map((slot, i) => {
+                                        const isCompleted = slot.status === 'completed';
+                                        const isScheduled = slot.status === 'scheduled';
+                                        const isEmpty = slot.status === 'empty';
+                                        const dateDisplay = slot.lessonDate ? dayjs(slot.lessonDate).format('YYYY-MM-DD') : null;
 
-                {/* Action button */}
-                <Button
-                    variant="contained"
-                    startIcon={<AddIcon />}
-                    onClick={onAddPayment}
-                    fullWidth
-                    sx={{ mt: 2, textTransform: 'none', borderRadius: 2 }}
-                >
-                    Record payment
-                </Button>
-            </Box>
+                                        return (
+                                            <Box
+                                                key={slot.slotNumber}
+                                                data-testid={`slot-${slot.slotNumber}`}
+                                                sx={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: 0.5,
+                                                    py: 0.5,
+                                                    px: 1,
+                                                    borderBottom: i < (packageState?.packageLessons.length || 0) - 1 ? `1px solid ${theme.palette.divider}` : 'none',
+                                                    bgcolor: isCompleted
+                                                        ? alpha(theme.palette.success.main, 0.04)
+                                                        : isScheduled
+                                                        ? alpha(theme.palette.info.main, 0.04)
+                                                        : 'transparent',
+                                                    '&:hover': {
+                                                        bgcolor: isCompleted
+                                                            ? alpha(theme.palette.success.main, 0.08)
+                                                            : isScheduled
+                                                            ? alpha(theme.palette.info.main, 0.08)
+                                                            : alpha(theme.palette.grey[500], 0.04),
+                                                    },
+                                                }}
+                                            >
+                                                {/* Actions Menu Icon */}
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={(e) => handleSlotClick(e, slot)}
+                                                    disabled={isEmpty || isViewingHistorical}
+                                                    sx={{
+                                                        p: 0.5,
+                                                        color: 'text.secondary',
+                                                        '&:hover': { bgcolor: alpha(theme.palette.grey[500], 0.1) },
+                                                        opacity: isEmpty || isViewingHistorical ? 0.3 : 1,
+                                                    }}
+                                                >
+                                                    <MoreVertIcon sx={{ fontSize: 16 }} />
+                                                </IconButton>
 
-            <Divider />
+                                                {/* Status icon */}
+                                                {isCompleted && <CheckCircleIcon sx={{ fontSize: 18, color: theme.palette.success.main }} />}
+                                                {isScheduled && <RadioButtonUncheckedIcon sx={{ fontSize: 18, color: theme.palette.info.main }} />}
+                                                {isEmpty && <RadioButtonUncheckedIcon sx={{ fontSize: 18, color: theme.palette.grey[400] }} />}
 
-            {/* Ledger filter tabs */}
-            <Box sx={{ px: 2, pt: 1 }}>
-                <Tabs
-                    value={ledgerFilterTab}
-                    onChange={(_, newValue) => setLedgerFilterTab(newValue as LedgerFilterTab)}
-                    variant="fullWidth"
-                    sx={{
-                        minHeight: 36,
-                        '& .MuiTab-root': {
-                            minHeight: 36,
-                            textTransform: 'none',
-                            fontSize: '0.8rem',
-                            fontWeight: 500,
-                        },
-                    }}
-                >
-                    <Tab label="All" value="all" />
-                    <Tab label="Lessons" value="lessons" />
-                    <Tab label="Payments" value="payments" />
-                </Tabs>
+                                                {/* Slot number */}
+                                                <Typography
+                                                    variant="body2"
+                                                    fontWeight={600}
+                                                    sx={{
+                                                        minWidth: 20,
+                                                        color: isEmpty ? 'text.disabled' : 'text.primary',
+                                                    }}
+                                                >
+                                                    {slot.slotNumber}
+                                                </Typography>
 
-                {/* Summary totals */}
-                {!loading && entries.length > 0 && (
-                    <Box 
-                        sx={{ 
-                            display: 'flex', 
-                            justifyContent: 'center', 
-                            gap: 3,
-                            mt: 1.5,
-                            mb: 1,
-                            py: 1,
-                            px: 2,
-                            bgcolor: alpha(theme.palette.grey[500], 0.05),
-                            borderRadius: 1,
-                        }}
-                    >
-                        <Typography variant="caption" color="text.secondary">
-                            <strong style={{ color: theme.palette.info.main }}>Charged:</strong>{' '}
-                            {formatMoney(summaryTotals.totalCharged, currency)}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                            <strong style={{ color: theme.palette.success.main }}>Paid:</strong>{' '}
-                            {formatMoney(summaryTotals.totalPaid, currency)}
-                        </Typography>
-                    </Box>
-                )}
-            </Box>
+                                                {/* Date or status text */}
+                                                {(isCompleted || isScheduled) && dateDisplay ? (
+                                                    <Typography
+                                                        variant="body2"
+                                                        sx={{
+                                                            ml: 'auto',
+                                                            color: 'text.primary',
+                                                            fontFamily: 'monospace',
+                                                            fontSize: '0.8rem',
+                                                        }}
+                                                    >
+                                                        {dateDisplay}
+                                                    </Typography>
+                                                ) : (
+                                                    <Typography
+                                                        variant="body2"
+                                                        sx={{
+                                                            ml: 'auto',
+                                                            color: 'text.disabled',
+                                                            fontSize: '0.8rem',
+                                                        }}
+                                                    >
+                                                        ———
+                                                    </Typography>
+                                                )}
 
-            {/* Ledger entries */}
-            <Box sx={{ flex: 1, overflowY: 'auto', p: 2, pt: 1 }}>
-                {loading ? (
-                    <Stack spacing={1}>
-                        {[...Array(5)].map((_, i) => (
-                            <Skeleton key={i} variant="rounded" height={100} />
-                        ))}
+                                                {/* Open lesson button (if has lesson) */}
+                                                {(isCompleted || isScheduled) && slot.lessonId && (
+                                                    <Tooltip title="Open lesson" arrow>
+                                                        <IconButton
+                                                            size="small"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                if (onViewLesson) onViewLesson(slot.lessonId!);
+                                                            }}
+                                                            sx={{
+                                                                p: 0.5,
+                                                                color: theme.palette.primary.main,
+                                                                '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.1) },
+                                                            }}
+                                                        >
+                                                            <OpenInNewIcon sx={{ fontSize: 14 }} />
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                )}
+                                            </Box>
+                                        );
+                                    })}
+                                </Box>
+                            )}
+                        </Paper>
+                        
+                        {/* Quick Actions / Summary */}
+                        <Paper
+                            elevation={0}
+                            sx={{
+                                p: 2,
+                                borderRadius: 3,
+                                border: `1px solid ${theme.palette.divider}`,
+                                bgcolor: alpha(theme.palette.grey[500], 0.03),
+                            }}
+                        >
+                            <Grid container spacing={2} alignItems="center">
+                                <Grid size={{ xs:12, sm:6 }}>
+                                    <Typography variant="body2" fontWeight={800}>
+                                        Total Debt: {formatMoney(outstandingFullAmount, displayCurrency)}
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                        Equivalent to {packagesOwedFull} full packages
+                                    </Typography>
+                                </Grid>
+                                <Grid size={{ xs:12, sm:6 }}>
+                                    <Button
+                                        variant="contained"
+                                        startIcon={<AddIcon />}
+                                        onClick={onAddPayment}
+                                        fullWidth
+                                        disableElevation
+                                        sx={{ textTransform: 'none', borderRadius: 2, fontWeight: 700 }}
+                                    >
+                                        Add payment
+                                    </Button>
+                                </Grid>
+                            </Grid>
+                        </Paper>
                     </Stack>
-                ) : filteredEntries.length === 0 ? (
-                    <Paper
-                        elevation={0}
-                        sx={{
-                            p: 4,
-                            textAlign: 'center',
-                            bgcolor: alpha(theme.palette.grey[500], 0.05),
-                            borderRadius: 2,
-                        }}
-                    >
-                        <Typography color="text.secondary">
-                            {entries.length === 0 
-                                ? 'No transactions yet' 
-                                : `No ${ledgerFilterTab === 'lessons' ? 'lessons' : 'payments'} in this period`
-                            }
-                        </Typography>
-                    </Paper>
-                ) : (
-                    <Stack spacing={0}>
-                        {filteredEntries.map((entry) => (
-                            <LedgerEntryRow
-                                key={entry.id}
-                                entry={entry}
-                                currency={currency}
-                                onEdit={entry.kind === 'PAYMENT' ? handleOpenEdit : undefined}
-                                onDelete={entry.kind === 'PAYMENT' ? handleOpenDelete : undefined}
-                                onViewLesson={onViewLesson}
-                            />
-                        ))}
+                )}
+
+                {activeTab === 'payments' && (
+                    <Stack spacing={2}>
+                        <Box display="flex" justifyContent="space-between" alignItems="center">
+                            <Typography variant="subtitle1" fontWeight={700}>Payments</Typography>
+                            <Button
+                                variant="contained"
+                                startIcon={<AddIcon />}
+                                onClick={onAddPayment}
+                                sx={{ textTransform: 'none', borderRadius: 2 }}
+                            >
+                                Record payment
+                            </Button>
+                        </Box>
+                        {loading ? (
+                            <Stack spacing={1}>
+                                {[...Array(4)].map((_, i) => (
+                                    <Skeleton key={i} variant="rounded" height={100} />
+                                ))}
+                            </Stack>
+                        ) : paymentEntries.length === 0 ? (
+                            <Paper
+                                elevation={0}
+                                sx={{
+                                    p: 4,
+                                    textAlign: 'center',
+                                    bgcolor: alpha(theme.palette.grey[500], 0.05),
+                                    borderRadius: 2,
+                                }}
+                            >
+                                <Typography color="text.secondary">No payments in this period</Typography>
+                            </Paper>
+                        ) : (
+                            <Stack spacing={0}>
+                                {paymentEntries.map((entry) => (
+                                    <LedgerEntryRow
+                                        key={entry.id}
+                                        entry={entry}
+                                        currency={currency}
+                                        onEdit={handleOpenEdit}
+                                        onDelete={handleOpenDelete}
+                                    />
+                                ))}
+                            </Stack>
+                        )}
+                    </Stack>
+                )}
+
+                {activeTab === 'audit' && (
+                    <Stack spacing={2}>
+                        <Box 
+                            sx={{ 
+                                display: 'flex', 
+                                justifyContent: 'center', 
+                                gap: 3,
+                                py: 1,
+                                px: 2,
+                                bgcolor: alpha(theme.palette.grey[500], 0.05),
+                                borderRadius: 1,
+                            }}
+                        >
+                            <Typography variant="caption" color="text.secondary">
+                                <strong style={{ color: theme.palette.info.main }}>Charged:</strong>{' '}
+                                {formatMoney(summaryTotals.totalCharged, currency)}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                                <strong style={{ color: theme.palette.success.main }}>Paid:</strong>{' '}
+                                {formatMoney(summaryTotals.totalPaid, currency)}
+                            </Typography>
+                        </Box>
+                        {loading ? (
+                            <Stack spacing={1}>
+                                {[...Array(5)].map((_, i) => (
+                                    <Skeleton key={i} variant="rounded" height={100} />
+                                ))}
+                            </Stack>
+                        ) : entries.length === 0 ? (
+                            <Paper
+                                elevation={0}
+                                sx={{
+                                    p: 4,
+                                    textAlign: 'center',
+                                    bgcolor: alpha(theme.palette.grey[500], 0.05),
+                                    borderRadius: 2,
+                                }}
+                            >
+                                <Typography color="text.secondary">No transactions yet</Typography>
+                            </Paper>
+                        ) : (
+                            <Stack spacing={0}>
+                                {entries.map((entry) => (
+                                    <LedgerEntryRow
+                                        key={entry.id}
+                                        entry={entry}
+                                        currency={currency}
+                                        onEdit={entry.kind === 'PAYMENT' ? handleOpenEdit : undefined}
+                                        onDelete={entry.kind === 'PAYMENT' ? handleOpenDelete : undefined}
+                                        onViewLesson={onViewLesson}
+                                    />
+                                ))}
+                            </Stack>
+                        )}
                     </Stack>
                 )}
             </Box>
@@ -528,6 +1060,114 @@ const StudentLedgerDrawer: React.FC<StudentLedgerDrawerProps> = ({
                     </Button>
                     <Button onClick={handleConfirmDelete} color="error" disabled={deleteLoading}>
                         {deleteLoading ? 'Deleting...' : 'Delete'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Slot Actions Menu */}
+            <Menu
+                anchorEl={anchorEl}
+                open={Boolean(anchorEl)}
+                onClose={handleCloseMenu}
+                PaperProps={{
+                    elevation: 3,
+                    sx: { borderRadius: 2, minWidth: 180 }
+                }}
+            >
+                {selectedSlot && selectedSlot.lessonId && (
+                    <MenuItem onClick={() => {
+                        if (selectedSlot.lessonId && onViewLesson) onViewLesson(selectedSlot.lessonId);
+                        handleCloseMenu();
+                    }}>
+                        <ListItemIcon><OpenInNewIcon fontSize="small" /></ListItemIcon>
+                        <ListItemText primary="Open lesson" />
+                    </MenuItem>
+                )}
+                {!isViewingHistorical && selectedSlot && selectedSlot.slotNumber > 1 && selectedSlot.lessonId && (
+                    <MenuItem
+                        onClick={() => handleSetStartFromLesson(selectedSlot)}
+                    >
+                        <ListItemIcon><PlayArrowIcon fontSize="small" color="primary" /></ListItemIcon>
+                        <ListItemText primary="Start package here" />
+                    </MenuItem>
+                )}
+                {!isViewingHistorical && selectedSlot && selectedSlot.lessonId && (
+                    <MenuItem onClick={() => handleRemoveLesson(selectedSlot)}>
+                        <ListItemIcon><DeleteOutlineIcon fontSize="small" color="error" /></ListItemIcon>
+                        <ListItemText primary="Remove from package" />
+                    </MenuItem>
+                )}
+            </Menu>
+
+            {/* Reset Package Confirmation Dialog */}
+            <Dialog
+                open={confirmResetOpen}
+                onClose={handleResetCancel}
+                maxWidth="xs"
+                fullWidth
+                PaperProps={{
+                    sx: {
+                        borderRadius: 3,
+                        maxWidth: 360,
+                        mx: 2,
+                    },
+                }}
+            >
+                <DialogTitle sx={{ pb: 1, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    <Box
+                        sx={{
+                            width: 40,
+                            height: 40,
+                            borderRadius: '50%',
+                            bgcolor: alpha(theme.palette.warning.main, 0.12),
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                        }}
+                    >
+                        <WarningAmberIcon sx={{ color: theme.palette.warning.main }} />
+                    </Box>
+                    <Typography variant="h6" fontWeight={600}>
+                        Reset Package?
+                    </Typography>
+                </DialogTitle>
+                <DialogContent>
+                    <Typography variant="body2" color="text.secondary">
+                        This will reset the package progress to <strong>0/{packageState?.packageSize || packageSize}</strong> lessons.
+                        The lesson history will be preserved, but a new package cycle will start.
+                    </Typography>
+                </DialogContent>
+                <DialogActions sx={{ px: 3, pb: 2.5, pt: 1, gap: 1 }}>
+                    <Button
+                        onClick={handleResetCancel}
+                        variant="outlined"
+                        sx={{
+                            flex: 1,
+                            textTransform: 'none',
+                            borderRadius: 2,
+                            borderColor: theme.palette.divider,
+                            color: 'text.secondary',
+                            '&:hover': {
+                                borderColor: theme.palette.grey[400],
+                                bgcolor: alpha(theme.palette.grey[500], 0.08),
+                            },
+                        }}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={handleResetConfirm}
+                        variant="contained"
+                        color="warning"
+                        disabled={submitting}
+                        sx={{
+                            flex: 1,
+                            textTransform: 'none',
+                            borderRadius: 2,
+                            fontWeight: 600,
+                        }}
+                    >
+                        {submitting ? 'Resetting...' : 'Reset Package'}
                     </Button>
                 </DialogActions>
             </Dialog>

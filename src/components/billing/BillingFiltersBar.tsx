@@ -10,7 +10,6 @@ import {
     Stack,
     TextField,
     ToggleButton,
-    ToggleButtonGroup,
     Tooltip,
     Typography,
     useTheme,
@@ -20,8 +19,6 @@ import {
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import AddIcon from '@mui/icons-material/Add';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
-import SortIcon from '@mui/icons-material/Sort';
-import SortByAlphaIcon from '@mui/icons-material/SortByAlpha';
 import dayjs, { Dayjs } from 'dayjs';
 import { DateRangePreset, BillingFilters, BillingSortOption, DEFAULT_BILLING_CURRENCY, CURRENCIES } from '../../types/billing';
 
@@ -88,7 +85,7 @@ export function getDefaultFilters(): BillingFilters {
         to,
         currency: DEFAULT_BILLING_CURRENCY,
         preset: 'thisMonth',
-        sortBy: 'outstanding_desc',
+        sortBy: 'priority',
         activeOnly: true,
     };
 }
@@ -121,13 +118,8 @@ const BillingFiltersBar: React.FC<BillingFiltersBarProps> = ({
         onFiltersChange({ ...filters, currency: e.target.value });
     };
 
-    const handleSortChange = (
-        _event: React.MouseEvent<HTMLElement>,
-        newSort: BillingSortOption | null,
-    ) => {
-        if (newSort !== null) {
-            onFiltersChange({ ...filters, sortBy: newSort });
-        }
+    const handleSortChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        onFiltersChange({ ...filters, sortBy: e.target.value as BillingSortOption });
     };
 
     const handleDateRangeClick = () => {
@@ -250,25 +242,20 @@ const BillingFiltersBar: React.FC<BillingFiltersBarProps> = ({
                         {filters.activeOnly ? 'Active only' : 'All students'}
                     </ToggleButton>
 
-                    {/* Sort toggle */}
-                    <ToggleButtonGroup
-                        value={filters.sortBy}
-                        exclusive
-                        onChange={handleSortChange}
+                    {/* Sort dropdown */}
+                    <TextField
+                        select
                         size="small"
-                        aria-label="sort students"
+                        label="Sort"
+                        value={filters.sortBy}
+                        onChange={handleSortChange}
+                        sx={{ minWidth: 150 }}
                     >
-                        <ToggleButton value="outstanding_desc" aria-label="debtors first">
-                            <Tooltip title="Debtors first" arrow>
-                                <SortIcon sx={{ fontSize: 20 }} />
-                            </Tooltip>
-                        </ToggleButton>
-                        <ToggleButton value="name_asc" aria-label="alphabetical">
-                            <Tooltip title="Alphabetical" arrow>
-                                <SortByAlphaIcon sx={{ fontSize: 20 }} />
-                            </Tooltip>
-                        </ToggleButton>
-                    </ToggleButtonGroup>
+                        <MenuItem value="priority">Needs action</MenuItem>
+                        <MenuItem value="name_asc">Name</MenuItem>
+                        <MenuItem value="most_progressed">Most progressed</MenuItem>
+                        <MenuItem value="last_payment">Last payment</MenuItem>
+                    </TextField>
                 </Stack>
 
                 {/* Right side: Action button */}

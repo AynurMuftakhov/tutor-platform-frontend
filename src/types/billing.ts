@@ -23,6 +23,7 @@ export interface BillingAnalytics {
     
     // All-time (always cumulative)
     outstandingTotal: number;     // Total outstanding across all students (all time)
+    packagesToSettleCount: number; // Students with packagePhase=READY_TO_SETTLE
     
     // Monthly breakdown for chart
     monthlyData: MonthlyDataPoint[];
@@ -52,6 +53,14 @@ export interface BillingStudent {
     outstandingPackages: number;  // floor(completed/pkgSize) - floor(paid/pkgSize) (all time)
     packageDue: boolean;          // true when outstandingPackages > 0
     hasCredit: boolean;           // true when outstandingPackages < 0 (prepayment)
+    // Package-first helpers
+    currentPackageLessonsCompleted?: number;
+    currentPackageLessonsPaid?: number;
+    currentPackageBalanceLessons?: number;
+    currentPackageProgressInLessons?: number;
+    currentPackageStatus?: string;
+    outstandingAmountFullPackages?: number;
+    packagesOwedFull?: number;
     
     // === PERIOD-SPECIFIC (filtered by date range, for analytics display) ===
     periodLessonsCompleted?: number;  // Lessons conducted in selected period
@@ -63,6 +72,14 @@ export interface BillingStudent {
     lastPaymentDate: string | null;
     currency: string;
     isActive?: boolean;           // Whether student is active
+
+    // Redesign fields
+    packagePhase?: 'IN_PROGRESS' | 'READY_TO_SETTLE';
+    shouldShowOwedInUI?: boolean;
+    packagesToSettle?: boolean;
+    creditLessons?: number;
+    owesPackageCount?: number;
+    settlementStatus?: string;
 }
 
 // Legacy ledger entry (backward compatibility)
@@ -136,7 +153,6 @@ export interface UpdatePaymentPayload {
     method?: PaymentMethod | null;
     comment?: string | null;
 }
-
 export interface BillingStudentsResponse {
     students: BillingStudent[];
     totalCount: number;
@@ -161,6 +177,13 @@ export interface UnifiedLedgerResponse {
         outstandingAmount: number;
         paidInPeriod: number;
         earnedInPeriod: number;
+        currentPackageLessonsCompleted?: number;
+        currentPackageLessonsPaid?: number;
+        currentPackageBalanceLessons?: number;
+        currentPackageProgressInLessons?: number;
+        currentPackageStatus?: string;
+        outstandingAmountFullPackages?: number;
+        packagesOwedFull?: number;
     };
 }
 
@@ -168,7 +191,7 @@ export interface UnifiedLedgerResponse {
 export type DateRangePreset = 'thisMonth' | 'lastMonth' | '3months' | '6months' | 'year' | 'custom';
 
 // Sorting options for students list
-export type BillingSortOption = 'outstanding_desc' | 'name_asc';
+export type BillingSortOption = 'priority' | 'name_asc' | 'most_progressed' | 'last_payment';
 
 export interface BillingFilters {
     from: string;
@@ -199,7 +222,50 @@ export const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
 ];
 
 // ============================================
-// Package State Management Types
+// Package Tracker Types (DEPRECATED - Use PackageState instead)
+// ============================================
+// These types are no longer used in the frontend.
+// Keeping for reference until backend cleanup is complete.
+
+/**
+ * @deprecated Use PackageState instead. This slot-based tracker system has been replaced
+ * by an adjustment-based system that automatically tracks lessons.
+ */
+export interface PackageTracker {
+    packageSize: number;
+    lessonsCompleted: number;
+    packagePhase: 'IN_PROGRESS' | 'READY_TO_SETTLE';
+    status: 'IN_PROGRESS' | 'READY' | 'OWES_PACKAGE' | 'PREPAID';
+    pricePerPackage: number;
+    currency: string;
+    slots: PackageSlotTracker[];
+    unassignedLessons: UnassignedLesson[];
+    shouldShowOwedInUI: boolean;
+}
+
+/**
+ * @deprecated Use PackageLessonSlot instead
+ */
+export interface PackageSlotTracker {
+    index: number; // 1-based
+    status: 'OPEN' | 'ASSIGNED' | 'CANCELED';
+    lessonId?: string;
+    lessonDate?: string;
+    lessonTitle?: string;
+}
+
+/**
+ * @deprecated No longer needed with adjustment-based system
+ */
+export interface UnassignedLesson {
+    id: string;
+    date: string;
+    title: string;
+    status: string;
+}
+
+// ============================================
+// Package State Management Types (legacy or internal)
 // ============================================
 
 export type PackageAdjustmentType = 
@@ -231,12 +297,37 @@ export interface PackageState {
     currentPackageStart: number;      // Lesson index where current package starts (1-based)
     lessonsInPackage: number;         // Lessons completed in current package
     packageSize: number;              // Total lessons per package
-    
+
     // Lesson details for current package
     packageLessons: PackageLessonSlot[];
-    
+
     // Adjustment history
     adjustments: PackageAdjustmentEntry[];
+}
+
+// ============================================
+// Package History Types
+// ============================================
+
+export interface PackageHistoryResponse {
+    packages: HistoricalPackage[];
+    currentPackageNumber: number;
+    totalPackages: number;
+}
+
+export interface HistoricalPackage {
+    packageNumber: number;           // Sequential package number (1, 2, 3...)
+    startLessonIndex: number;        // Global lesson index where package started (1-based)
+    endLessonIndex: number | null;   // Last lesson index, null if in progress
+    lessonsCompleted: number;        // How many lessons finished in this package
+    packageSize: number;             // Total slots in package
+    status: 'IN_PROGRESS' | 'COMPLETED' | 'PAID';
+    isCurrent: boolean;              // True for the active package
+    startDate: string;               // Date of first lesson (YYYY-MM-DD)
+    endDate?: string;                // Date of last lesson
+    paidDate?: string;               // Date when package was paid
+    amountPaid?: number;             // Amount paid for this package
+    packageLessons: PackageLessonSlot[];
 }
 
 export interface PackageLessonSlot {

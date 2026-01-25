@@ -11,6 +11,7 @@ import {
     FormControlLabel,
     InputAdornment,
     MenuItem,
+    Switch,
     Radio,
     RadioGroup,
     Stack,
@@ -24,7 +25,6 @@ import {
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
-import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import dayjs, { Dayjs } from 'dayjs';
 import { useAuth } from '../../context/AuthContext';
 import { fetchStudents } from '../../services/api';
@@ -32,8 +32,18 @@ import { createPayment } from '../../services/billing.api';
 import {
     CURRENCIES,
     BillingStudent,
+    PAYMENT_METHODS,
+    PaymentMethod,
 } from '../../types/billing';
 import { Student } from '../../pages/MyStudentsPage';
+
+type PaymentMode = 'packages' | 'lessons';
+
+export type PaymentPreset = {
+    mode: PaymentMode;
+    packagesCount?: number;
+    lessonsCount?: number;
+};
 
 interface AddPaymentModalProps {
     open: boolean;
@@ -41,6 +51,7 @@ interface AddPaymentModalProps {
     onSuccess: () => void;
     defaultCurrency: string;
     preselectedStudent?: BillingStudent | null;
+    preset?: PaymentPreset | null;
 }
 
 function formatMoney(amount: number, currency: string): string {
@@ -52,12 +63,18 @@ function formatMoney(amount: number, currency: string): string {
     }).format(amount);
 }
 
+function parseCount(value: string): number {
+    const parsed = parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
 const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
     open,
     onClose,
     onSuccess,
     defaultCurrency,
     preselectedStudent,
+    preset,
 }) => {
     const theme = useTheme();
     const { user } = useAuth();
@@ -65,12 +82,13 @@ const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
     // Form state
     const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
     const [currency, setCurrency] = useState(defaultCurrency);
-    const [paymentType, setPaymentType] = useState<'full' | 'partial'>('full');
+    const [paymentMode, setPaymentMode] = useState<PaymentMode>('packages');
     const [packagesCount, setPackagesCount] = useState('1');
-    const [lessonsCount, setLessonsCount] = useState('');
+    const [customLessonsCount, setCustomLessonsCount] = useState('1');
     const [amount, setAmount] = useState('');
-    const [amountManuallySet, setAmountManuallySet] = useState(false);
+    const [overrideAmount, setOverrideAmount] = useState(false);
     const [date, setDate] = useState<Dayjs | null>(dayjs());
+    const [method, setMethod] = useState<PaymentMethod | ''>('');
     const [comment, setComment] = useState('');
 
     // Autocomplete state
@@ -82,55 +100,51 @@ const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // Smart defaults based on preselected student (package-based)
-    const smartDefaults = useMemo(() => {
+    const pricingInfo = useMemo(() => {
         if (!preselectedStudent) {
-            return { 
-                packagesOutstanding: 0, 
-                packageSize: 1, 
-                packageRate: 0, 
-                hasOutstanding: false,
+            return {
+                packageSize: 1,
+                pricePerPackage: 0,
+                ratePerLesson: 0,
+                packagesOwedFull: 0,
+                currentPackageBalanceLessons: 0,
             };
         }
-        
+
         const packageSize = preselectedStudent.packageSize || 1;
-        const packageRate = preselectedStudent.pricePerPackage || 0;
-        
-        // Calculate outstanding packages
-        const completedPackages = Math.floor(preselectedStudent.lessonsCompleted / packageSize);
-        const paidPackages = Math.floor(preselectedStudent.lessonsPaid / packageSize);
-        const packagesOutstanding = completedPackages - paidPackages;
-        const hasOutstanding = packagesOutstanding > 0;
-        
+        const pricePerPackage = preselectedStudent.pricePerPackage || 0;
+        const ratePerLesson = preselectedStudent.ratePerLesson || (packageSize ? pricePerPackage / packageSize : 0);
+        const packagesOwedFull = preselectedStudent.packagesOwedFull ?? Math.max(preselectedStudent.outstandingPackages, 0);
+        const currentPackageBalanceLessons = preselectedStudent.currentPackageBalanceLessons ?? 0;
+
         return {
-            packagesOutstanding,
             packageSize,
-            packageRate,
-            hasOutstanding,
+            pricePerPackage,
+            ratePerLesson,
+            packagesOwedFull,
+            currentPackageBalanceLessons,
         };
     }, [preselectedStudent]);
 
-    // Calculate amount when payment changes (if not manually set)
-    useEffect(() => {
-        if (!amountManuallySet && preselectedStudent) {
-            const { packageRate, packageSize } = smartDefaults;
-            
-            if (paymentType === 'full') {
-                // Full package payment
-                const packages = parseFloat(packagesCount) || 1;
-                const calculatedAmount = packages * packageRate;
-                const calculatedLessons = packages * packageSize;
-                setAmount(String(calculatedAmount));
-                setLessonsCount(String(calculatedLessons));
-            } else {
-                // Partial payment - calculate based on lessons
-                const lessons = parseFloat(lessonsCount) || 0;
-                const perLessonRate = packageSize > 0 ? packageRate / packageSize : 0;
-                const calculatedAmount = lessons * perLessonRate;
-                setAmount(String(calculatedAmount));
-            }
+    const computedPackageLessons = useMemo(() => {
+        const pkgCount = parseCount(packagesCount);
+        return pkgCount * pricingInfo.packageSize;
+    }, [packagesCount, pricingInfo.packageSize]);
+
+    const computedCustomLessons = useMemo(() => parseCount(customLessonsCount), [customLessonsCount]);
+
+    const computedLessons = paymentMode === 'packages' ? computedPackageLessons : computedCustomLessons;
+
+    const autoAmount = useMemo(() => {
+        if (!preselectedStudent) {
+            return 0;
         }
-    }, [paymentType, packagesCount, lessonsCount, preselectedStudent, amountManuallySet, smartDefaults]);
+        if (paymentMode === 'packages') {
+            const pkgCount = parseCount(packagesCount);
+            return pkgCount * pricingInfo.pricePerPackage;
+        }
+        return computedCustomLessons * pricingInfo.ratePerLesson;
+    }, [computedCustomLessons, paymentMode, packagesCount, preselectedStudent, pricingInfo.pricePerPackage, pricingInfo.ratePerLesson]);
 
     // Reset form when opening
     useEffect(() => {
@@ -139,8 +153,8 @@ const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
             setDate(dayjs());
             setComment('');
             setError(null);
-            setAmountManuallySet(false);
-            setPaymentType('full');
+            setOverrideAmount(false);
+            setMethod('');
 
             if (preselectedStudent) {
                 setSelectedStudent({
@@ -150,21 +164,37 @@ const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
                     level: 'Intermediate',
                     homeworkDone: false,
                 } as Student);
-                // Set smart defaults - default to outstanding packages or 1
-                const defaultPackages = smartDefaults.hasOutstanding 
-                    ? smartDefaults.packagesOutstanding 
-                    : 1;
+
+                const defaultPackages = Math.max(
+                    preset?.packagesCount ?? (pricingInfo.packagesOwedFull > 0 ? pricingInfo.packagesOwedFull : 1),
+                    1
+                );
+                const fallbackLessons = pricingInfo.currentPackageBalanceLessons > 0
+                    ? Math.min(pricingInfo.currentPackageBalanceLessons, pricingInfo.packageSize)
+                    : pricingInfo.packageSize;
+                const defaultLessons = Math.max(preset?.lessonsCount ?? fallbackLessons, 1);
+                const initialMode = preset?.mode ?? 'packages';
+
+                setPaymentMode(initialMode);
                 setPackagesCount(String(defaultPackages));
-                setLessonsCount(String(defaultPackages * smartDefaults.packageSize));
-                setAmount(String(defaultPackages * smartDefaults.packageRate));
+                setCustomLessonsCount(String(defaultLessons));
+                setAmount('');
             } else {
                 setSelectedStudent(null);
                 setPackagesCount('1');
-                setLessonsCount('');
+                setCustomLessonsCount('1');
                 setAmount('');
+                setPaymentMode(preset?.mode ?? 'lessons');
             }
         }
-    }, [open, defaultCurrency, preselectedStudent, smartDefaults]);
+    }, [open, defaultCurrency, preselectedStudent, preset, pricingInfo]);
+
+    useEffect(() => {
+        if (!open) return;
+        if (!overrideAmount) {
+            setAmount(String(autoAmount));
+        }
+    }, [autoAmount, overrideAmount, open]);
 
     // Debounced student search
     const searchStudents = useCallback(async (search: string) => {
@@ -198,47 +228,28 @@ const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
 
     const handlePackagesChange = (value: string) => {
         setPackagesCount(value);
-        setAmountManuallySet(false);
     };
 
     const handleLessonsChange = (value: string) => {
-        setLessonsCount(value);
-        setAmountManuallySet(false);
+        setCustomLessonsCount(value);
     };
 
-    const handleAmountChange = (value: string) => {
-        setAmount(value);
-        setAmountManuallySet(true);
-    };
-
-    const handlePaymentTypeChange = (type: 'full' | 'partial') => {
-        setPaymentType(type);
-        setAmountManuallySet(false);
-        if (type === 'full') {
-            // Reset to 1 package
-            setPackagesCount('1');
-        } else {
-            // Reset lessons for partial
-            setLessonsCount('1');
-        }
+    const handlePaymentModeChange = (mode: PaymentMode) => {
+        setPaymentMode(mode);
+        setOverrideAmount(false);
     };
 
     const handleSubmit = async () => {
-        if (!selectedStudent || !amount || !date || !lessonsCount) {
+        const resolvedLessons = paymentMode === 'packages' ? computedPackageLessons : computedCustomLessons;
+        const resolvedAmount = overrideAmount ? parseFloat(amount) : autoAmount;
+
+        if (!selectedStudent || !date || resolvedLessons <= 0) {
             setError('Please fill in all required fields');
             return;
         }
 
-        const parsedAmount = parseFloat(amount);
-        const parsedLessons = parseFloat(lessonsCount);
-        
-        if (isNaN(parsedAmount) || parsedAmount <= 0) {
+        if (isNaN(resolvedAmount) || resolvedAmount <= 0) {
             setError('Please enter a valid amount');
-            return;
-        }
-
-        if (isNaN(parsedLessons) || parsedLessons <= 0) {
-            setError('Please enter a valid number of lessons');
             return;
         }
 
@@ -248,11 +259,12 @@ const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
         try {
             await createPayment({
                 studentId: selectedStudent.id,
-                lessonsCount: parsedLessons,
-                amount: parsedAmount,
+                lessonsCount: resolvedLessons,
+                amount: resolvedAmount,
                 currency,
                 entryDate: date.format('YYYY-MM-DD'),
                 comment: comment || null,
+                method: method || null,
             });
             onSuccess();
             onClose();
@@ -264,7 +276,11 @@ const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
         }
     };
 
-    const showSmartDefaultsInfo = preselectedStudent && smartDefaults.packageRate > 0;
+    const displayAmount = overrideAmount ? parseFloat(amount) || 0 : autoAmount;
+    const displayLessons = computedLessons || 0;
+    const packageSummary = preselectedStudent
+        ? `${pricingInfo.packageSize} lessons • ${formatMoney(pricingInfo.pricePerPackage, currency)} (${formatMoney(pricingInfo.ratePerLesson, currency)} per lesson)`
+        : null;
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
@@ -313,8 +329,7 @@ const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
                         )}
                     />
 
-                    {/* Smart defaults info */}
-                    {showSmartDefaultsInfo && (
+                    {preselectedStudent && (
                         <Box
                             sx={{
                                 p: 1.5,
@@ -330,51 +345,38 @@ const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
                                 </Typography>
                             </Box>
                             <Typography variant="caption" color="text.secondary">
-                                {smartDefaults.hasOutstanding 
-                                    ? `${smartDefaults.packagesOutstanding} package${smartDefaults.packagesOutstanding !== 1 ? 's' : ''} outstanding`
-                                    : 'No outstanding packages'
-                                }
+                                {pricingInfo.packagesOwedFull > 0
+                                    ? `${pricingInfo.packagesOwedFull} package${pricingInfo.packagesOwedFull !== 1 ? 's' : ''} outstanding`
+                                    : 'No full packages outstanding'}
                                 {' • '}
-                                Package: {smartDefaults.packageSize} lessons for {formatMoney(smartDefaults.packageRate, currency)}
+                                {packageSummary}
                             </Typography>
                         </Box>
                     )}
 
-                    {/* Payment type toggle */}
-                    {preselectedStudent && (
-                        <Box>
-                            <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
-                                Payment type
-                            </Typography>
-                            <RadioGroup
-                                row
-                                value={paymentType}
-                                onChange={(e) => handlePaymentTypeChange(e.target.value as 'full' | 'partial')}
-                            >
-                                <FormControlLabel
-                                    value="full"
-                                    control={<Radio size="small" />}
-                                    label={
-                                        <Typography variant="body2">
-                                            Full package ({formatMoney(smartDefaults.packageRate, currency)})
-                                        </Typography>
-                                    }
-                                />
-                                <FormControlLabel
-                                    value="partial"
-                                    control={<Radio size="small" />}
-                                    label={
-                                        <Typography variant="body2" color="text.secondary">
-                                            Partial (per lesson)
-                                        </Typography>
-                                    }
-                                />
-                            </RadioGroup>
-                        </Box>
-                    )}
+                    <Box>
+                        <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+                            Payment covers
+                        </Typography>
+                        <RadioGroup
+                            row
+                            value={paymentMode}
+                            onChange={(e) => handlePaymentModeChange(e.target.value as PaymentMode)}
+                        >
+                            <FormControlLabel
+                                value="packages"
+                                control={<Radio size="small" />}
+                                label={<Typography variant="body2">Full package(s)</Typography>}
+                            />
+                            <FormControlLabel
+                                value="lessons"
+                                control={<Radio size="small" />}
+                                label={<Typography variant="body2">Custom lessons</Typography>}
+                            />
+                        </RadioGroup>
+                    </Box>
 
-                    {/* Packages count (for full payment type) */}
-                    {paymentType === 'full' && preselectedStudent && (
+                    {paymentMode === 'packages' && (
                         <TextField
                             label="Number of packages"
                             type="number"
@@ -384,50 +386,89 @@ const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
                             size="small"
                             fullWidth
                             inputProps={{ min: 1, step: 1 }}
-                            helperText={`= ${parseFloat(packagesCount) * smartDefaults.packageSize || 0} lessons`}
+                            helperText={`= ${computedPackageLessons || 0} lessons`}
                         />
                     )}
 
-                    {/* Lessons count (for partial payment type or no preselected student) */}
-                    {(paymentType === 'partial' || !preselectedStudent) && (
-                        <>
-                            <TextField
-                                label="Number of lessons"
-                                type="number"
-                                value={lessonsCount}
-                                onChange={(e) => handleLessonsChange(e.target.value)}
-                                required
-                                size="small"
-                                fullWidth
-                                inputProps={{ min: 0.5, step: 0.5 }}
-                                InputProps={{
-                                    endAdornment: preselectedStudent && (
-                                        <InputAdornment position="end">
-                                            <Chip
-                                                label={`of ${preselectedStudent.packageSize}`}
-                                                size="small"
-                                                sx={{ 
-                                                    height: 20, 
-                                                    fontSize: '0.7rem',
-                                                    bgcolor: alpha(theme.palette.grey[500], 0.1),
-                                                }}
-                                            />
-                                        </InputAdornment>
-                                    ),
-                                }}
-                            />
-                        </>
+                    {paymentMode === 'lessons' && (
+                        <TextField
+                            label="Number of lessons"
+                            type="number"
+                            value={customLessonsCount}
+                            onChange={(e) => handleLessonsChange(e.target.value)}
+                            required
+                            size="small"
+                            fullWidth
+                            inputProps={{ min: 0.5, step: 0.5 }}
+                            InputProps={{
+                                endAdornment: preselectedStudent && (
+                                    <InputAdornment position="end">
+                                        <Chip
+                                            label={`of ${pricingInfo.packageSize}`}
+                                            size="small"
+                                            sx={{
+                                                height: 20,
+                                                fontSize: '0.7rem',
+                                                bgcolor: alpha(theme.palette.grey[500], 0.1),
+                                            }}
+                                        />
+                                    </InputAdornment>
+                                ),
+                            }}
+                        />
                     )}
 
-                    <Stack direction="row" spacing={2}>
-                        {/* Currency */}
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="flex-start">
+                        <TextField
+                            label="Amount"
+                            type="number"
+                            value={amount}
+                            onChange={(e) => setAmount(e.target.value)}
+                            required
+                            size="small"
+                            fullWidth
+                            inputProps={{ min: 0, step: 0.01, readOnly: !overrideAmount }}
+                            InputProps={{
+                                endAdornment: !overrideAmount && preselectedStudent && (
+                                    <Tooltip title="Auto-calculated from selection">
+                                        <InputAdornment position="end">
+                                            <Chip
+                                                label="Auto"
+                                                size="small"
+                                                color="info"
+                                                sx={{ height: 20, fontSize: '0.7rem' }}
+                                            />
+                                        </InputAdornment>
+                                    </Tooltip>
+                                ),
+                            }}
+                        />
+                        <FormControlLabel
+                            control={(
+                                <Switch
+                                    size="medium"
+                                    checked={overrideAmount}
+                                    onChange={(e) => {
+                                        setOverrideAmount(e.target.checked);
+                                        if (!e.target.checked) {
+                                            setAmount(String(autoAmount));
+                                        }
+                                    }}
+                                />
+                            )}
+                            label="Override amount"
+                            sx={{ mt: { xs: 0, sm: 1 } }}
+                        />
+                    </Stack>
+
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                         <TextField
                             select
                             label="Currency"
                             value={currency}
                             onChange={(e) => setCurrency(e.target.value)}
                             size="small"
-                            sx={{ minWidth: 100 }}
+                            sx={{ minWidth: 120 }}
                         >
                             {CURRENCIES.map((cur) => (
                                 <MenuItem key={cur} value={cur}>
@@ -436,34 +477,23 @@ const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
                             ))}
                         </TextField>
 
-                        {/* Amount */}
                         <TextField
-                            label="Amount"
-                            type="number"
-                            value={amount}
-                            onChange={(e) => handleAmountChange(e.target.value)}
-                            required
+                            select
+                            label="Payment method"
+                            value={method}
+                            onChange={(e) => setMethod(e.target.value as PaymentMethod)}
                             size="small"
                             fullWidth
-                            inputProps={{ min: 0, step: 0.01 }}
-                            InputProps={{
-                                endAdornment: amountManuallySet && preselectedStudent && (
-                                    <Tooltip title="Amount manually adjusted">
-                                        <InputAdornment position="end">
-                                            <Chip
-                                                label="Custom"
-                                                size="small"
-                                                color="warning"
-                                                sx={{ height: 20, fontSize: '0.7rem' }}
-                                            />
-                                        </InputAdornment>
-                                    </Tooltip>
-                                ),
-                            }}
-                        />
+                        >
+                            <MenuItem value="">Select method</MenuItem>
+                            {PAYMENT_METHODS.map((item) => (
+                                <MenuItem key={item.value} value={item.value}>
+                                    {item.label}
+                                </MenuItem>
+                            ))}
+                        </TextField>
                     </Stack>
 
-                    {/* Date */}
                     <DatePicker
                         label="Date"
                         value={date}
@@ -471,7 +501,6 @@ const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
                         slotProps={{ textField: { size: 'small', fullWidth: true, required: true } }}
                     />
 
-                    {/* Comment */}
                     <TextField
                         label="Comment (optional)"
                         value={comment}
@@ -480,8 +509,21 @@ const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
                         fullWidth
                         multiline
                         rows={2}
-                        placeholder={`Payment for ${lessonsCount || '...'} lesson${parseFloat(lessonsCount) !== 1 ? 's' : ''}`}
+                        placeholder={`Payment for ${displayLessons || '...'} lesson${displayLessons === 1 ? '' : 's'}`}
                     />
+
+                    <Box
+                        sx={{
+                            p: 1.5,
+                            borderRadius: 2,
+                            bgcolor: alpha(theme.palette.primary.main, 0.04),
+                            border: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`,
+                        }}
+                    >
+                        <Typography variant="body2" fontWeight={700}>
+                            Will record payment: {displayLessons || 0} lessons = {formatMoney(displayAmount || 0, currency)} ({currency})
+                        </Typography>
+                    </Box>
 
                     {error && (
                         <Typography color="error" variant="body2">
@@ -497,9 +539,9 @@ const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
                 <Button
                     onClick={handleSubmit}
                     variant="contained"
-                    disabled={submitting || !selectedStudent || !amount || !lessonsCount}
+                    disabled={submitting || !selectedStudent || displayLessons <= 0 || displayAmount <= 0}
                 >
-                    {submitting ? 'Recording...' : `Record ${formatMoney(parseFloat(amount) || 0, currency)}`}
+                    {submitting ? 'Recording...' : `Record ${formatMoney(displayAmount || 0, currency)}`}
                 </Button>
             </DialogActions>
         </Dialog>

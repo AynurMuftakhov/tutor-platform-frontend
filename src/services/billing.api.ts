@@ -15,10 +15,16 @@ import type {
     UpdatePaymentPayload,
     LedgerKind,
     PackageAdjustmentPayload,
+    PaymentMethod,
     PackageAdjustmentEntry,
     PackageState,
     PackageLessonSlot,
     PackageAdjustmentType,
+    PackageTracker,
+    PackageSlotTracker,
+    UnassignedLesson,
+    PackageHistoryResponse,
+    HistoricalPackage,
 } from '../types/billing';
 
 const BILLING_BASE = 'users-service/api/billing';
@@ -56,6 +62,9 @@ const mapBillingStudent = (student: any): BillingStudent => {
     const pricePerPackage = Number(student.pricePerPackage ?? 0);
     // ratePerLesson from backend, or fallback to calculated per-lesson rate
     const ratePerLesson = Number(student.ratePerLesson) || (packageSize > 0 ? pricePerPackage / packageSize : 0);
+    const fallbackLessonsInPackage = Number(student.lessonsCompleted ?? 0) % packageSize;
+    const fallbackPaidInPackage = Number(student.lessonsPaid ?? 0) % packageSize;
+    const fallbackBalanceInPackage = fallbackLessonsInPackage - fallbackPaidInPackage;
 
     return {
         studentId: student.studentId,
@@ -75,6 +84,13 @@ const mapBillingStudent = (student: any): BillingStudent => {
         outstandingPackages: Number(student.outstandingPackages ?? 0),
         packageDue: Boolean(student.packageDue),
         hasCredit: Boolean(student.hasCredit),
+        currentPackageLessonsCompleted: Number(student.currentPackageLessonsCompleted ?? fallbackLessonsInPackage),
+        currentPackageLessonsPaid: Number(student.currentPackageLessonsPaid ?? fallbackPaidInPackage),
+        currentPackageBalanceLessons: Number(student.currentPackageBalanceLessons ?? fallbackBalanceInPackage),
+        currentPackageProgressInLessons: Number(student.currentPackageProgressInLessons ?? fallbackLessonsInPackage),
+        currentPackageStatus: student.currentPackageStatus ?? undefined,
+        outstandingAmountFullPackages: Number(student.outstandingAmountFullPackages ?? student.outstandingAmount ?? 0),
+        packagesOwedFull: Number(student.packagesOwedFull ?? Math.max(Number(student.outstandingPackages ?? 0), 0)),
 
         // PERIOD-SPECIFIC
         periodLessonsCompleted: Number(student.periodLessonsCompleted ?? 0),
@@ -86,6 +102,12 @@ const mapBillingStudent = (student: any): BillingStudent => {
         lastPaymentDate: student.lastPaymentDate ?? null,
         currency: student.currency ?? 'USD',
         isActive: student.isActive ?? true,
+
+        // Redesign fields
+        packagePhase: student.packagePhase,
+        shouldShowOwedInUI: student.shouldShowOwedInUI,
+        packagesToSettle: student.packagesToSettle,
+        creditLessons: student.creditLessons,
     };
 };
 
@@ -137,6 +159,7 @@ const mapBillingAnalytics = (data: any): BillingAnalytics => ({
     receivedInPeriod: Number(data?.receivedInPeriod ?? data?.receivedThisMonth ?? 0),
     // All-time (always cumulative)
     outstandingTotal: Number(data?.outstandingTotal ?? 0),
+    packagesToSettleCount: Number(data?.packagesToSettleCount ?? 0),
     monthlyData: (data?.monthlyData ?? []).map(mapMonthlyDataPoint),
 });
 
@@ -261,6 +284,13 @@ export const getUnifiedStudentLedger = async (
             outstandingAmount: Number(summarySource.balanceToday ?? summarySource.outstandingAmount ?? 0),
             paidInPeriod: Number(summarySource.paidInPeriod ?? 0),
             earnedInPeriod: Number(summarySource.chargedInPeriod ?? summarySource.earnedInPeriod ?? 0),
+            currentPackageLessonsCompleted: Number(summarySource.currentPackageLessonsCompleted ?? 0),
+            currentPackageLessonsPaid: Number(summarySource.currentPackageLessonsPaid ?? 0),
+            currentPackageBalanceLessons: Number(summarySource.currentPackageBalanceLessons ?? 0),
+            currentPackageProgressInLessons: Number(summarySource.currentPackageProgressInLessons ?? 0),
+            currentPackageStatus: summarySource.currentPackageStatus ?? undefined,
+            outstandingAmountFullPackages: Number(summarySource.outstandingAmountFullPackages ?? summarySource.outstandingAmount ?? 0),
+            packagesOwedFull: Number(summarySource.packagesOwedFull ?? Math.max(Number(summarySource.lessonsOutstanding ?? 0), 0)),
         },
     };
 };
@@ -291,6 +321,32 @@ export const updatePayment = async (
  */
 export const deletePayment = async (id: string): Promise<void> => {
     await api.delete(`${BILLING_BASE}/payments/${id}`);
+};
+
+export interface PackageSetupPayload {
+    effectiveDate: string;
+    packageSize: number;
+    pricePerPackage: number;
+    currency: string;
+    completedLessons: number;
+    paidLessons: number;
+    comment?: string | null;
+    recordPayment?: boolean;
+    paymentLessons?: number;
+    paymentAmount?: number;
+    paymentMethod?: PaymentMethod | null;
+    paymentComment?: string | null;
+    paymentDate?: string;
+}
+
+/**
+ * Seed a student's current package state (migration helper)
+ */
+export const packageSetupStudent = async (
+    studentId: string,
+    payload: PackageSetupPayload
+): Promise<void> => {
+    await api.post(`${BILLING_BASE}/students/${studentId}/package-setup`, payload);
 };
 
 // ============================================
@@ -357,3 +413,120 @@ export const deletePackageAdjustment = async (
 ): Promise<void> => {
     await api.delete(`${BILLING_BASE}/students/${studentId}/package-adjustments/${adjustmentId}`);
 };
+
+// ============================================
+// Package History API
+// ============================================
+
+const mapHistoricalPackage = (pkg: any): HistoricalPackage => ({
+    packageNumber: Number(pkg.packageNumber),
+    startLessonIndex: Number(pkg.startLessonIndex),
+    endLessonIndex: pkg.endLessonIndex != null ? Number(pkg.endLessonIndex) : null,
+    lessonsCompleted: Number(pkg.lessonsCompleted ?? 0),
+    packageSize: Number(pkg.packageSize),
+    status: pkg.status ?? 'IN_PROGRESS',
+    isCurrent: !!pkg.isCurrent,
+    startDate: pkg.startDate,
+    endDate: pkg.endDate,
+    paidDate: pkg.paidDate,
+    amountPaid: pkg.amountPaid != null ? Number(pkg.amountPaid) : undefined,
+    packageLessons: (pkg.packageLessons ?? []).map(mapPackageLessonSlot),
+});
+
+const mapPackageHistoryResponse = (data: any): PackageHistoryResponse => ({
+    packages: (data.packages ?? []).map(mapHistoricalPackage),
+    currentPackageNumber: Number(data.currentPackageNumber ?? 1),
+    totalPackages: Number(data.totalPackages ?? 1),
+});
+
+/**
+ * Get package history for a student
+ * Returns all package cycles, both historical and current
+ *
+ * @param studentId - Student ID
+ * @param packageNumber - Optional: Return only specific package number
+ */
+export const getPackageHistory = async (
+    studentId: string,
+    packageNumber?: number
+): Promise<PackageHistoryResponse> => {
+    const params = packageNumber ? `?packageNumber=${packageNumber}` : '';
+    const response = await api.get(`${BILLING_BASE}/students/${studentId}/package-history${params}`);
+    return mapPackageHistoryResponse(response.data);
+};
+
+// ============================================
+// Package Tracker API (DEPRECATED - Use PackageState instead)
+// ============================================
+// The following APIs are no longer used in the frontend.
+// They have been replaced by the PackageState adjustment-based system.
+// Keeping these commented for reference until backend cleanup is complete.
+
+/*
+const mapPackageSlotTracker = (slot: any): PackageSlotTracker => ({
+    index: Number(slot.index ?? slot.slotIndex),
+    status: slot.status,
+    lessonId: slot.lessonId ?? slot.lesson?.id ?? undefined,
+    lessonDate: slot.lessonDate ?? slot.lesson?.date ?? undefined,
+    lessonTitle: slot.lessonTitle ?? slot.lesson?.title ?? undefined,
+});
+
+const mapUnassignedLesson = (lesson: any): UnassignedLesson => ({
+    id: lesson.id,
+    date: lesson.date,
+    title: lesson.title,
+    status: lesson.status ?? 'COMPLETED',
+});
+
+const mapPackageTracker = (data: any): PackageTracker => ({
+    packageSize: Number(data.packageSize ?? 1),
+    lessonsCompleted: Number(data.lessonsCompleted ?? data.progress?.completedLessons ?? 0),
+    packagePhase: data.packagePhase ?? data.progress?.packagePhase,
+    status:
+        data.status ??
+        (data.progress?.packagePhase === 'READY_TO_SETTLE'
+            ? 'READY'
+            : data.progress?.packagePhase === 'IN_PROGRESS'
+                ? 'IN_PROGRESS'
+                : 'IN_PROGRESS'),
+    pricePerPackage: Number(data.pricePerPackage ?? 0),
+    currency: data.currency,
+    slots: (data.slots ?? []).map(mapPackageSlotTracker),
+    unassignedLessons: (data.unassignedLessons ?? data.unassignedCompletedLessons ?? []).map(mapUnassignedLesson),
+    shouldShowOwedInUI: !!(data.shouldShowOwedInUI ?? data.progress?.shouldShowOwedInUI),
+});
+
+export const getPackageTracker = async (studentId: string): Promise<PackageTracker> => {
+    const response = await api.get(`${BILLING_BASE}/students/${studentId}/package-tracker`);
+    return mapPackageTracker(response.data);
+};
+
+export const assignLessonToSlot = async (
+    studentId: string,
+    slotIndex: number,
+    lessonId: string
+): Promise<void> => {
+    await api.post(`${BILLING_BASE}/students/${studentId}/slots/${slotIndex}/assign`, { lessonId });
+};
+
+export const unassignLessonFromSlot = async (
+    studentId: string,
+    slotIndex: number
+): Promise<void> => {
+    await api.post(`${BILLING_BASE}/students/${studentId}/slots/${slotIndex}/unassign`, {});
+};
+
+export const cancelSlot = async (
+    studentId: string,
+    slotIndex: number
+): Promise<void> => {
+    await api.post(`${BILLING_BASE}/students/${studentId}/slots/${slotIndex}/cancel`, {});
+};
+
+export const reopenSlot = async (
+    studentId: string,
+    slotIndex: number
+): Promise<void> => {
+    await api.post(`${BILLING_BASE}/students/${studentId}/slots/${slotIndex}/reopen`, {});
+};
+*/

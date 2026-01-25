@@ -39,20 +39,40 @@ function formatMoney(amount: number, currency: string): string {
 
 const BillingKPICards: React.FC<BillingKPICardsProps> = ({ analytics, loading, currency }) => {
     const theme = useTheme();
-    const [chartExpanded, setChartExpanded] = React.useState(true);
+    const [chartExpanded, setChartExpanded] = React.useState(false);
+    const insightsStorageKey = 'billing-insights-expanded';
+
+    React.useEffect(() => {
+        const stored = typeof window !== 'undefined' ? window.localStorage.getItem(insightsStorageKey) : null;
+        if (stored !== null) {
+            setChartExpanded(stored === 'true');
+        } else {
+            // Default to collapsed for new redesign
+            setChartExpanded(false);
+        }
+    }, []);
+
+    const toggleChartExpanded = () => {
+        setChartExpanded((prev) => {
+            const next = !prev;
+            if (typeof window !== 'undefined') {
+                window.localStorage.setItem(insightsStorageKey, String(next));
+            }
+            return next;
+        });
+    };
 
     // Period-specific (based on date filter)
     const earned = analytics?.earnedInPeriod ?? 0;
     const received = analytics?.receivedInPeriod ?? 0;
     // All-time (always cumulative)
-    const outstanding = analytics?.outstandingTotal ?? 0;
-    const hasOutstanding = outstanding > 0;
+    const packagesToSettleCount = analytics?.packagesToSettleCount ?? 0;
 
     return (
         <Box sx={{ mb: 3 }}>
-            <Grid container spacing={3}>
+            <Grid container spacing={2}>
                 {/* Earned Card */}
-                <Grid size={{ xs:12, sm:6, md:4, lg:3, xl:2 }}>
+                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
                     <Card
                         elevation={0}
                         sx={{
@@ -75,15 +95,16 @@ const BillingKPICards: React.FC<BillingKPICardsProps> = ({ analytics, loading, c
                                             color="text.secondary"
                                             sx={{ fontWeight: 500 }}
                                         >
-                                            Earned
+                                            Earned (this period)
                                         </Typography>
-                                        <Tooltip title="Sum of lesson charges in the selected period. Reflects teaching value delivered." arrow>
+                                        <Tooltip title="Value of lessons delivered in this period." arrow>
                                             <InfoOutlinedIcon 
                                                 sx={{ 
                                                     fontSize: 14, 
                                                     color: 'text.disabled',
                                                     cursor: 'help',
-                                                }} 
+                                                }}
+                                                data-testid="earned-tooltip-icon"
                                             />
                                         </Tooltip>
                                     </Box>
@@ -122,7 +143,7 @@ const BillingKPICards: React.FC<BillingKPICardsProps> = ({ analytics, loading, c
                 </Grid>
 
                 {/* Received Card */}
-                <Grid size={{ xs:12, sm:6, md:4, lg:3, xl:2 }}>
+                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
                     <Card
                         elevation={0}
                         sx={{
@@ -145,15 +166,16 @@ const BillingKPICards: React.FC<BillingKPICardsProps> = ({ analytics, loading, c
                                             color="text.secondary"
                                             sx={{ fontWeight: 500 }}
                                         >
-                                            Received
+                                            Received (this period)
                                         </Typography>
-                                        <Tooltip title="Actual payments collected from students in the selected period." arrow>
+                                        <Tooltip title="Total payments received in this period." arrow>
                                             <InfoOutlinedIcon 
                                                 sx={{ 
                                                     fontSize: 14, 
                                                     color: 'text.disabled',
                                                     cursor: 'help',
-                                                }} 
+                                                }}
+                                                data-testid="received-tooltip-icon"
                                             />
                                         </Tooltip>
                                     </Box>
@@ -191,103 +213,82 @@ const BillingKPICards: React.FC<BillingKPICardsProps> = ({ analytics, loading, c
                     </Card>
                 </Grid>
 
-                {/* Outstanding Card - More prominent */}
-                <Grid size={{ xs:12, sm:6, md:4, lg:3, xl:2 }}>
+                {/* Packages to Settle Card */}
+                <Grid size={{ xs: 12, sm: 12, md: 4 }}>
                     <Card
                         elevation={0}
                         sx={{
                             height: '100%',
-                            border: `2px solid ${hasOutstanding 
-                                ? alpha(theme.palette.error.main, 0.5) 
-                                : alpha(theme.palette.success.main, 0.5)}`,
+                            border: `1px solid ${packagesToSettleCount > 0 
+                                ? alpha(theme.palette.warning.main, 0.3) 
+                                : alpha(theme.palette.divider, 0.5)}`,
                             borderRadius: 3,
-                            bgcolor: hasOutstanding 
-                                ? alpha(theme.palette.error.main, 0.02)
-                                : alpha(theme.palette.success.main, 0.02),
+                            bgcolor: packagesToSettleCount > 0 
+                                ? alpha(theme.palette.warning.main, 0.02)
+                                : 'transparent',
                             transition: 'all 0.2s ease',
                             '&:hover': {
-                                boxShadow: hasOutstanding
-                                    ? `0 4px 16px ${alpha(theme.palette.error.main, 0.15)}`
-                                    : `0 4px 16px ${alpha(theme.palette.success.main, 0.15)}`,
+                                boxShadow: `0 4px 12px ${alpha(theme.palette.warning.main, 0.08)}`,
+                                borderColor: alpha(theme.palette.warning.main, 0.4),
                             },
                         }}
                     >
                         <CardContent sx={{ p: 2.5 }}>
                             <Box display="flex" alignItems="flex-start" justifyContent="space-between">
                                 <Box>
-                                    <Box display="flex" alignItems="center" gap={0.5} mb={0.5}>
+                                    <Box display="flex" alignItems="center" gap={0.5} mb={1}>
                                         <Typography
                                             variant="body2"
                                             color="text.secondary"
                                             sx={{ fontWeight: 500 }}
                                         >
-                                            Owed total
+                                            Packages to settle
                                         </Typography>
-                                        <Tooltip title="Total package-based debt across all students (all-time). A student owes a package only after completing more lessons than paid packages cover." arrow>
+                                        <Tooltip title="Count of students who finished their package and need a new one or payment." arrow>
                                             <InfoOutlinedIcon 
                                                 sx={{ 
                                                     fontSize: 14, 
                                                     color: 'text.disabled',
                                                     cursor: 'help',
-                                                }} 
+                                                }}
+                                                data-testid="settle-tooltip-icon"
                                             />
                                         </Tooltip>
                                     </Box>
                                     {loading ? (
-                                        <Skeleton width={120} height={40} />
+                                        <Skeleton width={60} height={36} />
                                     ) : (
                                         <Typography
-                                            variant="h4"
+                                            variant="h5"
                                             sx={{
-                                                fontWeight: 800,
-                                                color: hasOutstanding 
-                                                    ? theme.palette.error.main 
-                                                    : theme.palette.success.main,
-                                                letterSpacing: '-0.02em',
+                                                fontWeight: 700,
+                                                color: packagesToSettleCount > 0 
+                                                    ? theme.palette.warning.main 
+                                                    : theme.palette.text.secondary,
+                                                letterSpacing: '-0.01em',
                                             }}
                                         >
-                                            {formatMoney(outstanding, currency)}
-                                        </Typography>
-                                    )}
-                                    {!loading && (
-                                        <Typography 
-                                            variant="caption" 
-                                            sx={{ 
-                                                color: hasOutstanding 
-                                                    ? theme.palette.error.main 
-                                                    : theme.palette.success.main,
-                                                fontWeight: 500,
-                                                mt: 0.5,
-                                                display: 'block',
-                                            }}
-                                        >
-                                            {hasOutstanding 
-                                                ? 'Students have unpaid balances' 
-                                                : 'All students are settled!'}
+                                            {packagesToSettleCount}
                                         </Typography>
                                     )}
                                 </Box>
                                 <Box
                                     sx={{
-                                        width: 48,
-                                        height: 48,
+                                        width: 44,
+                                        height: 44,
                                         borderRadius: 2,
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
-                                        bgcolor: hasOutstanding
-                                            ? alpha(theme.palette.error.main, 0.1)
-                                            : alpha(theme.palette.success.main, 0.1),
-                                        color: hasOutstanding
-                                            ? theme.palette.error.main
-                                            : theme.palette.success.main,
+                                        bgcolor: packagesToSettleCount > 0 
+                                            ? alpha(theme.palette.warning.main, 0.1)
+                                            : alpha(theme.palette.divider, 0.1),
+                                        color: packagesToSettleCount > 0 
+                                            ? theme.palette.warning.main 
+                                            : theme.palette.text.disabled,
                                     }}
                                 >
-                                    {hasOutstanding ? (
-                                        <WarningAmberIcon sx={{ fontSize: 28 }} />
-                                    ) : (
-                                        <CheckCircleOutlineIcon sx={{ fontSize: 28 }} />
-                                    )}
+                                    <WarningAmberIcon sx={{ fontSize: 24 }} />
                                 </Box>
                             </Box>
                         </CardContent>
@@ -316,18 +317,19 @@ const BillingKPICards: React.FC<BillingKPICardsProps> = ({ analytics, loading, c
                         }}
                     >
                         <Typography variant="subtitle2" fontWeight={600}>
-                            Overview
+                            Insights
                         </Typography>
                         <IconButton
                             size="small"
-                            onClick={() => setChartExpanded(!chartExpanded)}
+                            onClick={toggleChartExpanded}
+                            aria-label={chartExpanded ? 'Collapse insights' : 'Expand insights'}
                             sx={{ color: 'text.secondary' }}
                         >
                             {chartExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
                         </IconButton>
                     </Box>
                     <Collapse in={chartExpanded}>
-                        <Box sx={{ p: 2 }}>
+                        <Box sx={{ p: 2 }} data-testid="billing-insights-content">
                             <AnalyticsMiniChart
                                 data={analytics?.monthlyData ?? []}
                                 currency={currency}

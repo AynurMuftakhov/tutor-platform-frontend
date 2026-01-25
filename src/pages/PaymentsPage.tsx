@@ -1,15 +1,16 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { Box } from '@mui/material';
+import { Alert, Box, Snackbar } from '@mui/material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import PaymentsIcon from '@mui/icons-material/Payments';
 import PageHeader from '../components/PageHeader';
 import BillingFiltersBar, { getDefaultFilters } from '../components/billing/BillingFiltersBar';
 import BillingKPICards from '../components/billing/BillingKPICards';
-import StudentCardsGrid from '../components/billing/StudentCardsGrid';
+import StudentPackagesTable from '../components/billing/StudentCardsGrid';
 import StudentLedgerDrawer from '../components/billing/StudentLedgerDrawer';
-import AddPaymentModal from '../components/billing/AddPaymentModal';
+import AddPaymentModal, { PaymentPreset } from '../components/billing/AddPaymentModal';
 import PlanSettingsModal from '../components/billing/PlanSettingsModal';
+import SetCurrentStateWizard from '../components/billing/SetCurrentStateWizard';
 import {
     getBillingStudents,
     getBillingAnalytics,
@@ -21,7 +22,56 @@ import type {
     BillingFilters,
     BillingStudent,
     UnifiedLedgerEntry,
+    BillingSortOption,
 } from '../types/billing';
+
+export const sortBillingStudents = (rawStudents: BillingStudent[], sortBy: BillingSortOption) => {
+    const sorted = [...rawStudents];
+
+    if (sortBy === 'name_asc') {
+        sorted.sort((a, b) => a.studentName.localeCompare(b.studentName));
+        return sorted;
+    }
+
+    if (sortBy === 'most_progressed') {
+        sorted.sort((a, b) => {
+            const getProgress = (s: BillingStudent) => {
+                const completed = s.currentPackageLessonsCompleted ?? 0;
+                const size = s.packageSize || 1;
+                return completed / size;
+            };
+            return getProgress(b) - getProgress(a);
+        });
+        return sorted;
+    }
+
+    if (sortBy === 'last_payment') {
+        sorted.sort((a, b) => {
+            const dateA = a.lastPaymentDate ? new Date(a.lastPaymentDate).getTime() : 0;
+            const dateB = b.lastPaymentDate ? new Date(b.lastPaymentDate).getTime() : 0;
+            return dateB - dateA;
+        });
+        return sorted;
+    }
+
+    // Default: priority view - "Needs action"
+    // Logic: packagesToSettle first, then owes, then progress
+    sorted.sort((a, b) => {
+        if (a.packagesToSettle && !b.packagesToSettle) return -1;
+        if (!a.packagesToSettle && b.packagesToSettle) return 1;
+
+        if (a.shouldShowOwedInUI && !b.shouldShowOwedInUI) return -1;
+        if (!a.shouldShowOwedInUI && b.shouldShowOwedInUI) return 1;
+
+        const progressA = (a.currentPackageLessonsCompleted ?? 0) / (a.packageSize || 1);
+        const progressB = (b.currentPackageLessonsCompleted ?? 0) / (b.packageSize || 1);
+        if (progressB !== progressA) return progressB - progressA;
+
+        return a.studentName.localeCompare(b.studentName);
+    });
+
+    return sorted;
+};
 
 const PaymentsPage: React.FC = () => {
     const queryClient = useQueryClient();
@@ -37,8 +87,12 @@ const PaymentsPage: React.FC = () => {
     // Modal state
     const [paymentModalOpen, setPaymentModalOpen] = useState(false);
     const [modalPreselectedStudent, setModalPreselectedStudent] = useState<BillingStudent | null>(null);
+    const [paymentPreset, setPaymentPreset] = useState<PaymentPreset | null>(null);
     const [planModalOpen, setPlanModalOpen] = useState(false);
     const [planStudent, setPlanStudent] = useState<BillingStudent | null>(null);
+    const [setupWizardOpen, setSetupWizardOpen] = useState(false);
+    const [setupStudent, setSetupStudent] = useState<BillingStudent | null>(null);
+    const [toastOpen, setToastOpen] = useState(false);
 
     // Analytics query
     const {
@@ -95,24 +149,41 @@ const PaymentsPage: React.FC = () => {
         setDrawerOpen(false);
     };
 
-    const handleQuickPay = (student: BillingStudent) => {
-        setModalPreselectedStudent(student);
-        setPaymentModalOpen(true);
-    };
-
     const handleAddPaymentFromHeader = () => {
         setModalPreselectedStudent(null);
+        setPaymentPreset(null);
         setPaymentModalOpen(true);
     };
 
     const handleAddPaymentFromDrawer = () => {
         setModalPreselectedStudent(selectedStudent);
+        setPaymentPreset(null);
         setPaymentModalOpen(true);
     };
 
     const handleOpenPlan = (student: BillingStudent) => {
         setPlanStudent(student);
         setPlanModalOpen(true);
+    };
+
+    const handleOpenSetupWizard = (student: BillingStudent) => {
+        setSetupStudent(student);
+        setSetupWizardOpen(true);
+    };
+
+    const handleCloseSetupWizard = () => {
+        setSetupWizardOpen(false);
+        setSetupStudent(null);
+    };
+
+    const handleSetupSuccess = (studentId: string) => {
+        refreshAll();
+        const refreshedStudent = studentsData?.students.find((s) => s.studentId === studentId) ?? setupStudent;
+        if (refreshedStudent) {
+            setSelectedStudent(refreshedStudent);
+            setDrawerOpen(true);
+        }
+        setToastOpen(true);
     };
 
     const handlePlanClose = () => {
@@ -123,6 +194,7 @@ const PaymentsPage: React.FC = () => {
     const handlePaymentModalClose = () => {
         setPaymentModalOpen(false);
         setModalPreselectedStudent(null);
+        setPaymentPreset(null);
     };
 
     const handlePaymentSuccess = () => {
@@ -151,20 +223,9 @@ const PaymentsPage: React.FC = () => {
     // Sort students on frontend (as fallback if backend doesn't support sorting)
     const students = useMemo(() => {
         const rawStudents = studentsData?.students ?? [];
-        
-        // Create a copy to avoid mutating the original data
-        const sorted = [...rawStudents];
-        
-        if (filters.sortBy === 'name_asc') {
-            // Sort alphabetically by name
-            sorted.sort((a, b) => a.studentName.localeCompare(b.studentName));
-        } else {
-            // Default: sort by outstanding (debtors first)
-            sorted.sort((a, b) => b.lessonsOutstanding - a.lessonsOutstanding);
-        }
-        
-        return sorted;
+        return sortBillingStudents(rawStudents, filters.sortBy);
     }, [studentsData?.students, filters.sortBy]);
+
 
     return (
         <Box sx={{ bgcolor: '#fafbfd', minHeight: '100%' }}>
@@ -183,22 +244,24 @@ const PaymentsPage: React.FC = () => {
                     onAddPayment={handleAddPaymentFromHeader}
                 />
 
-                {/* KPI Cards with Analytics Chart */}
+                {/* KPI Cards with Insights */}
                 <BillingKPICards
                     analytics={analyticsData ?? null}
                     loading={analyticsLoading}
                     currency={filters.currency}
                 />
 
-                {/* Students Cards View */}
-                <StudentCardsGrid
+                {/* Students packages table */}
+                <StudentPackagesTable
                     students={students}
                     loading={studentsLoading}
-                    onCardClick={handleRowClick}
-                    onQuickPay={handleQuickPay}
-                    onEditPlan={handleOpenPlan}
-                    onPackageChanged={refreshAll}
-                    filterCurrency={filters.currency}
+                    onRowClick={handleRowClick}
+                    onOpenSetup={handleOpenSetupWizard}
+                    onRecordPayment={(student, preset) => {
+                        setModalPreselectedStudent(student);
+                        setPaymentPreset(preset);
+                        setPaymentModalOpen(true);
+                    }}
                 />
             </Box>
 
@@ -214,6 +277,8 @@ const PaymentsPage: React.FC = () => {
                 onEditPayment={handleEditPayment}
                 onDeletePayment={handleDeletePayment}
                 onViewLesson={handleViewLesson}
+                onEditPlan={handleOpenPlan}
+                onOpenSetup={handleOpenSetupWizard}
             />
 
             {/* Add Payment Modal */}
@@ -223,6 +288,7 @@ const PaymentsPage: React.FC = () => {
                 onSuccess={handlePaymentSuccess}
                 defaultCurrency={filters.currency}
                 preselectedStudent={modalPreselectedStudent}
+                preset={paymentPreset}
             />
 
             {/* Plan settings modal */}
@@ -233,6 +299,26 @@ const PaymentsPage: React.FC = () => {
                 defaultCurrency={filters.currency}
                 onSaved={refreshAll}
             />
+
+            {/* Package setup wizard */}
+            <SetCurrentStateWizard
+                open={setupWizardOpen}
+                onClose={handleCloseSetupWizard}
+                student={setupStudent}
+                defaultCurrency={filters.currency}
+                onSuccess={handleSetupSuccess}
+            />
+
+            <Snackbar
+                open={toastOpen}
+                autoHideDuration={3000}
+                onClose={() => setToastOpen(false)}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+            >
+                <Alert severity="success" onClose={() => setToastOpen(false)} sx={{ width: '100%' }}>
+                    State updated
+                </Alert>
+            </Snackbar>
         </Box>
     );
 };
