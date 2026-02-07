@@ -150,7 +150,7 @@ const StudentLedgerDrawer: React.FC<StudentLedgerDrawerProps> = ({
     const isViewingHistorical = !isViewingCurrent;
 
     // Package State Data (fallback for compatibility, until backend has history endpoint)
-    const { data: packageState, isLoading: loadingPackageState, refetch: refetchPackageState } = useQuery({
+    const { data: packageState, isLoading: loadingPackageState } = useQuery({
         queryKey: ['package-state', student?.studentId],
         queryFn: () => getPackageState(student!.studentId),
         enabled: !!student?.studentId && open && !packageHistory, // Only use as fallback
@@ -218,8 +218,12 @@ const StudentLedgerDrawer: React.FC<StudentLedgerDrawerProps> = ({
             queryClient.invalidateQueries({ queryKey: ['package-history', student.studentId] });
             queryClient.invalidateQueries({ queryKey: ['billing-students'] });
 
-            // Refetch to update the UI
-            await refetchPackageState();
+            // Refetch to update the UI immediately
+            await Promise.all([
+                queryClient.refetchQueries({ queryKey: ['package-history', student.studentId] }),
+                queryClient.refetchQueries({ queryKey: ['package-state', student.studentId] }),
+                queryClient.refetchQueries({ queryKey: ['billing-students'] }),
+            ]);
         } catch (err) {
             console.error('Failed to apply adjustment:', err);
         } finally {
@@ -355,6 +359,9 @@ const StudentLedgerDrawer: React.FC<StudentLedgerDrawerProps> = ({
     }, [lessonEntries, completedSlotsCount, packageSize]);
     const packagesOwedFull = student?.packagesOwedFull ?? Math.max(student?.outstandingPackages ?? 0, 0);
     const outstandingFullAmount = student?.outstandingAmountFullPackages ?? student?.outstandingAmount ?? 0;
+    const displayedPackageSlots = currentViewPackage?.packageLessons ?? packageState?.packageLessons ?? [];
+    const displayPackageSize = currentViewPackage?.packageSize ?? packageState?.packageSize ?? packageSize;
+    const displayLessonsInPackage = currentViewPackage?.lessonsCompleted ?? packageState?.lessonsInPackage ?? packageLessonsCompleted;
 
     // Use backend-provided student values (all-time, not affected by date filter)
     const displayCurrency = student?.currency || currency;
@@ -566,8 +573,7 @@ const StudentLedgerDrawer: React.FC<StudentLedgerDrawerProps> = ({
                                     </Box>
 
                                     <Typography variant="h5" fontWeight={900} sx={{ mt: 0.5 }}>
-                                        {currentViewPackage?.lessonsCompleted ?? packageState?.lessonsInPackage ?? packageLessonsCompleted}/
-                                        {currentViewPackage?.packageSize ?? packageState?.packageSize ?? packageSize}
+                                        {displayLessonsInPackage}/{displayPackageSize}
                                         <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1, fontWeight: 500 }}>
                                             lessons
                                         </Typography>
@@ -587,13 +593,7 @@ const StudentLedgerDrawer: React.FC<StudentLedgerDrawerProps> = ({
 
                             <LinearProgress
                                 variant="determinate"
-                                value={
-                                    currentViewPackage
-                                        ? (currentViewPackage.lessonsCompleted / currentViewPackage.packageSize) * 100
-                                        : packageState
-                                        ? (packageState.lessonsInPackage / packageState.packageSize) * 100
-                                        : packageProgressPercent
-                                }
+                                value={displayPackageSize > 0 ? (displayLessonsInPackage / displayPackageSize) * 100 : packageProgressPercent}
                                 sx={{
                                     height: 10,
                                     borderRadius: 5,
@@ -667,7 +667,7 @@ const StudentLedgerDrawer: React.FC<StudentLedgerDrawerProps> = ({
                                             color="warning"
                                             startIcon={<RestartAltIcon sx={{ fontSize: 14 }} />}
                                             onClick={handleResetClick}
-                                            disabled={submitting || isViewingHistorical || !packageState || packageState.lessonsInPackage === 0}
+                                            disabled={submitting || isViewingHistorical || displayLessonsInPackage === 0}
                                             sx={{
                                                 textTransform: 'none',
                                                 fontSize: '0.7rem',
@@ -722,9 +722,10 @@ const StudentLedgerDrawer: React.FC<StudentLedgerDrawerProps> = ({
                                         overflow: 'hidden',
                                     }}
                                 >
-                                    {(currentViewPackage?.packageLessons ?? packageState?.packageLessons ?? []).map((slot, i) => {
+                                    {displayedPackageSlots.map((slot, i) => {
                                         const isCompleted = slot.status === 'completed';
                                         const isScheduled = slot.status === 'scheduled';
+                                        const isAdjusted = slot.status === 'adjusted';
                                         const isEmpty = slot.status === 'empty';
                                         const dateDisplay = slot.lessonDate ? dayjs(slot.lessonDate).format('YYYY-MM-DD') : null;
 
@@ -738,17 +739,21 @@ const StudentLedgerDrawer: React.FC<StudentLedgerDrawerProps> = ({
                                                     gap: 0.5,
                                                     py: 0.5,
                                                     px: 1,
-                                                    borderBottom: i < (packageState?.packageLessons.length || 0) - 1 ? `1px solid ${theme.palette.divider}` : 'none',
+                                                    borderBottom: i < displayedPackageSlots.length - 1 ? `1px solid ${theme.palette.divider}` : 'none',
                                                     bgcolor: isCompleted
                                                         ? alpha(theme.palette.success.main, 0.04)
                                                         : isScheduled
                                                         ? alpha(theme.palette.info.main, 0.04)
+                                                        : isAdjusted
+                                                        ? alpha(theme.palette.warning.main, 0.06)
                                                         : 'transparent',
                                                     '&:hover': {
                                                         bgcolor: isCompleted
                                                             ? alpha(theme.palette.success.main, 0.08)
                                                             : isScheduled
                                                             ? alpha(theme.palette.info.main, 0.08)
+                                                            : isAdjusted
+                                                            ? alpha(theme.palette.warning.main, 0.12)
                                                             : alpha(theme.palette.grey[500], 0.04),
                                                     },
                                                 }}
@@ -757,12 +762,12 @@ const StudentLedgerDrawer: React.FC<StudentLedgerDrawerProps> = ({
                                                 <IconButton
                                                     size="small"
                                                     onClick={(e) => handleSlotClick(e, slot)}
-                                                    disabled={isEmpty || isViewingHistorical}
+                                                    disabled={isEmpty || isAdjusted || isViewingHistorical}
                                                     sx={{
                                                         p: 0.5,
                                                         color: 'text.secondary',
                                                         '&:hover': { bgcolor: alpha(theme.palette.grey[500], 0.1) },
-                                                        opacity: isEmpty || isViewingHistorical ? 0.3 : 1,
+                                                        opacity: isEmpty || isAdjusted || isViewingHistorical ? 0.3 : 1,
                                                     }}
                                                 >
                                                     <MoreVertIcon sx={{ fontSize: 16 }} />
@@ -771,6 +776,7 @@ const StudentLedgerDrawer: React.FC<StudentLedgerDrawerProps> = ({
                                                 {/* Status icon */}
                                                 {isCompleted && <CheckCircleIcon sx={{ fontSize: 18, color: theme.palette.success.main }} />}
                                                 {isScheduled && <RadioButtonUncheckedIcon sx={{ fontSize: 18, color: theme.palette.info.main }} />}
+                                                {isAdjusted && <RadioButtonUncheckedIcon sx={{ fontSize: 18, color: theme.palette.warning.main }} />}
                                                 {isEmpty && <RadioButtonUncheckedIcon sx={{ fontSize: 18, color: theme.palette.grey[400] }} />}
 
                                                 {/* Slot number */}
@@ -798,6 +804,19 @@ const StudentLedgerDrawer: React.FC<StudentLedgerDrawerProps> = ({
                                                     >
                                                         {dateDisplay}
                                                     </Typography>
+                                                ) : isAdjusted ? (
+                                                    <Chip
+                                                        label="Adjusted"
+                                                        size="small"
+                                                        sx={{
+                                                            ml: 'auto',
+                                                            height: 20,
+                                                            fontSize: '0.65rem',
+                                                            bgcolor: alpha(theme.palette.warning.main, 0.12),
+                                                            color: theme.palette.warning.dark,
+                                                            fontWeight: 600,
+                                                        }}
+                                                    />
                                                 ) : (
                                                     <Typography
                                                         variant="body2"
@@ -1133,7 +1152,7 @@ const StudentLedgerDrawer: React.FC<StudentLedgerDrawerProps> = ({
                 </DialogTitle>
                 <DialogContent>
                     <Typography variant="body2" color="text.secondary">
-                        This will reset the package progress to <strong>0/{packageState?.packageSize || packageSize}</strong> lessons.
+                        This will reset the package progress to <strong>0/{displayPackageSize}</strong> lessons.
                         The lesson history will be preserved, but a new package cycle will start.
                     </Typography>
                 </DialogContent>

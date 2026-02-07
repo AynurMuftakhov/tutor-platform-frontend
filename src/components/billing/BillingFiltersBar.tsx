@@ -86,7 +86,7 @@ export function getDefaultFilters(): BillingFilters {
         currency: DEFAULT_BILLING_CURRENCY,
         preset: 'thisMonth',
         sortBy: 'priority',
-        activeOnly: true,
+        activeOnly: false,
     };
 }
 

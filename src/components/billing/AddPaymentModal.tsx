@@ -99,6 +99,7 @@ const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
     // Submit state
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const hasAutoPricing = !!preselectedStudent;
 
     const pricingInfo = useMemo(() => {
         if (!preselectedStudent) {
@@ -157,6 +158,7 @@ const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
             setMethod('');
 
             if (preselectedStudent) {
+                setOverrideAmount(false);
                 setSelectedStudent({
                     id: preselectedStudent.studentId,
                     name: preselectedStudent.studentName,
@@ -180,21 +182,22 @@ const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
                 setCustomLessonsCount(String(defaultLessons));
                 setAmount('');
             } else {
+                setOverrideAmount(true);
                 setSelectedStudent(null);
                 setPackagesCount('1');
                 setCustomLessonsCount('1');
                 setAmount('');
-                setPaymentMode(preset?.mode ?? 'lessons');
+                setPaymentMode('lessons');
             }
         }
     }, [open, defaultCurrency, preselectedStudent, preset, pricingInfo]);
 
     useEffect(() => {
-        if (!open) return;
+        if (!open || !hasAutoPricing) return;
         if (!overrideAmount) {
             setAmount(String(autoAmount));
         }
-    }, [autoAmount, overrideAmount, open]);
+    }, [autoAmount, hasAutoPricing, overrideAmount, open]);
 
     // Debounced student search
     const searchStudents = useCallback(async (search: string) => {
@@ -235,13 +238,19 @@ const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
     };
 
     const handlePaymentModeChange = (mode: PaymentMode) => {
+        if (!hasAutoPricing && mode === 'packages') {
+            return;
+        }
         setPaymentMode(mode);
-        setOverrideAmount(false);
+        if (hasAutoPricing) {
+            setOverrideAmount(false);
+        }
     };
 
     const handleSubmit = async () => {
         const resolvedLessons = paymentMode === 'packages' ? computedPackageLessons : computedCustomLessons;
-        const resolvedAmount = overrideAmount ? parseFloat(amount) : autoAmount;
+        const parsedAmount = parseFloat(amount);
+        const resolvedAmount = hasAutoPricing && !overrideAmount ? autoAmount : parsedAmount;
 
         if (!selectedStudent || !date || resolvedLessons <= 0) {
             setError('Please fill in all required fields');
@@ -276,7 +285,7 @@ const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
         }
     };
 
-    const displayAmount = overrideAmount ? parseFloat(amount) || 0 : autoAmount;
+    const displayAmount = hasAutoPricing && !overrideAmount ? autoAmount : parseFloat(amount) || 0;
     const displayLessons = computedLessons || 0;
     const packageSummary = preselectedStudent
         ? `${pricingInfo.packageSize} lessons • ${formatMoney(pricingInfo.pricePerPackage, currency)} (${formatMoney(pricingInfo.ratePerLesson, currency)} per lesson)`
@@ -367,6 +376,7 @@ const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
                                 value="packages"
                                 control={<Radio size="small" />}
                                 label={<Typography variant="body2">Full package(s)</Typography>}
+                                disabled={!hasAutoPricing}
                             />
                             <FormControlLabel
                                 value="lessons"
@@ -427,9 +437,9 @@ const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
                             required
                             size="small"
                             fullWidth
-                            inputProps={{ min: 0, step: 0.01, readOnly: !overrideAmount }}
+                            inputProps={{ min: 0, step: 0.01, readOnly: hasAutoPricing && !overrideAmount }}
                             InputProps={{
-                                endAdornment: !overrideAmount && preselectedStudent && (
+                                endAdornment: hasAutoPricing && !overrideAmount && (
                                     <Tooltip title="Auto-calculated from selection">
                                         <InputAdornment position="end">
                                             <Chip
@@ -443,22 +453,24 @@ const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
                                 ),
                             }}
                         />
-                        <FormControlLabel
-                            control={(
-                                <Switch
-                                    size="medium"
-                                    checked={overrideAmount}
-                                    onChange={(e) => {
-                                        setOverrideAmount(e.target.checked);
-                                        if (!e.target.checked) {
-                                            setAmount(String(autoAmount));
-                                        }
-                                    }}
-                                />
-                            )}
-                            label="Override amount"
-                            sx={{ mt: { xs: 0, sm: 1 } }}
-                        />
+                        {hasAutoPricing && (
+                            <FormControlLabel
+                                control={(
+                                    <Switch
+                                        size="medium"
+                                        checked={overrideAmount}
+                                        onChange={(e) => {
+                                            setOverrideAmount(e.target.checked);
+                                            if (!e.target.checked) {
+                                                setAmount(String(autoAmount));
+                                            }
+                                        }}
+                                    />
+                                )}
+                                label="Override amount"
+                                sx={{ mt: { xs: 0, sm: 1 } }}
+                            />
+                        )}
                     </Stack>
 
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>

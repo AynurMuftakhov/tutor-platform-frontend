@@ -328,10 +328,21 @@ export interface PackageSetupPayload {
     packageSize: number;
     pricePerPackage: number;
     currency: string;
-    completedLessons: number;
-    paidLessons: number;
+    currentPackageCompletedLessons: number;
+    currentPackagePaidLessons: number;
     comment?: string | null;
     recordPayment?: boolean;
+    payment?: {
+        amount?: number;
+        lessonsCount?: number;
+        method?: PaymentMethod | null;
+        comment?: string | null;
+        paymentDate?: string;
+    } | null;
+
+    // Legacy aliases kept for backward compatibility with older callers
+    completedLessons?: number;
+    paidLessons?: number;
     paymentLessons?: number;
     paymentAmount?: number;
     paymentMethod?: PaymentMethod | null;

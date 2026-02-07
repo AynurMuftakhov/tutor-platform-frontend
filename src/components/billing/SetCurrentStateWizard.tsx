@@ -181,7 +181,15 @@ const SetCurrentStateWizard: React.FC<SetCurrentStateWizardProps> = ({
             setError('Currency is required.');
             return false;
         }
+        if (parsedValues.paid > 0 && !recordPayment) {
+            setError('Enable "Also record payment now" when paid lessons are greater than 0.');
+            return false;
+        }
         if (recordPayment) {
+            if (parsedValues.paid <= 0) {
+                setError('Paid lessons must be greater than 0 when recording a payment.');
+                return false;
+            }
             if (parsedValues.paymentAmt < 0) {
                 setError('Payment amount cannot be negative.');
                 return false;
@@ -209,17 +217,19 @@ const SetCurrentStateWizard: React.FC<SetCurrentStateWizardProps> = ({
             packageSize: parsedValues.pkgSize,
             pricePerPackage: parsedValues.price,
             currency,
-            completedLessons: parsedValues.completed,
-            paidLessons: parsedValues.paid,
+            currentPackageCompletedLessons: parsedValues.completed,
+            currentPackagePaidLessons: parsedValues.paid,
             comment: comment || null,
+            recordPayment,
         };
         if (recordPayment) {
-            payload.recordPayment = true;
-            payload.paymentLessons = parsedValues.paid;
-            payload.paymentAmount = parsedValues.paymentAmt;
-            payload.paymentMethod = paymentMethod || null;
-            payload.paymentComment = paymentComment ? paymentComment : comment || null;
-            payload.paymentDate = (paymentDate ?? effectiveDate ?? dayjs()).format('YYYY-MM-DD');
+            payload.payment = {
+                lessonsCount: parsedValues.paid,
+                amount: parsedValues.paymentAmt,
+                method: paymentMethod || null,
+                comment: paymentComment ? paymentComment : comment || null,
+                paymentDate: (paymentDate ?? effectiveDate ?? dayjs()).format('YYYY-MM-DD'),
+            };
         }
 
         try {

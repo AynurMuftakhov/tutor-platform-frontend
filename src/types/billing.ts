@@ -335,5 +335,5 @@ export interface PackageLessonSlot {
     lessonId?: string;                // If filled, the lesson ID
     lessonDate?: string;              // If filled, the lesson date (YYYY-MM-DD)
     lessonTitle?: string;             // If filled, lesson title/topic
-    status: 'completed' | 'scheduled' | 'empty';
+    status: 'completed' | 'scheduled' | 'adjusted' | 'empty';
 }
