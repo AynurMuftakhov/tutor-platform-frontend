@@ -60,6 +60,11 @@ const TeacherHomeworkPage: React.FC = () => {
 
   const [page, setPage] = useState<number>(Number(params.get('page') || '1'));
   const [size, setSize] = useState<number>(Number(params.get('size') || '10'));
+  const prefillVocabWordIds = useMemo(() => {
+    const raw = params.get('vocabWordIds');
+    if (!raw) return [] as string[];
+    return raw.split(',').map(id => id.trim()).filter(Boolean);
+  }, [params]);
 
   React.useEffect(() => {
     const focus = params.get('focus');
@@ -82,6 +87,12 @@ const TeacherHomeworkPage: React.FC = () => {
     });
     setFiltersApplied(true);
     setPage(1);
+  }, [params]);
+
+  React.useEffect(() => {
+    if (params.get('create') === '1') {
+      setComposerOpen(true);
+    }
   }, [params]);
 
 
@@ -133,6 +144,21 @@ const TeacherHomeworkPage: React.FC = () => {
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMsg, setSnackbarMsg] = useState('');
   const [lastCreated, setLastCreated] = useState<AssignmentDto | null>(null);
+
+  const clearBatchCreateParams = React.useCallback(() => {
+    if (!params.has('create') && !params.has('vocabWordIds')) {
+      return;
+    }
+    const next = new URLSearchParams(params);
+    next.delete('create');
+    next.delete('vocabWordIds');
+    setParams(next);
+  }, [params, setParams]);
+
+  const closeComposer = React.useCallback(() => {
+    setComposerOpen(false);
+    clearBatchCreateParams();
+  }, [clearBatchCreateParams]);
 
   // manual refresh handler
   const onRefresh = () => refetch();
@@ -380,16 +406,17 @@ const TeacherHomeworkPage: React.FC = () => {
 
       <HomeworkComposerDrawer
         open={composerOpen}
-        onClose={() => setComposerOpen(false)}
+        onClose={closeComposer}
         prefillStudentId={studentFilter || undefined}
+        prefillVocabWordIds={prefillVocabWordIds.length ? prefillVocabWordIds : undefined}
         onSuccess={(assignment, studentLabel) => {
           setLastCreated(assignment);
           setSnackbarMsg(`Homework assigned to ${studentLabel}`);
-          setComposerOpen(false);
+          closeComposer();
           setSnackbarOpen(true);
         }}
         onCreateAndOpen={(assignment) => {
-          setComposerOpen(false);
+          closeComposer();
           navigate(`/homework/${assignment.id}`);
         }}
       />

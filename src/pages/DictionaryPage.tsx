@@ -46,14 +46,17 @@ import ReviewWordDialog from '../components/vocabulary/ReviewWordDialog';
 import QuizMode from '../components/vocabulary/QuizMode';
 import VocabularyRoundSetup from '../components/vocabulary/VocabularyRoundSetup';
 import AssignStudentModal from '../components/vocabulary/AssignStudentModal';
-import {VocabularyWord} from '../types';
+import BatchAddWordsDialog from '../components/vocabulary/BatchAddWordsDialog';
+import {BatchWordsCreateResponse, VocabularyWord} from '../types';
 import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const ITEMS_PER_PAGE = 12;
 const EMPTY_ARRAY: any[] = [];
 
 const DictionaryPage: React.FC = () => {
     const theme = useTheme();
+    const navigate = useNavigate();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const { user } = useAuth();
     const isTeacher = user?.role === 'tutor';
@@ -179,6 +182,7 @@ const DictionaryPage: React.FC = () => {
     const [allowAnyCount, setAllowAnyCount] = useState(false);
     const [questionWords, setQuestionWords] = useState<VocabularyWord[] | null>(null);
     const [assignOpen, setAssignOpen] = useState(false);
+    const [batchOpen, setBatchOpen] = useState(false);
     const [selected, setSelected] = useState<VocabularyWord | null>(null);
 
     useEffect(() => {
@@ -323,6 +327,21 @@ const DictionaryPage: React.FC = () => {
         });
     };
 
+    const handleBatchCreated = (result: BatchWordsCreateResponse) => {
+        const wordIds = result.allWordIdsForHomework;
+        if (!wordIds.length) {
+            setSnackbarMessage('Batch saved, but no words available for homework.');
+            setSnackbarSeverity('error');
+            setSnackbarOpen(true);
+            return;
+        }
+        const params = new URLSearchParams();
+        params.set('create', '1');
+        params.set('vocabWordIds', wordIds.join(','));
+        setBatchOpen(false);
+        navigate(`/t/homework?${params.toString()}`);
+    };
+
     return (
         <Box
             sx={{
@@ -405,6 +424,16 @@ const DictionaryPage: React.FC = () => {
                                             }}
                                         >
                                             Add Word
+                                        </Button>
+                                        <Button
+                                            variant="outlined"
+                                            onClick={() => setBatchOpen(true)}
+                                            startIcon={<AddIcon />}
+                                            sx={{
+                                                borderRadius: 2
+                                            }}
+                                        >
+                                            Batch Add
                                         </Button>
                                     </>
                                 )}
@@ -738,6 +767,13 @@ const DictionaryPage: React.FC = () => {
                     setGenOpen(false);
                     refetchWords(); // Refetch words when dialog is closed
                 }}
+            />
+
+            <BatchAddWordsDialog
+                open={batchOpen}
+                teacherId={user?.id}
+                onClose={() => setBatchOpen(false)}
+                onCreated={handleBatchCreated}
             />
 
             <ReviewWordDialog

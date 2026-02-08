@@ -51,6 +51,8 @@ export interface HomeworkComposerDrawerProps {
   onClose: () => void;
   // optional prefilled student id from filtered list
   prefillStudentId?: string;
+  // optional prefilled vocabulary words for quick "create homework from batch" flow
+  prefillVocabWordIds?: string[];
   onSuccess: (assignment: AssignmentDto, studentLabel: string) => void;
   // optional: when user clicks Create & open, consumer can navigate immediately
   onCreateAndOpen?: (assignment: AssignmentDto) => void;
@@ -59,7 +61,14 @@ export interface HomeworkComposerDrawerProps {
 const WIDTH = 640; // within 560–680px
 const EMPTY_ARRAY: any[] = [];
 
-const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, onClose, prefillStudentId, onSuccess, onCreateAndOpen }) => {
+const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({
+  open,
+  onClose,
+  prefillStudentId,
+  prefillVocabWordIds,
+  onSuccess,
+  onCreateAndOpen
+}) => {
   const { user } = useAuth();
   const create = useCreateAssignment(user?.id || '');
   const assignWords = useAssignWords();
@@ -423,6 +432,16 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({ open, o
       style: listeningStyle,
     });
   }, [isListeningTask, transcriptId, listeningLanguage, listeningTheme, listeningCefr, listeningStyle]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    if (!prefillVocabWordIds || prefillVocabWordIds.length === 0) return;
+    setTaskType('VOCAB');
+    setSourceKind('VOCAB_LIST');
+    setShowAllWords(true);
+    setTaskTitle('Vocabulary batch');
+    setSelectedWordIds(prefillVocabWordIds);
+  }, [open, prefillVocabWordIds]);
 
   const buildCoverageMissing = (coverage: Record<string, boolean> | undefined) =>
     Object.entries(coverage ?? {})

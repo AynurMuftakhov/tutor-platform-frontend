@@ -24,6 +24,82 @@ export interface CreateWordRequest {
     teacherId: string;
 }
 
+export type BatchWordStatus = 'NEW' | 'DUPLICATE_REUSE' | 'INVALID';
+export type BatchFailureStage = 'LLM' | 'AUDIO' | 'VALIDATION' | 'DB' | 'UNKNOWN';
+
+export interface BatchWordsPreviewRequest {
+    teacherId: string;
+    inputs: string[];
+}
+
+export interface BatchWordPreviewRow {
+    input: string;
+    normalized: string;
+    status: BatchWordStatus;
+    existingWordId: string | null;
+    reason: string | null;
+}
+
+export interface BatchWordsPreviewSummary {
+    total: number;
+    newCount: number;
+    duplicateCount: number;
+    invalidCount: number;
+}
+
+export interface BatchWordsPreviewResponse {
+    rows: BatchWordPreviewRow[];
+    summary: BatchWordsPreviewSummary;
+}
+
+export interface BatchWordsCreateRequest {
+    teacherId: string;
+    inputs: string[];
+    reuseDuplicates?: boolean;
+    generateAudio?: boolean;
+}
+
+export interface BatchWordCreateFailure {
+    input: string;
+    stage: BatchFailureStage;
+    message: string;
+}
+
+export interface BatchWordsCreateSummary {
+    total: number;
+    createdCount: number;
+    reusedCount: number;
+    failedCount: number;
+}
+
+export interface BatchWordsCreateResponse {
+    created: VocabularyWord[];
+    reused: VocabularyWord[];
+    failed: BatchWordCreateFailure[];
+    allWordIdsForHomework: string[];
+    summary: BatchWordsCreateSummary;
+}
+
+export type BatchJobStatus = 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED';
+
+export interface BatchWordsCreateJobResponse {
+    jobId: string;
+    status: BatchJobStatus;
+}
+
+export interface BatchWordsCreateJobStatusResponse {
+    jobId: string;
+    status: BatchJobStatus;
+    totalCount: number;
+    processedCount: number;
+    createdCount: number;
+    reusedCount: number;
+    failedCount: number;
+    progressPct: number;
+    message: string;
+    result: BatchWordsCreateResponse | null;
+}
+
 export interface VocabularyWord {
     id: string;
     text: string;

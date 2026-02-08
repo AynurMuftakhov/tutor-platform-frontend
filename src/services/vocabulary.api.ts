@@ -2,7 +2,16 @@ import ky from 'ky';
 import {
     AssignWordsRequest,
     AssignedWordResponse,
-    VocabularyWord, CreateWordRequest, AudioPart, PageResult
+    VocabularyWord,
+    CreateWordRequest,
+    AudioPart,
+    PageResult,
+    BatchWordsPreviewRequest,
+    BatchWordsPreviewResponse,
+    BatchWordsCreateRequest,
+    BatchWordsCreateResponse,
+    BatchWordsCreateJobResponse,
+    BatchWordsCreateJobStatusResponse
 } from '../types';
 
 const api = ky.create({
@@ -51,6 +60,14 @@ export const vocabApi = {
     },
     createWord: (dto: CreateWordRequest) =>
         api.post('words/create', { json: dto }).json<VocabularyWord>(),
+    previewBatch: (dto: BatchWordsPreviewRequest) =>
+        api.post('words/batch/preview', { json: dto }).json<BatchWordsPreviewResponse>(),
+    createBatch: (dto: BatchWordsCreateRequest) =>
+        api.post('words/batch/create', { json: dto }).json<BatchWordsCreateResponse>(),
+    createBatchJob: (dto: BatchWordsCreateRequest) =>
+        api.post('words/batch/jobs', { json: dto }).json<BatchWordsCreateJobResponse>(),
+    getBatchJobStatus: (jobId: string) =>
+        api.get(`words/batch/jobs/${jobId}`).json<BatchWordsCreateJobStatusResponse>(),
     updateWord: (id: string, dto: Partial<VocabularyWord>) =>
         api.patch(`words/${id}`, { json: dto }).json<VocabularyWord>(),
     deleteWord: (id: string) => api.delete(`words/${id}`),
