@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import {
     Box, Button, Chip, Container, Grid, Typography, Pagination, Stack,
 } from '@mui/material';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useStudentAssignments } from '../../hooks/useHomeworks';
 import { AssignmentListItemDto } from '../../types/homework';
 import { Link as RouterLink } from 'react-router-dom';
@@ -17,6 +17,7 @@ import {CalendarIcon} from "@mui/x-date-pickers";
 const StudentHomeworkPage: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const role = (user?.role || '').toLowerCase();
   const isTeacher = role === 'tutor' || role === 'teacher';
 
@@ -59,6 +60,29 @@ const StudentHomeworkPage: React.FC = () => {
 
   const [page, setPage] = useState<number>(1);
   const [size] = useState<number>(10);
+
+  React.useEffect(() => {
+    const focus = new URLSearchParams(location.search).get('focus');
+    if (focus !== 'due') {
+      return;
+    }
+
+    const now = new Date();
+    const toYMD = (d: Date) => d.toISOString().slice(0, 10);
+    const from = toYMD(now);
+    const to = toYMD(new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000));
+
+    setFilters({
+      status: 'active',
+      range: 'custom',
+      from,
+      to,
+      hideCompleted: true,
+      sort: 'dueAsc',
+    });
+    setFiltersApplied(true);
+    setPage(1);
+  }, [location.search]);
 
   // reset to first page when filters change
   React.useEffect(() => {

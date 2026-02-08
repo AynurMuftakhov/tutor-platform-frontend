@@ -21,7 +21,7 @@ import {
 } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { Student } from "./MyStudentsPage";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
     FilterList,
     ArrowBackIos,
@@ -52,7 +52,12 @@ const LessonsPage = () => {
     const [lessons, setLessons] = useState<any[]>([]);
     const { user } = useAuth();
     const navigate = useNavigate();
-    const [status, setStatus] = useState("");
+    const location = useLocation();
+    const [status, setStatus] = useState(() => new URLSearchParams(location.search).get("status") ?? "");
+    const [missingNotesOnly, setMissingNotesOnly] = useState(() => {
+        const params = new URLSearchParams(location.search);
+        return params.get("missingNotes") === "true" || params.get("filter") === "missingNotes";
+    });
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [students, setStudents] = useState<Student[]>([]);
     const [tutorsMap, setTutorsMap] = useState<Map<string, string>>(new Map());
@@ -152,6 +157,27 @@ const LessonsPage = () => {
         handleStatusFilterClose();
     };
 
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        const statusFromQuery = params.get("status");
+        if (statusFromQuery !== null) {
+            setStatus(statusFromQuery);
+        }
+        setMissingNotesOnly(params.get("missingNotes") === "true" || params.get("filter") === "missingNotes");
+        const windowDays = params.get("windowDays");
+        if (windowDays === "7") {
+            const now = dayjs();
+            setSelectedDate(now);
+            setCalendarView("timeGridWeek");
+            setTimeout(() => {
+                const api = calendarRef.current?.getApi();
+                if (!api) return;
+                api.changeView("timeGridWeek", now.toDate());
+                api.gotoDate(now.toDate());
+            }, 0);
+        }
+    }, [location.search]);
+
     const refreshLessons = async () => {
         try {
             const calendarApi = calendarRef.current?.getApi();
@@ -232,7 +258,11 @@ const LessonsPage = () => {
 
     // Convert lessons to FullCalendar events
     const lessonsToEvents = (): EventInput[] => {
-        return lessons.map(lesson => {
+        const filteredLessons = missingNotesOnly
+            ? lessons.filter((lesson) => !lesson.notes || String(lesson.notes).trim() === "")
+            : lessons;
+
+        return filteredLessons.map(lesson => {
             const student = getStudentById(lesson.studentId);
             const tutorName = tutorsMap.get(lesson.tutorId) || "Unknown";
             const displayName =  user?.role === "tutor" ? lesson.title :`Lesson with ${tutorName}`;

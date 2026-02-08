@@ -64,6 +64,10 @@ const DictionaryPage: React.FC = () => {
     const [search, setSearch] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [page, setPage] = useState(1); // 1-based for Pagination component
+    const [category, setCategory] = useState<'0' | '1' | '2' | '3' | '4' | '5'>('0');
+    const [filterState, setFilterState] = useState<'all' | 'learned' | 'not-learned'>('all');
+    const [learnedWords, setLearnedWords] = useState<Set<string>>(new Set());
+    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
     // Debounce search term
     useEffect(() => {
@@ -92,12 +96,22 @@ const DictionaryPage: React.FC = () => {
         setAssignedWordIdsState(new Set(assignedWordIds));
     }, [assignedWordIds]);
 
-    // Fetch vocabulary words with server-side pagination and search
+    const myVocabularyIds = useMemo(
+        () => (!isTeacher && activeTab === 'my-vocabulary') ? Array.from(assignedWordIds) : undefined,
+        [isTeacher, activeTab, assignedWordIds]
+    );
+
+    const shouldFetchDictionary = isTeacher || activeTab !== 'my-vocabulary' || (myVocabularyIds?.length ?? 0) > 0;
+
+    // Fetch vocabulary words with server-side pagination and filtering
     const {data: wordsPage, isLoading: wordsLoading, refetch: refetchWords} = useDictionary({
         text: debouncedSearch,
+        difficulty: category === '0' ? undefined : category,
         page: page - 1,
         size: ITEMS_PER_PAGE,
-        ids: (!isTeacher && activeTab === 'my-vocabulary') ? Array.from(assignedWordIds) : undefined
+        ids: myVocabularyIds
+    }, {
+        enabled: shouldFetchDictionary
     });
 
     const words = useMemo(() => wordsPage?.content ?? EMPTY_ARRAY, [wordsPage]);
@@ -165,14 +179,10 @@ const DictionaryPage: React.FC = () => {
     const [questionWords, setQuestionWords] = useState<VocabularyWord[] | null>(null);
     const [assignOpen, setAssignOpen] = useState(false);
     const [selected, setSelected] = useState<VocabularyWord | null>(null);
-    const [category, setCategory] = useState<'0' | '1' | '2' | '3' | '4' | '5'>('0');
-    const [filterState, setFilterState] = useState<'all' | 'learned' | 'not-learned'>('all');
-    const [learnedWords, setLearnedWords] = useState<Set<string>>(new Set());
-    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
     useEffect(() => {
         setPage(1);
-    }, [activeTab]);
+    }, [activeTab, category, filterState]);
 
     // State for word selection (for assigning to students)
     const [selectedWords, setSelectedWords] = useState<string[]>([]);
@@ -187,17 +197,15 @@ const DictionaryPage: React.FC = () => {
     const filtered = useMemo(
         () =>
             displayWords.filter(w => {
-                // search is already handled by backend via debouncedSearch
-                const matchCat = category === '0' ? true : w.difficulty?.toString() === category;
                 let matchFilter = true;
                 if (filterState === 'learned') {
                     matchFilter = learnedWords.has(w.id);
                 } else if (filterState === 'not-learned') {
                     matchFilter = !learnedWords.has(w.id);
                 }
-                return matchCat && matchFilter;
+                return matchFilter;
             }),
-        [displayWords, category, filterState, learnedWords]
+        [displayWords, filterState, learnedWords]
     );
 
     const paginated = filtered;

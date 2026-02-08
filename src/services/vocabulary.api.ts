@@ -22,10 +22,13 @@ const api = ky.create({
 
 
 export const vocabApi = {
-    listWords: (params: { text?: string; page?: number; size?: number; ids?: string[] } = {}) => {
+    listWords: (params: { text?: string; difficulty?: string; page?: number; size?: number; ids?: string[] } = {}) => {
         const searchParams = new URLSearchParams();
         if (params.text) {
             searchParams.set('text', params.text);
+        }
+        if (params.difficulty) {
+            searchParams.set('difficulty', params.difficulty);
         }
         if (params.page !== undefined) {
             searchParams.set('page', String(params.page));

@@ -61,6 +61,29 @@ const TeacherHomeworkPage: React.FC = () => {
   const [page, setPage] = useState<number>(Number(params.get('page') || '1'));
   const [size, setSize] = useState<number>(Number(params.get('size') || '10'));
 
+  React.useEffect(() => {
+    const focus = params.get('focus');
+    const filter = params.get('filter');
+    if (focus !== 'review' && filter !== 'toReview') {
+      return;
+    }
+
+    const now = new Date();
+    const toYMD = (d: Date) => d.toISOString().slice(0, 10);
+    const fromDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    setFilters({
+      status: 'completed',
+      range: 'custom',
+      from: toYMD(fromDate),
+      to: toYMD(now),
+      hideCompleted: false,
+      sort: 'assignedDesc',
+    });
+    setFiltersApplied(true);
+    setPage(1);
+  }, [params]);
+
 
   // reset to first page when filters or student changes
   React.useEffect(() => {

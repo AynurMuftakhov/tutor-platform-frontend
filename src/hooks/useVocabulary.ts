@@ -5,7 +5,7 @@ import {AudioPart, CreateWordRequest, VocabularyWord, PageResult } from '../type
 const QUERY_KEY = ['vocabulary', 'words'];
 
 export const useDictionary = (
-    params: { text?: string; page?: number; size?: number; ids?: string[] } = {},
+    params: { text?: string; difficulty?: string; page?: number; size?: number; ids?: string[] } = {},
     options: { enabled?: boolean; staleTime?: number } = {}
 ) => useQuery({
     queryKey: [...QUERY_KEY, params],

@@ -22,14 +22,14 @@ import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import LinkIcon from "@mui/icons-material/Link";
-import {createStudent, deleteUser, fetchStudents, resetPasswordEmail, updateCurrentUser, generateMagicLink} from "../services/api";
+import {createStudent, deleteUser, fetchStudents, getLessons, resetPasswordEmail, updateCurrentUser, generateMagicLink} from "../services/api";
 import { useAuth } from '../context/AuthContext';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
 import {ENGLISH_LEVELS, EnglishLevel} from "../types/ENGLISH_LEVELS";
 import StudentVocabularyModal from "../components/vocabulary/StudentVocabularyModal";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {CalendarIcon} from "@mui/x-date-pickers";
 import {Person} from "@mui/icons-material";
 
@@ -56,7 +56,15 @@ export interface Student {
 type NewStudentForm = { name: string; email?: string; level: EnglishLevel };
 const MyStudentsPage: React.FC = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const { user }  = useAuth();
+    const focusWithoutNextLesson = useMemo(
+        () => {
+            const params = new URLSearchParams(location.search);
+            return params.get("focus") === "without-next-lesson" || params.get("filter") === "noUpcoming";
+        },
+        [location.search]
+    );
     const [students, setStudents] = useState<Student[]>([]);
     const [searchText, setSearchText] = useState("");
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -81,10 +89,88 @@ const MyStudentsPage: React.FC = () => {
     const [page, setPage] = useState(0);
     const [pageSize, setPageSize] = useState(5);
     const [loading, setLoading] = useState(false);
+    const [studentsWithoutNextLessonIds, setStudentsWithoutNextLessonIds] = useState<Set<string> | null>(null);
+    const [withoutNextLessonLoading, setWithoutNextLessonLoading] = useState(false);
 
     // State for vocabulary modal
     const [vocabularyModalOpen, setVocabularyModalOpen] = useState(false);
     const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+
+    useEffect(() => {
+        if (focusWithoutNextLesson) {
+            setPage(0);
+        }
+    }, [focusWithoutNextLesson]);
+
+    useEffect(() => {
+        if (!focusWithoutNextLesson || !user?.id) {
+            setStudentsWithoutNextLessonIds(null);
+            setWithoutNextLessonLoading(false);
+            return;
+        }
+
+        let cancelled = false;
+        const loadStudentIdsWithoutNextLesson = async () => {
+            try {
+                setWithoutNextLessonLoading(true);
+                const now = new Date();
+                const nowIso = now.toISOString();
+                const last30DaysIso = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+                const upcomingFromIso = new Date(now.getTime() - 5 * 60 * 1000).toISOString();
+                const upcomingToIso = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000).toISOString();
+
+                const recentLessons = await getLessons(
+                    "",
+                    user.id,
+                    "COMPLETED,MISSED,IN_PROGRESS,RESCHEDULED,SCHEDULED",
+                    last30DaysIso,
+                    nowIso
+                );
+                const upcomingLessons = await getLessons(
+                    "",
+                    user.id,
+                    "SCHEDULED,IN_PROGRESS,RESCHEDULED",
+                    upcomingFromIso,
+                    upcomingToIso
+                );
+
+                if (cancelled) return;
+
+                const recentStudentIds = new Set<string>(
+                    (Array.isArray(recentLessons) ? recentLessons : [])
+                        .map((lesson: any) => lesson.studentId)
+                        .filter(Boolean)
+                );
+                const upcomingStudentIds = new Set<string>(
+                    (Array.isArray(upcomingLessons) ? upcomingLessons : [])
+                        .map((lesson: any) => lesson.studentId)
+                        .filter(Boolean)
+                );
+
+                const missingNextIds = new Set<string>();
+                recentStudentIds.forEach((studentId) => {
+                    if (!upcomingStudentIds.has(studentId)) {
+                        missingNextIds.add(studentId);
+                    }
+                });
+                setStudentsWithoutNextLessonIds(missingNextIds);
+            } catch (error) {
+                if (!cancelled) {
+                    console.error("Failed to compute students without next lesson", error);
+                    setStudentsWithoutNextLessonIds(new Set());
+                }
+            } finally {
+                if (!cancelled) {
+                    setWithoutNextLessonLoading(false);
+                }
+            }
+        };
+
+        loadStudentIdsWithoutNextLesson();
+        return () => {
+            cancelled = true;
+        };
+    }, [focusWithoutNextLesson, user?.id]);
 
     const handleSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
         setSearchText(event.target.value);
@@ -254,12 +340,25 @@ const MyStudentsPage: React.FC = () => {
         if (!user){
             return
         }
+        if (focusWithoutNextLesson && studentsWithoutNextLessonIds === null) {
+            return;
+        }
         const loadStudents = async () => {
             try {
                 setLoading(true);
-                const data = await fetchStudents(user?.id, searchText, page, pageSize);
-                setStudents(data.content);
-                setTotalStudents(data.totalElements);
+                const requestedPage = focusWithoutNextLesson ? 0 : page;
+                const requestedSize = focusWithoutNextLesson ? 500 : pageSize;
+                const data = await fetchStudents(user?.id, searchText, requestedPage, requestedSize);
+                let content = data.content;
+                let total = data.totalElements;
+
+                if (focusWithoutNextLesson && studentsWithoutNextLessonIds) {
+                    content = content.filter((student) => studentsWithoutNextLessonIds.has(student.id));
+                    total = content.length;
+                }
+
+                setStudents(content);
+                setTotalStudents(total);
             } catch (err) {
                 console.error("Failed to load students", err);
             } finally {
@@ -268,7 +367,7 @@ const MyStudentsPage: React.FC = () => {
         };
 
         loadStudents();
-    }, [user, searchText, page, pageSize]);
+    }, [user, searchText, page, pageSize, focusWithoutNextLesson, studentsWithoutNextLessonIds]);
 
     const columns: GridColDef<Student>[] = [
         {
@@ -432,6 +531,20 @@ const MyStudentsPage: React.FC = () => {
                 />
 
                 <Paper elevation={1} sx={{ p: 2, borderRadius: 3 }}>
+                {focusWithoutNextLesson && (
+                    <Box sx={{ mb: 1.5, display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                        <Chip
+                            label="Filtered: students without next lesson"
+                            color="warning"
+                            size="small"
+                        />
+                        {withoutNextLessonLoading && (
+                            <Typography variant="caption" color="text.secondary">
+                                Calculating...
+                            </Typography>
+                        )}
+                    </Box>
+                )}
                 {/* Search */}
                 <Box sx={{ mb: 2, maxWidth: 300 }}>
                     <TextField

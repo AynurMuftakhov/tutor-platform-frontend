@@ -3,20 +3,30 @@ import {
     Typography,
     Box,
     useTheme,
-    Tooltip
+    Tooltip,
+    alpha
 } from "@mui/material";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import AlarmIcon from "@mui/icons-material/Alarm";
 import { useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
 import {Lesson} from "../../types/Lesson";
+import { DashboardLessonSummaryItem } from "../../services/dashboardSummary";
 
-const NextLessonCard = ({ lesson }: { lesson: Lesson }) => {
+type LessonCardItem = Lesson | DashboardLessonSummaryItem;
+
+const isDashboardLesson = (lesson: LessonCardItem): lesson is DashboardLessonSummaryItem => {
+    return (lesson as DashboardLessonSummaryItem).startsAtUtc !== undefined;
+};
+
+const NextLessonCard = ({ lesson }: { lesson: LessonCardItem }) => {
     const navigate = useNavigate();
     const theme = useTheme();
 
-    const start = dayjs(lesson.dateTime);
-    const end = start.add(lesson.duration, "minute");
+    const start = dayjs(isDashboardLesson(lesson) ? lesson.startsAtUtc : lesson.dateTime);
+    const end = isDashboardLesson(lesson)
+        ? dayjs(lesson.endsAtUtc)
+        : start.add(lesson.duration, "minute");
     const now = dayjs();
 
     const minutesToStart = start.diff(now, "minute");
@@ -24,7 +34,7 @@ const NextLessonCard = ({ lesson }: { lesson: Lesson }) => {
 
     return (
         <Paper
-            elevation={2}
+            elevation={0}
             onClick={() => navigate(`/lessons/${lesson.id}`)}
             sx={{
                 p: 2,
@@ -34,10 +44,13 @@ const NextLessonCard = ({ lesson }: { lesson: Lesson }) => {
                 borderRadius: 2,
                 height: "100%",
                 cursor: "pointer",
-                border: isSoon ? `1.5px solid ${theme.palette.warning.main}` : "1px solid #e0e0e0",
+                border: `1px solid ${alpha(theme.palette.grey[500], 0.28)}`,
+                bgcolor: isSoon ? alpha(theme.palette.warning.main, 0.06) : "background.paper",
+                boxShadow: "0 4px 14px rgba(15, 23, 42, 0.06)",
                 transition: "all 0.3s",
                 "&:hover": {
-                    boxShadow: 4,
+                    borderColor: alpha(theme.palette.primary.main, 0.22),
+                    boxShadow: "0 8px 18px rgba(15, 23, 42, 0.1)",
                 },
             }}
         >
@@ -58,7 +71,7 @@ const NextLessonCard = ({ lesson }: { lesson: Lesson }) => {
             {/* Info */}
             <Box sx={{ flexGrow: 1 }}>
                 <Typography fontWeight={600} fontSize={14}>
-                    {lesson.title}
+                    {lesson.title || "Lesson"}
                 </Typography>
 
                 <Box display="flex" alignItems="center" gap={0.5}>

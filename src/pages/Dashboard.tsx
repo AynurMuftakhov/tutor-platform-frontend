@@ -5,11 +5,11 @@ import {
     Paper,
     Avatar,
     useTheme,
-    Button,
     alpha,
-    Tooltip,
-    LinearProgress
+    LinearProgress,
+    Alert
 } from "@mui/material";
+import { useState } from "react";
 import PageHeader from "../components/PageHeader";
 import { useTutorStatistics } from "../hooks/useTutorStatistics";
 import SchoolIcon from "@mui/icons-material/School";
@@ -18,6 +18,14 @@ import { useAuth } from "../context/AuthContext";
 import UpcomingLessonsSection from "../components/dashboard/UpcomingLessonsSection";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
+import { useDashboardSummary } from "../hooks/useDashboardSummary";
+import { updateLesson } from "../services/api";
+import StudentNextLessonCard from "../components/dashboard/student/NextLessonCard";
+import StudentUpcomingLessonsWidget from "../components/dashboard/student/UpcomingLessonsWidget";
+import StudentHomeworkDueWidget from "../components/dashboard/student/HomeworkDueWidget";
+import StudentProgressSnapshotWidget from "../components/dashboard/student/ProgressSnapshotWidget";
+import TutorActionQueueWidget from "../components/dashboard/tutor/ActionQueueWidget";
+import TutorTodayAgendaWidget from "../components/dashboard/tutor/TodayAgendaWidget";
 
 type StatCardProps = {
     title: string;
@@ -43,7 +51,7 @@ const StatCard = ({ title, value, icon, color = "primary", progress, progressLab
             <Paper
                 elevation={0}
                 sx={{
-                    p: 3,
+                    p: 2.5,
                     borderRadius: 1,
                     display: 'flex',
                     flexDirection: 'column',
@@ -68,13 +76,13 @@ const StatCard = ({ title, value, icon, color = "primary", progress, progressLab
                     }}
                 />
 
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, position: 'relative', zIndex: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5, position: 'relative', zIndex: 1 }}>
                     <Avatar
                         sx={{
                             bgcolor: lightColor,
                             color: mainColor,
-                            width: 48,
-                            height: 48,
+                            height: 44,
+                            width: 44,
                             boxShadow: `0 4px 12px ${alpha(mainColor, 0.2)}`
                         }}
                     >
@@ -132,7 +140,6 @@ const StatCard = ({ title, value, icon, color = "primary", progress, progressLab
 
 const Dashboard = () => {
     const { user } = useAuth();
-    const theme = useTheme();
     const isTeacher = user?.role === "tutor";
     const navigate = useNavigate();
 
@@ -140,6 +147,25 @@ const Dashboard = () => {
     const { data: tutorStats, isLoading: isLoadingStats } = useTutorStatistics(
         isTeacher && user?.id ? user.id : ""
     );
+
+    const { data: dashboardSummary, isLoading: isDashboardSummaryLoading, refetch: refetchDashboardSummary } = useDashboardSummary();
+    const [agendaActionLessonId, setAgendaActionLessonId] = useState<string | null>(null);
+
+    const criticalWarnings = (dashboardSummary?.warnings || []).filter(
+        warning => warning === "NEXT_LESSON_NULL_BUT_UPCOMING_PRESENT" || warning.startsWith("CRITICAL_")
+    );
+
+    const updateAgendaLessonStatus = async (lessonId: string, status: "IN_PROGRESS" | "COMPLETED") => {
+        try {
+            setAgendaActionLessonId(lessonId);
+            await updateLesson(lessonId, { status });
+            await refetchDashboardSummary();
+        } catch (error) {
+            console.error("Failed to update lesson status from dashboard agenda", error);
+        } finally {
+            setAgendaActionLessonId(null);
+        }
+    };
 
     return (
         <Box
@@ -158,13 +184,19 @@ const Dashboard = () => {
             title={`Hello, ${user?.name || "Tutor"}!`}
             titleColor="gradient"
             subtitle={new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-            mb={4}
+            mb={isTeacher ? 3 : 4}
         />
+
+            {criticalWarnings.length > 0 && (
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                    Some dashboard data may be incomplete right now.
+                </Alert>
+            )}
 
             {/* Stats Cards Section */}
             {user?.role === "tutor" && (
-                <Grid container spacing={2} sx={{ mb: 4 }} wrap="wrap">
-                    <Grid size={{ xs:6, sm:6, md:6, lg:3 }}>
+                <Grid container spacing={2} sx={{ mb: 3 }} wrap="wrap">
+                    <Grid size={{ xs: 12, sm: 6, md: 6 }}>
                         <StatCard
                             title="Students Taught"
                             value={isLoadingStats ? "..." : tutorStats?.taughtStudents.toString() || "0"}
@@ -172,7 +204,7 @@ const Dashboard = () => {
                             color="primary"
                         />
                     </Grid>
-                    <Grid size={{ xs:6, sm:6, md:6, lg:3 }}>
+                    <Grid size={{ xs: 12, sm: 6, md: 6 }}>
                         {(() => {
                             const completedLessons = tutorStats?.completedLessons || 0;
                             const monthlyGoal = 20;
@@ -194,58 +226,79 @@ const Dashboard = () => {
             )}
 
             {/* Main Content Grid */}
-            <Grid container spacing={4}>
-                {/* Next Lessons Section */}
-                <Grid size ={{ xs:12, md:8 }}>
-                        <Paper
-                            elevation={0}
-                            sx={{
-                                p: 0,
-                                borderRadius: 4,
-                                overflow: 'hidden',
-                                height: '100%',
-                                border: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`,
-                                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)',
-                            }}
-                        >
-                            <Box
-                                sx={{
-                                    p: 3,
-                                    borderBottom: `1px solid ${theme.palette.divider}`,
-                                    background: `linear-gradient(90deg, ${alpha(theme.palette.primary.main, 0.05)} 0%, ${alpha(theme.palette.primary.light, 0.02)} 100%)`,
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center'
-                                }}
-                            >
-                                <Typography variant="h6" fontWeight={600} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    <EventNoteIcon sx={{ color: 'primary.main' }} /> Upcoming Lessons
-                                </Typography>
-                                <Tooltip title="View all lessons">
-                                    <Button
-                                        size="small"
-                                        variant="outlined"
-                                        onClick={() => navigate(`/lessons`)}
-                                        sx={{
-                                            borderRadius: 2,
-                                            borderColor: theme.palette.primary.main,
-                                            color: theme.palette.primary.main,
-                                            '&:hover': {
-                                                borderColor: theme.palette.primary.dark,
-                                                backgroundColor: alpha(theme.palette.primary.main, 0.05)
-                                            }
-                                        }}
-                                    >
-                                        View All
-                                    </Button>
-                                </Tooltip>
+            {isTeacher ? (
+                <Grid container spacing={{ xs: 2, md: 2.5 }} alignItems="flex-start">
+                    <Grid size={{ xs: 12, md: 8 }} order={{ xs: 1, md: 1 }}>
+                        <TutorTodayAgendaWidget
+                            summary={dashboardSummary}
+                            loading={isDashboardSummaryLoading}
+                            actionLoadingLessonId={agendaActionLessonId}
+                            onOpenLesson={(lessonId) => navigate(`/lessons/${lessonId}`)}
+                            onMarkStarted={(lessonId) => updateAgendaLessonStatus(lessonId, "IN_PROGRESS")}
+                            onMarkCompleted={(lessonId) => updateAgendaLessonStatus(lessonId, "COMPLETED")}
+                            onViewAllLessons={() => navigate(`/lessons`)}
+                        />
+                    </Grid>
+                    <Grid size={{ xs: 12, md: 4 }} order={{ xs: 2, md: 2 }}>
+                        <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                            <Box sx={{ order: { xs: 1, md: 2 } }}>
+                                <TutorActionQueueWidget
+                                    summary={dashboardSummary}
+                                    loading={isDashboardSummaryLoading}
+                                    onOpenHomeworkReview={() => navigate(`/t/homework?filter=toReview`)}
+                                    onOpenMissingNotes={() => navigate(`/lessons?filter=missingNotes`)}
+                                    onOpenStudentsWithoutNext={() => navigate(`/my-students?filter=noUpcoming`)}
+                                />
                             </Box>
-                            <Box sx={{ p: 3 }}>
-                                <UpcomingLessonsSection />
+                            <Box sx={{ order: { xs: 2, md: 1 } }}>
+                                <UpcomingLessonsSection
+                                    lessons={dashboardSummary?.upcomingLessons || []}
+                                    loading={isDashboardSummaryLoading}
+                                    onOpenLesson={(lessonId) => navigate(`/lessons/${lessonId}`)}
+                                    onViewAllLessons={() => navigate(`/lessons`)}
+                                />
                             </Box>
-                        </Paper>
+                        </Box>
+                    </Grid>
                 </Grid>
-            </Grid>
+            ) : (
+                <Grid container spacing={4}>
+                    <Grid size={{ xs: 12, md: 8 }}>
+                        <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                            <StudentNextLessonCard
+                                summary={dashboardSummary}
+                                loading={isDashboardSummaryLoading}
+                                onOpenLesson={(lessonId) => navigate(`/lessons/${lessonId}`)}
+                                onJoinLesson={(lessonId) =>
+                                    navigate('/video-call', {
+                                        state: {
+                                            identity: user?.id,
+                                            roomName: `lesson-${lessonId}`,
+                                        },
+                                    })
+                                }
+                                onViewAllLessons={() => navigate(`/lessons?status=SCHEDULED,RESCHEDULED,IN_PROGRESS&windowDays=7`)}
+                                onMessageTutor={() => navigate(`/notes`)}
+                            />
+                            <StudentUpcomingLessonsWidget
+                                summary={dashboardSummary}
+                                loading={isDashboardSummaryLoading}
+                                onOpenLesson={(lessonId) => navigate(`/lessons/${lessonId}`)}
+                                onViewAllLessons={() => navigate(`/lessons?status=SCHEDULED,RESCHEDULED,IN_PROGRESS&windowDays=7`)}
+                            />
+                            <StudentHomeworkDueWidget
+                                summary={dashboardSummary}
+                                loading={isDashboardSummaryLoading}
+                                onOpenHomework={() => navigate(`/homework?focus=due`)}
+                            />
+                            <StudentProgressSnapshotWidget
+                                summary={dashboardSummary}
+                                loading={isDashboardSummaryLoading}
+                            />
+                        </Box>
+                    </Grid>
+                </Grid>
+            )}
         </Box>
     );
 };
