@@ -24,7 +24,7 @@ import {
 } from '@mui/material';
 import { CreateAssignmentDto, HomeworkTaskType, SourceKind } from '../../types/homework';
 import { useAuth } from '../../context/AuthContext';
-import { useCreateAssignment } from '../../hooks/useHomeworks';
+import { useCreateAssignmentsBulk } from '../../hooks/useHomeworks';
 import { useAssignWords, useAssignments } from '../../hooks/useAssignments';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toOffsetDateTime } from '../../utils/datetime';
@@ -49,17 +49,19 @@ const TeacherHomeworkNewPage: React.FC = () => {
   const { user } = useAuth();
   const [params] = useSearchParams();
   const navigate = useNavigate();
-  const create = useCreateAssignment(user?.id || '');
+  const create = useCreateAssignmentsBulk(user?.id || '');
   const assignWords = useAssignWords();
 
-  const [studentId, setStudentId] = useState(params.get('studentId') || '');
+  const initialStudentId = params.get('studentId') || '';
+  const [studentIds, setStudentIds] = useState<string[]>(initialStudentId ? [initialStudentId] : []);
   const [studentOptions, setStudentOptions] = useState<{ id: string; name: string; email?: string; avatar?: string }[]>([]);
   const [studentQ, setStudentQ] = useState('');
-  const [selectedStudent, setSelectedStudent] = useState<{ id: string; name: string; email?: string; avatar?: string } | null>(null);
+  const [selectedStudents, setSelectedStudents] = useState<Array<{ id: string; name: string; email?: string; avatar?: string }>>([]);
   const [studentLoading, setStudentLoading] = useState(false);
   const [title, setTitle] = useState('Homework');
   const [instructions, setInstructions] = useState('');
   const [dueAt, setDueAt] = useState('');
+  const [dueAtByStudentId, setDueAtByStudentId] = useState<Record<string, string>>({});
 
   // Minimal single-task wizard for MVP
   const [taskTitle, setTaskTitle] = useState('Task 1');
@@ -111,7 +113,16 @@ const TeacherHomeworkNewPage: React.FC = () => {
     staleTime: 60_000,
   });
   const allWords = wordsPage?.content ?? EMPTY_ARRAY;
-  const assignmentsQuery = useAssignments(studentId);
+  const primaryStudentId = studentIds[0] || '';
+  const assignmentsQuery = useAssignments(primaryStudentId);
+
+  useEffect(() => {
+    setDueAtByStudentId((prev) => {
+      const allowed = new Set(studentIds);
+      const next = Object.fromEntries(Object.entries(prev).filter(([id]) => allowed.has(id)));
+      return Object.keys(next).length === Object.keys(prev).length ? prev : next;
+    });
+  }, [studentIds]);
 
   const assignedWords = useMemo(() => {
     const seen = new Set<string>();
@@ -203,7 +214,7 @@ const TeacherHomeworkNewPage: React.FC = () => {
   const isVocabSelectionInvalid = selectedWordIds.length < 5 || selectedWordIds.length > 100;
   const createDisabled =
     create.isPending ||
-    !studentId ||
+    studentIds.length === 0 ||
     (isVocabList && isVocabSelectionInvalid) ||
     (isListeningTask && (!transcriptId || hasUnsavedTranscriptEdits || !listeningWordRequirementMet || !audioContentRef)) ||
     (isVideoTask && !sourceUrl.trim());
@@ -492,23 +503,23 @@ const TeacherHomeworkNewPage: React.FC = () => {
     return () => { cancelled = true; clearTimeout(h); };
   }, [studentQ, user?.id]);
 
-  // initialize selected student from URL param if present
+  // initialize selected students from URL param if present
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (!studentId) { setSelectedStudent(null); return; }
+      if (!primaryStudentId) { setSelectedStudents([]); return; }
       try {
-        const u = await fetchUserById(studentId);
-        if (!cancelled) setSelectedStudent({ id: u.id, name: u.name, email: u.email, avatar: u.avatar });
+        const u = await fetchUserById(primaryStudentId);
+        if (!cancelled) setSelectedStudents([{ id: u.id, name: u.name, email: u.email, avatar: u.avatar }]);
       } catch {
-        if (!cancelled) setSelectedStudent(null);
+        if (!cancelled) setSelectedStudents([]);
       }
     })();
     return () => { cancelled = true; };
-  }, [studentId]);
+  }, [primaryStudentId]);
 
   const onSubmit = async () => {
-    if (!user?.id || !studentId) return;
+    if (!user?.id || studentIds.length === 0) return;
 
     const tasks: CreateAssignmentDto['tasks'] = [];
     if (isVocabList) {
@@ -689,10 +700,18 @@ const TeacherHomeworkNewPage: React.FC = () => {
     }
 
     const payload: CreateAssignmentDto = {
-      studentId,
+      studentIds,
       title,
       instructions: instructions || undefined,
       dueAt: toOffsetDateTime(dueAt) || undefined,
+      dueAtByStudentId: (() => {
+        const mapped = studentIds.reduce<Record<string, string>>((acc, id) => {
+          const iso = toOffsetDateTime(dueAtByStudentId[id]);
+          if (iso) acc[id] = iso;
+          return acc;
+        }, {});
+        return Object.keys(mapped).length ? mapped : undefined;
+      })(),
       tasks,
     };
 
@@ -700,13 +719,15 @@ const TeacherHomeworkNewPage: React.FC = () => {
       await create.mutateAsync(payload);
       const vocabWordIds = Array.from(new Set(payload.tasks.flatMap(task => task.vocabWordIds ?? [])));
       if (vocabWordIds.length > 0) {
-        try {
-          await assignWords.mutateAsync({
-            studentId: payload.studentId,
-            vocabularyWordIds: vocabWordIds,
-          });
-        } catch (assignError) {
-          console.error('Failed to assign vocabulary words to student', assignError);
+        for (const studentId of studentIds) {
+          try {
+            await assignWords.mutateAsync({
+              studentId,
+              vocabularyWordIds: vocabWordIds,
+            });
+          } catch (assignError) {
+            console.error('Failed to assign vocabulary words to student', assignError);
+          }
         }
       }
       navigate('/t/homework');
@@ -733,17 +754,22 @@ const TeacherHomeworkNewPage: React.FC = () => {
         <Grid size={{xs:12, md: 6}}>
           <Stack spacing={2}>
             <Autocomplete
+              multiple
+              filterSelectedOptions
               options={studentOptions}
               getOptionLabel={(o) => o?.name || ''}
-              value={selectedStudent}
-              onChange={(_, val) => { setSelectedStudent(val); setStudentId(val?.id || ''); }}
+              value={selectedStudents}
+              onChange={(_, values) => {
+                setSelectedStudents(values);
+                setStudentIds(values.map(v => v.id));
+              }}
               onInputChange={(_, val, reason) => { if (reason !== 'reset') setStudentQ(val); }}
               loading={studentLoading}
               renderInput={(params) => (
                 <TextField
                   {...params}
-                  label="Student"
-                  placeholder="Type a name…"
+                  label="Students"
+                  placeholder="Type names…"
                   required
                   InputProps={{
                     ...params.InputProps,
@@ -760,7 +786,42 @@ const TeacherHomeworkNewPage: React.FC = () => {
             />
             <TextField label="Title" value={title} onChange={e => setTitle(e.target.value)} fullWidth required />
             <TextField label="Instructions" value={instructions} onChange={e => setInstructions(e.target.value)} fullWidth multiline minRows={2} />
-            <TextField type="datetime-local" label="Due At" value={dueAt} onChange={e => setDueAt(e.target.value)} InputLabelProps={{ shrink: true }} />
+            <TextField
+              type="datetime-local"
+              label="Default due date (Optional)"
+              value={dueAt}
+              onChange={e => setDueAt(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+            />
+            {selectedStudents.length > 0 && (
+              <Stack spacing={1}>
+                <Typography variant="subtitle2">Per-student due date overrides</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Leave empty to use the default due date.
+                </Typography>
+                {selectedStudents.map((student) => (
+                  <Stack key={student.id} direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }}>
+                    <Typography variant="body2" sx={{ minWidth: 180 }}>{student.name}</Typography>
+                    <TextField
+                      type="datetime-local"
+                      size="small"
+                      fullWidth
+                      value={dueAtByStudentId[student.id] || ''}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setDueAtByStudentId((prev) => {
+                          const next = { ...prev };
+                          if (!value) delete next[student.id];
+                          else next[student.id] = value;
+                          return next;
+                        });
+                      }}
+                      InputLabelProps={{ shrink: true }}
+                    />
+                  </Stack>
+                ))}
+              </Stack>
+            )}
           </Stack>
         </Grid>
         <Grid size={{xs:12, md: 6}}>
@@ -811,9 +872,9 @@ const TeacherHomeworkNewPage: React.FC = () => {
                     control={<Checkbox checked={showAllWords} onChange={(e) => setShowAllWords(e.target.checked)} />}
                     label="Show all words"
                   />
-                  {!showAllWords && !studentId && (
+                  {!showAllWords && !primaryStudentId && (
                     <Typography variant="caption" color="text.secondary">
-                      Select a student to load assigned words
+                      Select at least one student to load assigned words
                     </Typography>
                   )}
                 </Stack>
@@ -1062,7 +1123,7 @@ const TeacherHomeworkNewPage: React.FC = () => {
           <Stack spacing={2} sx={{ mt: 1 }}>
             <Typography variant="body2" color="text.secondary">
               {showAllWords ? 'Showing all vocabulary words.' : 'Showing words assigned to the selected student.'}
-              {!showAllWords && !studentId ? ' Select a student to load assignments.' : ''}
+              {!showAllWords && !primaryStudentId ? ' Select at least one student to load assignments.' : ''}
             </Typography>
             <TextField label="Search" value={wordSearch} onChange={e => setWordSearch(e.target.value)} fullWidth />
             <VocabularyList

@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { Box, Button, Card, CardContent, Chip, Container, Divider, Grid, Stack, Typography } from '@mui/material';
-import { useAssignmentById, useStartTask, useCompleteTask } from '../../hooks/useHomeworks';
+import { Autocomplete, Box, Button, Card, CardContent, Chip, CircularProgress, Container, Dialog, DialogActions, DialogContent, DialogTitle, Divider, Grid, Stack, TextField, Typography } from '@mui/material';
+import { useAssignmentById, useCompleteTask, useReassignHomework, useStartTask } from '../../hooks/useHomeworks';
 import { AssignmentDto, TaskDto } from '../../types/homework';
 import { useAuth } from '../../context/AuthContext';
 import HomeworkTaskFrame from '../../components/homework/HomeworkTaskFrame';
 import { activityEmitter } from '../../services/tracking/activityEmitter';
+import { fetchStudents } from '../../services/api';
+import { toOffsetDateTime } from '../../utils/datetime';
 
 const StudentAssignmentDetailPage: React.FC = () => {
   const { assignmentId } = useParams();
@@ -61,7 +63,15 @@ const StudentAssignmentDetailPage: React.FC = () => {
   // Lifecycle integrations
   const startTask = useStartTask(!isTeacher ? (user?.id || '') : '');
   const completeTask = useCompleteTask(!isTeacher ? (user?.id || '') : '');
+  const reassignHomework = useReassignHomework(user?.id || '');
   const startedOnceRef = useRef(false);
+  const [reassignOpen, setReassignOpen] = React.useState(false);
+  const [studentOptions, setStudentOptions] = React.useState<Array<{ id: string; name: string; email?: string; avatar?: string }>>([]);
+  const [studentQ, setStudentQ] = React.useState('');
+  const [selectedStudents, setSelectedStudents] = React.useState<Array<{ id: string; name: string; email?: string; avatar?: string }>>([]);
+  const [studentLoading, setStudentLoading] = React.useState(false);
+  const [dueAt, setDueAt] = React.useState('');
+  const [dueAtByStudentId, setDueAtByStudentId] = React.useState<Record<string, string>>({});
 
   useEffect(() => {
     if (isTeacher) return;
@@ -88,6 +98,65 @@ const StudentAssignmentDetailPage: React.FC = () => {
       setCompleting(false);
     }
   };
+
+  useEffect(() => {
+    if (!reassignOpen || !user?.id || !isTeacher) return;
+    let cancelled = false;
+    const h = setTimeout(async () => {
+      setStudentLoading(true);
+      try {
+        const res = await fetchStudents(user.id, studentQ, 0, 10);
+        if (!cancelled) {
+          setStudentOptions(
+            res.content
+              .map((s: any) => ({ id: s.id, name: s.name, email: s.email, avatar: s.avatar }))
+              .filter((s: { id: string }) => s.id !== assignment?.studentId),
+          );
+        }
+      } finally {
+        if (!cancelled) setStudentLoading(false);
+      }
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(h);
+    };
+  }, [reassignOpen, user?.id, studentQ, isTeacher, assignment?.studentId]);
+
+  const submitReassign = async () => {
+    if (!assignmentId || !assignment || selectedStudents.length === 0) return;
+    try {
+      const studentIds = selectedStudents.map((s) => s.id);
+      const mapped = studentIds.reduce<Record<string, string>>((acc, id) => {
+        const iso = toOffsetDateTime(dueAtByStudentId[id]);
+        if (iso) acc[id] = iso;
+        return acc;
+      }, {});
+      await reassignHomework.mutateAsync({
+        assignmentId,
+        payload: {
+          studentIds,
+          dueAt: toOffsetDateTime(dueAt) || undefined,
+          dueAtByStudentId: Object.keys(mapped).length ? mapped : undefined,
+        },
+      });
+      setReassignOpen(false);
+      setSelectedStudents([]);
+      setStudentQ('');
+      setDueAt('');
+      setDueAtByStudentId({});
+    } catch {
+      // handled globally
+    }
+  };
+
+  useEffect(() => {
+    setDueAtByStudentId((prev) => {
+      const allowed = new Set(selectedStudents.map((s) => s.id));
+      const next = Object.fromEntries(Object.entries(prev).filter(([id]) => allowed.has(id)));
+      return Object.keys(next).length === Object.keys(prev).length ? prev : next;
+    });
+  }, [selectedStudents]);
 
   if (isLoading) return <Container sx={{ py: 4 }}><Typography>Loading...</Typography></Container>;
   if (isError) return <Container sx={{ py: 4 }}><Typography color="error">Failed to load.</Typography></Container>;
@@ -135,6 +204,11 @@ const StudentAssignmentDetailPage: React.FC = () => {
                 {allDone ? 'Completed' : completing ? 'Completing…' : 'Mark homework as done'}
               </Button>
             )}
+            {isTeacher && (
+              <Button variant="outlined" onClick={() => setReassignOpen(true)}>
+                Reassign
+              </Button>
+            )}
             {assignment.tasks.length > 1 && (
               <Button variant="contained" onClick={goNext}>Continue</Button>
             )}
@@ -142,6 +216,89 @@ const StudentAssignmentDetailPage: React.FC = () => {
         </Grid>
       </Grid>
     </Container>
+        <Dialog open={reassignOpen} onClose={() => setReassignOpen(false)} fullWidth maxWidth="sm">
+          <DialogTitle>Reassign homework</DialogTitle>
+          <DialogContent>
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <TextField
+                type="datetime-local"
+                label="Default due date (Optional)"
+                value={dueAt}
+                onChange={(e) => setDueAt(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+              />
+              <Autocomplete
+                multiple
+                filterSelectedOptions
+                options={studentOptions}
+                getOptionLabel={(o) => o?.name || ''}
+                value={selectedStudents}
+                onChange={(_, values) => setSelectedStudents(values)}
+                onInputChange={(_, val, reason) => {
+                  if (reason !== 'reset') setStudentQ(val);
+                }}
+                loading={studentLoading}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Students"
+                    placeholder="Type names…"
+                    InputProps={{
+                      ...params.InputProps,
+                      endAdornment: (
+                        <>
+                          {studentLoading ? <CircularProgress color="inherit" size={16} /> : null}
+                          {params.InputProps.endAdornment}
+                        </>
+                      ),
+                    }}
+                    helperText={selectedStudents.length === 0 ? 'Select at least one student' : ' '}
+                  />
+                )}
+                isOptionEqualToValue={(o, v) => o.id === v.id}
+              />
+              {selectedStudents.length > 0 && (
+                <Stack spacing={1}>
+                  <Typography variant="subtitle2">Per-student due date overrides</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Leave empty to use the default due date.
+                  </Typography>
+                  {selectedStudents.map((student) => (
+                    <Stack key={student.id} direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }}>
+                      <Typography variant="body2" sx={{ minWidth: 180 }}>{student.name}</Typography>
+                      <TextField
+                        type="datetime-local"
+                        size="small"
+                        fullWidth
+                        value={dueAtByStudentId[student.id] || ''}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setDueAtByStudentId((prev) => {
+                            const next = { ...prev };
+                            if (!value) delete next[student.id];
+                            else next[student.id] = value;
+                            return next;
+                          });
+                        }}
+                        InputLabelProps={{ shrink: true }}
+                      />
+                    </Stack>
+                  ))}
+                </Stack>
+              )}
+            </Stack>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setReassignOpen(false)} disabled={reassignHomework.isPending}>Cancel</Button>
+            <Button
+              variant="contained"
+              onClick={submitReassign}
+              disabled={selectedStudents.length === 0 || reassignHomework.isPending}
+            >
+              {reassignHomework.isPending ? 'Reassigning…' : 'Reassign'}
+            </Button>
+          </DialogActions>
+        </Dialog>
       </Box>
   );
 };

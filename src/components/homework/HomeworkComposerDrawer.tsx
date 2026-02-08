@@ -22,7 +22,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import ContentPasteIcon from '@mui/icons-material/ContentPaste';
 import {useMutation, useQuery} from '@tanstack/react-query';
 import {useAuth} from '../../context/AuthContext';
-import {useCreateAssignment} from '../../hooks/useHomeworks';
+import {useCreateAssignmentsBulk} from '../../hooks/useHomeworks';
 import {useAssignWords, useAssignments} from '../../hooks/useAssignments';
 import {CreateAssignmentDto, HomeworkTaskType, SourceKind, AssignmentDto} from '../../types/homework';
 import {toOffsetDateTime} from '../../utils/datetime';
@@ -70,19 +70,20 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({
   onCreateAndOpen
 }) => {
   const { user } = useAuth();
-  const create = useCreateAssignment(user?.id || '');
+  const createBulk = useCreateAssignmentsBulk(user?.id || '');
   const assignWords = useAssignWords();
 
   // Assignment fields
-  const [studentId, setStudentId] = React.useState<string>('');
+  const [studentIds, setStudentIds] = React.useState<string[]>([]);
   const [studentOptions, setStudentOptions] = React.useState<{ id: string; name: string; email?: string; avatar?: string }[]>([]);
   const [studentQ, setStudentQ] = React.useState('');
-  const [selectedStudent, setSelectedStudent] = React.useState<{ id: string; name: string; email?: string; avatar?: string } | null>(null);
+  const [selectedStudents, setSelectedStudents] = React.useState<Array<{ id: string; name: string; email?: string; avatar?: string }>>([]);
   const [studentLoading, setStudentLoading] = React.useState(false);
 
   const [title, setTitle] = React.useState('Homework-' + new Date().toISOString().slice(0, 10));
   const [instructions, setInstructions] = React.useState('');
   const [dueAt, setDueAt] = React.useState('');
+  const [dueAtByStudentId, setDueAtByStudentId] = React.useState<Record<string, string>>({});
 
   // Task fields
   const [taskTitle, setTaskTitle] = React.useState('Task 1');
@@ -134,7 +135,8 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({
     staleTime: 60_000,
   });
   const allWords = wordsPage?.content ?? EMPTY_ARRAY;
-  const assignmentsQuery = useAssignments(studentId);
+  const primaryStudentId = studentIds[0] || '';
+  const assignmentsQuery = useAssignments(primaryStudentId);
 
   const assignedWords = React.useMemo(() => {
     const seen = new Set<string>();
@@ -213,17 +215,21 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({
     return () => { cancelled = true; clearTimeout(h); };
   }, [studentQ, user?.id]);
 
-  // initialize selected student from prefill
+  // initialize selected students from prefill
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
       if (!open) return; // run on open
-      if (!prefillStudentId) { setSelectedStudent(null); setStudentId(''); return; }
+      if (!prefillStudentId) { setSelectedStudents([]); setStudentIds([]); return; }
       try {
         const u = await fetchUserById(prefillStudentId);
-        if (!cancelled) { setSelectedStudent({ id: u.id, name: u.name, email: u.email, avatar: u.avatar }); setStudentId(prefillStudentId); }
+        if (!cancelled) {
+          const student = { id: u.id, name: u.name, email: u.email, avatar: u.avatar };
+          setSelectedStudents([student]);
+          setStudentIds([prefillStudentId]);
+        }
       } catch {
-        if (!cancelled) { setSelectedStudent(null); setStudentId(''); }
+        if (!cancelled) { setSelectedStudents([]); setStudentIds([]); }
       }
     })();
     return () => { cancelled = true; };
@@ -234,9 +240,12 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({
     if (!open) {
       // reset draft when closed
       setStudentQ('');
+      setSelectedStudents([]);
+      setStudentIds([]);
       setTitle('Homework-' + new Date().toISOString().slice(0, 10));
       setInstructions('');
       setDueAt('');
+      setDueAtByStudentId({});
       setTaskTitle('Task 1');
       setTaskType('VIDEO');
       setSourceKind('EXTERNAL_URL');
@@ -272,6 +281,14 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({
       setAudioContentRef(null);
     }
   }, [open]);
+
+  React.useEffect(() => {
+    setDueAtByStudentId((prev) => {
+      const allowed = new Set(studentIds);
+      const next = Object.fromEntries(Object.entries(prev).filter(([id]) => allowed.has(id)));
+      return Object.keys(next).length === Object.keys(prev).length ? prev : next;
+    });
+  }, [studentIds]);
 
   const urlValid = React.useMemo(() => {
     if (sourceKind !== 'EXTERNAL_URL') return true;
@@ -564,7 +581,7 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({
   };
 
   const isValid = React.useMemo(() => {
-    if (!studentId || !title.trim()) return false;
+    if (studentIds.length === 0 || !title.trim()) return false;
     if (isVocabList) {
       return !isVocabSelectionInvalid;
     }
@@ -584,7 +601,7 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({
     }
     return true;
   }, [
-    studentId,
+    studentIds,
     title,
     isVocabList,
     isVocabSelectionInvalid,
@@ -718,28 +735,41 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({
     }
 
     const payload: CreateAssignmentDto = {
-      studentId,
+      studentIds,
       title,
       instructions: instructions || undefined,
       dueAt: toOffsetDateTime(dueAt) || undefined,
+      dueAtByStudentId: (() => {
+        const mapped = studentIds.reduce<Record<string, string>>((acc, id) => {
+          const iso = toOffsetDateTime(dueAtByStudentId[id]);
+          if (iso) acc[id] = iso;
+          return acc;
+        }, {});
+        return Object.keys(mapped).length ? mapped : undefined;
+      })(),
       tasks: buildTasks(),
     };
     try {
-      const res = await create.mutateAsync(payload);
+      const created = await createBulk.mutateAsync(payload);
+      if (!created.length) return;
       const vocabWordIds = Array.from(new Set(payload.tasks.flatMap(task => task.vocabWordIds ?? [])));
       if (vocabWordIds.length > 0) {
-        try {
-          await assignWords.mutateAsync({
-            studentId: payload.studentId,
-            vocabularyWordIds: vocabWordIds,
-          });
-        } catch (assignError) {
-          console.error('Failed to assign vocabulary words to student', assignError);
+        for (const sid of studentIds) {
+          try {
+            await assignWords.mutateAsync({
+              studentId: sid,
+              vocabularyWordIds: vocabWordIds,
+            });
+          } catch (assignError) {
+            console.error('Failed to assign vocabulary words to student', assignError);
+          }
         }
       }
-      const studentLabel = selectedStudent?.name || studentId;
-      onSuccess(res, studentLabel);
-      if (openAfterCreate && onCreateAndOpen) onCreateAndOpen(res);
+      const studentLabel = selectedStudents.length === 1
+        ? (selectedStudents[0]?.name || studentIds[0])
+        : `${studentIds.length} students`;
+      onSuccess(created[0], studentLabel);
+      if (openAfterCreate && onCreateAndOpen) onCreateAndOpen(created[0]);
     } catch (e) {
       // global error boundary/snackbar should show errors
     }
@@ -766,17 +796,22 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({
             <Typography variant="h6" sx={{ mb: 2 }}>Assignment</Typography>
             <Stack>
               <Autocomplete
+                multiple
+                filterSelectedOptions
                 options={studentOptions}
                 getOptionLabel={(o) => o?.name || ''}
-                value={selectedStudent}
-                onChange={(_, val) => { setSelectedStudent(val); setStudentId(val?.id || ''); }}
+                value={selectedStudents}
+                onChange={(_, values) => {
+                  setSelectedStudents(values);
+                  setStudentIds(values.map(v => v.id));
+                }}
                 onInputChange={(_, val, reason) => { if (reason !== 'reset') setStudentQ(val); }}
                 loading={studentLoading}
                 renderInput={(params) => (
                   <TextField
                     {...params}
-                    label="Student"
-                    placeholder="Type a name…"
+                    label="Students"
+                    placeholder="Type names…"
                     required
                     autoFocus={studentAutoFocus}
                     InputProps={{
@@ -788,15 +823,44 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({
                         </>
                       ),
                     }}
-                    error={!studentId}
-                    helperText={!studentId ? 'Required' : ' '}
+                    error={studentIds.length === 0}
+                    helperText={studentIds.length === 0 ? 'Select at least one student' : ' '}
                   />
                 )}
                 isOptionEqualToValue={(o, v) => o.id === v.id}
               />
               <TextField label="Title" value={title} onChange={e => setTitle(e.target.value)} fullWidth required error={!title.trim()} helperText={!title.trim() ? 'Required' : ' '}/>
               <TextField label="Instructions" value={instructions} onChange={e => setInstructions(e.target.value)} fullWidth multiline minRows={2} />
-              <TextField type="datetime-local" label="Due At (Optional)" value={dueAt } sx={{mt: 2}} onChange={e => setDueAt(e.target.value)} InputLabelProps={{ shrink: true }} />
+              <TextField type="datetime-local" label="Default due date (Optional)" value={dueAt } sx={{mt: 2}} onChange={e => setDueAt(e.target.value)} InputLabelProps={{ shrink: true }} />
+              {selectedStudents.length > 0 && (
+                <Stack spacing={1} sx={{ mt: 2 }}>
+                  <Typography variant="subtitle2">Per-student due date overrides</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Leave empty to use the default due date.
+                  </Typography>
+                  {selectedStudents.map((student) => (
+                    <Stack key={student.id} direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }}>
+                      <Typography variant="body2" sx={{ minWidth: 180 }}>{student.name}</Typography>
+                      <TextField
+                        type="datetime-local"
+                        size="small"
+                        fullWidth
+                        value={dueAtByStudentId[student.id] || ''}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setDueAtByStudentId((prev) => {
+                            const next = { ...prev };
+                            if (!value) delete next[student.id];
+                            else next[student.id] = value;
+                            return next;
+                          });
+                        }}
+                        InputLabelProps={{ shrink: true }}
+                      />
+                    </Stack>
+                  ))}
+                </Stack>
+              )}
             </Stack>
           </Paper>
 
@@ -844,9 +908,9 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({
                       control={<Checkbox checked={showAllWords} onChange={e => setShowAllWords(e.target.checked)} />}
                       label="Show all words"
                     />
-                    {!showAllWords && !studentId && (
+                    {!showAllWords && !primaryStudentId && (
                       <Typography variant="caption" color="text.secondary">
-                        Select a student to load assigned words
+                        Select at least one student to load assigned words
                       </Typography>
                     )}
                   </Stack>
@@ -1083,9 +1147,9 @@ const HomeworkComposerDrawer: React.FC<HomeworkComposerDrawerProps> = ({
         <Paper variant="outlined" square sx={{ position: 'sticky', bottom: 0, p: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: 0 }}>
           <Stack direction="row" gap={1}>
             <Button onClick={onClose} color="inherit">Cancel</Button>
-            <Button onClick={() => submit(true)} disabled={!isValid || create.isPending}>Create & open</Button>
+            <Button onClick={() => submit(true)} disabled={!isValid || createBulk.isPending}>Create & open</Button>
           </Stack>
-          <Button variant="contained" onClick={() => submit(false)} disabled={!isValid || create.isPending}>Create</Button>
+          <Button variant="contained" onClick={() => submit(false)} disabled={!isValid || createBulk.isPending}>Create</Button>
         </Paper>
       </Box>
 

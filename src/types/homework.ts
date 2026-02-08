@@ -58,10 +58,12 @@ export interface AssignmentListItemDto {
 
 // Create payloads (frontend helpers)
 export interface CreateAssignmentDto {
-  studentId: string;
+  studentId?: string;
+  studentIds?: string[];
   title: string;
   instructions?: string;
   dueAt?: string; // ISO date
+  dueAtByStudentId?: Record<string, string>; // ISO date keyed by student id
   idempotencyKey?: string;
   tasks: Array<
     Pick<TaskDto, 'type' | 'sourceKind' | 'title' | 'instructions'> & {
@@ -72,6 +74,12 @@ export interface CreateAssignmentDto {
       vocabWordIds?: string[];
     }
   >;
+}
+
+export interface ReassignHomeworkDto {
+  studentIds: string[];
+  dueAt?: string;
+  dueAtByStudentId?: Record<string, string>;
 }
 
 export interface UpdateProgressPayload {
@@ -91,4 +99,3 @@ export interface UpdateProgressPayload {
   // additional info
   meta?: Record<string, unknown>;
 }
-

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AssignmentDto, AssignmentListItemDto, CreateAssignmentDto, PageResult, UpdateProgressPayload } from '../types/homework';
-import { completeTask, createHomework, deleteHomework, getStudentHomeworks, getTutorHomeworks, startTask, updateTaskProgress, getAssignmentById, getStudentHomeworkCounts, HomeworkListParams } from '../services/homework';
+import { AssignmentDto, AssignmentListItemDto, CreateAssignmentDto, PageResult, ReassignHomeworkDto, UpdateProgressPayload } from '../types/homework';
+import { completeTask, createHomework, createHomeworksBulk, deleteHomework, getStudentHomeworks, getTutorHomeworks, reassignHomework, startTask, updateTaskProgress, getAssignmentById, getStudentHomeworkCounts, HomeworkListParams } from '../services/homework';
 
 export const useStudentAssignments = (studentId: string, params?: HomeworkListParams) => {
   return useQuery<PageResult<AssignmentListItemDto>>({
@@ -31,6 +31,27 @@ export const useCreateAssignment = (teacherId: string) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload: CreateAssignmentDto) => createHomework(teacherId, payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['homeworks'] });
+    },
+  });
+};
+
+export const useCreateAssignmentsBulk = (teacherId: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: CreateAssignmentDto) => createHomeworksBulk(teacherId, payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['homeworks'] });
+    },
+  });
+};
+
+export const useReassignHomework = (teacherId: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ assignmentId, payload }: { assignmentId: string; payload: ReassignHomeworkDto }) =>
+      reassignHomework(teacherId, assignmentId, payload),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['homeworks'] });
     },

@@ -1,4 +1,4 @@
-import { AssignmentDto, AssignmentListItemDto, CreateAssignmentDto, HomeworkTaskType, PageResult, UpdateProgressPayload } from '../types/homework';
+import { AssignmentDto, AssignmentListItemDto, CreateAssignmentDto, HomeworkTaskType, PageResult, ReassignHomeworkDto, UpdateProgressPayload } from '../types/homework';
 import api from './api';
 
 // Endpoints base: prefer env override, fallback to service prefix
@@ -64,6 +64,12 @@ export const getTutorHomeworks = (tutorId: string, params?: HomeworkListParams) 
 
 export const createHomework = (teacherId: string, payload: CreateAssignmentDto) =>
   api.post<AssignmentDto>(`${HOMEWORKS_BASE}`, payload, { params: { teacherId } }).then(r => r.data);
+
+export const createHomeworksBulk = (teacherId: string, payload: CreateAssignmentDto) =>
+  api.post<AssignmentDto[]>(`${HOMEWORKS_BASE}/bulk`, payload, { params: { teacherId } }).then(r => r.data);
+
+export const reassignHomework = (teacherId: string, assignmentId: string, payload: ReassignHomeworkDto) =>
+  api.post<AssignmentDto[]>(`${HOMEWORKS_BASE}/${assignmentId}/reassign`, payload, { params: { teacherId } }).then(r => r.data);
 
 export const deleteHomework = (assignmentId: string) =>
   api.delete<void>(`${HOMEWORKS_BASE}/${assignmentId}`).then(r => r.data as unknown as void);
