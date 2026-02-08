@@ -22,7 +22,7 @@ const api = ky.create({
 
 
 export const vocabApi = {
-    listWords: (params: { text?: string; difficulty?: string; page?: number; size?: number; ids?: string[] } = {}) => {
+    listWords: (params: { text?: string; difficulty?: string; page?: number; size?: number; ids?: string[]; sort?: string | string[] } = {}) => {
         const searchParams = new URLSearchParams();
         if (params.text) {
             searchParams.set('text', params.text);
@@ -39,6 +39,12 @@ export const vocabApi = {
         if (params.ids && params.ids.length > 0) {
             params.ids.forEach(id => {
                 if (id) searchParams.append('ids', id);
+            });
+        }
+        if (params.sort) {
+            const sorts = Array.isArray(params.sort) ? params.sort : [params.sort];
+            sorts.forEach(sort => {
+                if (sort) searchParams.append('sort', sort);
             });
         }
         return api.get('words', { searchParams }).json<PageResult<VocabularyWord>>();

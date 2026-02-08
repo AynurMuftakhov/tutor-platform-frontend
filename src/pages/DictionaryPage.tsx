@@ -109,7 +109,8 @@ const DictionaryPage: React.FC = () => {
         difficulty: category === '0' ? undefined : category,
         page: page - 1,
         size: ITEMS_PER_PAGE,
-        ids: myVocabularyIds
+        ids: myVocabularyIds,
+        sort: 'createdAt,desc'
     }, {
         enabled: shouldFetchDictionary
     });
@@ -727,10 +728,17 @@ const DictionaryPage: React.FC = () => {
                 )}
 
             {/* Dialogs */}
-            <GenerateWordDialog open={genOpen} onClose={() => {
-                setGenOpen(false);
-                refetchWords(); // Refetch words when dialog is closed
-            }}/>
+            <GenerateWordDialog
+                open={genOpen}
+                onSaved={() => {
+                    setPage(1);
+                    refetchWords();
+                }}
+                onClose={() => {
+                    setGenOpen(false);
+                    refetchWords(); // Refetch words when dialog is closed
+                }}
+            />
 
             <ReviewWordDialog
                 open={reviewOpen}

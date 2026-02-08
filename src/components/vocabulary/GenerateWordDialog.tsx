@@ -28,11 +28,12 @@ import VolumeUpIcon from "@mui/icons-material/VolumeUp";
 interface Props {
     open: boolean;
     onClose: () => void;
+    onSaved?: () => void;
 }
 
 type Step = 'INPUT' | 'REVIEW';
 
-const GenerateWordDialog: React.FC<Props> = ({ open, onClose }) => {
+const GenerateWordDialog: React.FC<Props> = ({ open, onClose, onSaved }) => {
     const { user } = useAuth();
     const qc = useQueryClient();
     const createWord = useCreateWord();
@@ -80,6 +81,7 @@ const GenerateWordDialog: React.FC<Props> = ({ open, onClose }) => {
             // Invalidate the query to ensure the UI is updated
             qc.invalidateQueries({ queryKey: ['vocabulary', 'words'] });
         }
+        onSaved?.();
         onClose();
         setTimeout(reset, 400); // small delay to allow dialog close animation
     };
