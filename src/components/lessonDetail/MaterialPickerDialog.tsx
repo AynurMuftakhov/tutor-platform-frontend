@@ -20,6 +20,7 @@ import FolderSidebar, { SIDEBAR_WIDTH } from '../folders/FolderSidebar';
 import { ROOT_FOLDER_ID } from '../folders/FolderTree';
 import { fetchStudents } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { mapSortOption, mapToolbarTypeToApi, type MaterialSortOption } from '../materials/materialsViewConfig';
 
 interface MaterialPickerDialogProps {
   lessonId: string;
@@ -36,6 +37,7 @@ const MaterialPickerDialog: React.FC<MaterialPickerDialogProps> = ({
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedType, setSelectedType] = useState<MaterialType>('all');
+  const [selectedSort, setSelectedSort] = useState<MaterialSortOption>('title_asc');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [selectedFolderId, setSelectedFolderId] = useState<string>(ROOT_FOLDER_ID);
@@ -65,15 +67,9 @@ const MaterialPickerDialog: React.FC<MaterialPickerDialogProps> = ({
   const { data: materialsData = { content: [] }, isLoading: materialsLoading } = useMaterials({
     folderId: selectedFolderId === ROOT_FOLDER_ID || selectedFolderId === 'all' ? undefined : selectedFolderId,
     search: searchTerm,
-    type:
-      selectedType === 'all'
-        ? undefined
-        : selectedType === 'grammar'
-          ? 'GRAMMAR'
-          : selectedType === 'listening'
-            ? 'LISTENING'
-            : selectedType,
+    type: mapToolbarTypeToApi(selectedType),
     tags: selectedTags.length > 0 ? selectedTags : undefined,
+    ...mapSortOption(selectedSort),
   });
 
   // Fetch lesson materials to check which ones are already linked
@@ -113,6 +109,10 @@ const MaterialPickerDialog: React.FC<MaterialPickerDialogProps> = ({
   // Handle view mode change
   const handleViewModeChange = (mode: ViewMode) => {
     setViewMode(mode);
+  };
+
+  const handleSortChange = (sort: MaterialSortOption) => {
+    setSelectedSort(sort);
   };
 
   // Handle folder selection
@@ -199,6 +199,8 @@ const MaterialPickerDialog: React.FC<MaterialPickerDialogProps> = ({
             onTypeChange={handleTypeChange}
             selectedTags={selectedTags}
             onTagsChange={handleTagsChange}
+            selectedSort={selectedSort}
+            onSortChange={handleSortChange}
             onAddMaterial={handleAddMaterial}
           />
 

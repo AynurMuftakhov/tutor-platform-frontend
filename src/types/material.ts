@@ -5,7 +5,8 @@ export interface Material {
   title: string;
   type: MaterialType;
   thumbnailUrl?: string;
-  duration?: number; // in seconds
+  duration?: number;
+  durationSec?: number;
   tags?: string[];
   sourceUrl?: string;
   folderId?: string;

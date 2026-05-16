@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -16,11 +16,19 @@ import {
   Select,
   MenuItem,
   Pagination,
+  Alert,
 } from '@mui/material';
 import PageHeader from '../components/PageHeader';
 import ListeningTaskManager from '../components/materials/ListeningTaskManager';
 import {
   Add as AddIcon,
+  FolderOpenRounded as AllIcon,
+  AutoAwesome as NeedsOrgIcon,
+  Videocam as VideoIcon,
+  MusicNote as AudioIcon,
+  Description as DocumentIcon,
+  Code as GrammarIcon,
+  Headphones as ListeningIcon,
 } from '@mui/icons-material';
 import { useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
@@ -39,6 +47,12 @@ import { deleteMaterial, updateMaterialFolder, deleteMaterialFolder, fetchStuden
 import { resolveUrl } from '../services/assets';
 import { useAuth } from '../context/AuthContext';
 import ListeningMaterialViewer from '../components/materials/listening/ListeningMaterialViewer';
+import {
+  buildMaterialsApiQuery,
+  MaterialSmartViewId,
+  MaterialSortOption,
+  SMART_VIEW_LABELS,
+} from '../components/materials/materialsViewConfig';
 
 const LearningMaterialsPage: React.FC = () => {
   const theme = useTheme();
@@ -52,11 +66,21 @@ const LearningMaterialsPage: React.FC = () => {
   const getParamOrDefault = <T extends string>(key: string, defaultValue: T): T => {
     return (searchParams.get(key) as T) || defaultValue;
   };
+  const allowedSmartViews: MaterialSmartViewId[] = ['all', 'needs_organization', 'video', 'audio', 'document', 'grammar', 'listening'];
+  const allowedSortOptions: MaterialSortOption[] = ['title_asc', 'title_desc', 'type_asc'];
+  const smartFromQuery = searchParams.get('smart') as MaterialSmartViewId | null;
+  const sortFromQuery = searchParams.get('sort') as MaterialSortOption | null;
 
   // State
-  const [selectedFolderId, setSelectedFolderId] = useState<string>(getParamOrDefault('folder', ROOT_FOLDER_ID));
+  const [selectedFolderId, setSelectedFolderId] = useState<string>(getParamOrDefault('folder', 'all'));
   const [searchTerm, setSearchTerm] = useState<string>(getParamOrDefault('search', ''));
   const [selectedType, setSelectedType] = useState<MaterialType>(getParamOrDefault('type', 'all'));
+  const [selectedSmartView, setSelectedSmartView] = useState<MaterialSmartViewId>(
+    smartFromQuery && allowedSmartViews.includes(smartFromQuery) ? smartFromQuery : 'all'
+  );
+  const [selectedSort, setSelectedSort] = useState<MaterialSortOption>(
+    sortFromQuery && allowedSortOptions.includes(sortFromQuery) ? sortFromQuery : 'title_asc'
+  );
   const [selectedTags, setSelectedTags] = useState<string[]>(
     searchParams.get('tags') ? searchParams.get('tags')!.split(',') : []
   );
@@ -96,21 +120,26 @@ const LearningMaterialsPage: React.FC = () => {
 
   // Fetch data using React Query
   const { data: folderTree = [], isLoading: foldersLoading } = useFolderTree();
-  const { data: materialsData = { content: [] }, isLoading: materialsLoading } = useMaterials({
-    folderId: selectedFolderId === ROOT_FOLDER_ID || selectedFolderId === 'all' ? undefined : selectedFolderId,
-    search: searchTerm,
-    type:
-      selectedType === 'all'
-        ? undefined
-        : selectedType === 'grammar'
-          ? 'GRAMMAR'
-          : selectedType === 'listening'
-            ? 'LISTENING'
-            : selectedType,
-    tags: selectedTags.length > 0 ? selectedTags : undefined,
-    page: page - 1,
-    size,
-  });
+  const materialsQuery = useMemo(
+    () =>
+      buildMaterialsApiQuery({
+        folderId: selectedFolderId === ROOT_FOLDER_ID || selectedFolderId === 'all' ? undefined : selectedFolderId,
+        search: searchTerm,
+        selectedType,
+        selectedTags,
+        smartView: selectedSmartView,
+        sort: selectedSort,
+        page: page - 1,
+        size,
+      }),
+    [page, searchTerm, selectedFolderId, selectedSmartView, selectedSort, selectedTags, selectedType, size]
+  );
+
+  const {
+    data: materialsData = { content: [] },
+    isLoading: materialsLoading,
+    isError: materialsError,
+  } = useMaterials(materialsQuery);
 
   // Extract materials array from response (handle both array and object responses)
   const materials = Array.isArray(materialsData) ? materialsData : materialsData.content || [];
@@ -119,6 +148,37 @@ const LearningMaterialsPage: React.FC = () => {
   const totalPages: number = Array.isArray(materialsData) ? 1 : (materialsData.totalPages ?? Math.max(1, Math.ceil(((materialsData.totalElements ?? 0) / (materialsData.size ?? size)) || 1)));
   const from: number = total === 0 ? 0 : (page - 1) * size + 1;
   const to: number = Math.min(page * size, total);
+
+  const folderNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    const walk = (nodes: any[]) => {
+      nodes.forEach((node) => {
+        map.set(node.id, node.name);
+        if (node.children?.length) {
+          walk(node.children);
+        }
+      });
+    };
+    walk(folderTree as any[]);
+    return map;
+  }, [folderTree]);
+
+  const smartViews = useMemo(
+    () => [
+      { id: 'all', label: SMART_VIEW_LABELS.all, icon: <AllIcon fontSize="small" /> },
+      {
+        id: 'needs_organization',
+        label: SMART_VIEW_LABELS.needs_organization,
+        icon: <NeedsOrgIcon fontSize="small" />,
+      },
+      { id: 'video', label: SMART_VIEW_LABELS.video, icon: <VideoIcon fontSize="small" /> },
+      { id: 'audio', label: SMART_VIEW_LABELS.audio, icon: <AudioIcon fontSize="small" /> },
+      { id: 'document', label: SMART_VIEW_LABELS.document, icon: <DocumentIcon fontSize="small" /> },
+      { id: 'grammar', label: SMART_VIEW_LABELS.grammar, icon: <GrammarIcon fontSize="small" /> },
+      { id: 'listening', label: SMART_VIEW_LABELS.listening, icon: <ListeningIcon fontSize="small" /> },
+    ],
+    []
+  );
 
   // Update URL params when state changes
   useEffect(() => {
@@ -134,6 +194,14 @@ const LearningMaterialsPage: React.FC = () => {
 
     if (selectedType !== 'all') {
       params.type = selectedType;
+    }
+
+    if (selectedSmartView !== 'all') {
+      params.smart = selectedSmartView;
+    }
+
+    if (selectedSort !== 'title_asc') {
+      params.sort = selectedSort;
     }
 
     if (selectedTags.length > 0) {
@@ -155,11 +223,12 @@ const LearningMaterialsPage: React.FC = () => {
 
     // Save view mode to localStorage
     localStorage.setItem('materialsViewMode', viewMode);
-  }, [selectedFolderId, searchTerm, selectedType, selectedTags, viewMode, page, size, setSearchParams]);
+  }, [selectedFolderId, searchTerm, selectedType, selectedSmartView, selectedSort, selectedTags, viewMode, page, size, setSearchParams]);
 
   // Handle folder selection
   const handleFolderSelect = (folderId: string) => {
     setSelectedFolderId(folderId);
+    setSelectedSmartView('all');
     setPage(1);
   };
 
@@ -172,6 +241,20 @@ const LearningMaterialsPage: React.FC = () => {
   // Handle material type change
   const handleTypeChange = (type: MaterialType) => {
     setSelectedType(type);
+    setSelectedSmartView('all');
+    setPage(1);
+  };
+
+  const handleSortChange = (sort: MaterialSortOption) => {
+    setSelectedSort(sort);
+    setPage(1);
+  };
+
+  const handleSmartViewSelect = (viewId: string) => {
+    const view = (viewId as MaterialSmartViewId) || 'all';
+    setSelectedSmartView(view);
+    setSelectedFolderId('all');
+    setSelectedType('all');
     setPage(1);
   };
 
@@ -184,6 +267,16 @@ const LearningMaterialsPage: React.FC = () => {
   // Handle view mode change
   const handleViewModeChange = (mode: ViewMode) => {
     setViewMode(mode);
+  };
+
+  const clearFilters = () => {
+    setSelectedType('all');
+    setSelectedTags([]);
+    setSearchTerm('');
+    setSelectedSmartView('all');
+    setSelectedFolderId('all');
+    setSelectedSort('title_asc');
+    setPage(1);
   };
 
   // Handle play button click
@@ -243,7 +336,7 @@ const LearningMaterialsPage: React.FC = () => {
       await queryClient.invalidateQueries({ queryKey: ['materialFolderTree'] });
       // If the deleted folder was selected, select the root folder
       if (selectedFolderId === folder.id) {
-        setSelectedFolderId(ROOT_FOLDER_ID);
+        setSelectedFolderId('all');
       }
     } catch (error) {
       console.error('Failed to delete folder', error);
@@ -280,32 +373,31 @@ const LearningMaterialsPage: React.FC = () => {
   };
 
   // Handle material refresh after creation
-  const handleMaterialCreated = async (newMaterial?: Material) => {
-    // Always invalidate all material queries so inactive queries refresh
+  const handleMaterialCreated = async (_newMaterial?: Material) => {
     await queryClient.invalidateQueries({ queryKey: ['materials'] });
-
-    // Optionally push the new material optimistically if already present
-    if (newMaterial) {
-      await queryClient.setQueryData(
-        ['materials', {
-          folderId: selectedFolderId === ROOT_FOLDER_ID || selectedFolderId === 'all' ? undefined : selectedFolderId,
-          search: searchTerm,
-          type: selectedType === 'all' ? undefined : selectedType === 'listening' ? 'LISTENING' : selectedType,
-          tags: selectedTags.length > 0 ? selectedTags : undefined,
-        }],
-        (old: any) => {
-          if (!old) return old;
-          const content = Array.isArray(old) ? old : old.content ?? [];
-          const alreadyExists = content.some((m: Material) => m.id === newMaterial.id);
-          if (alreadyExists) return old;
-          return {
-            ...old,
-            content: [newMaterial, ...content],
-          };
-        }
-      );
-    }
   };
+
+  const hasAnyFilter = Boolean(
+    searchTerm ||
+      selectedTags.length ||
+      selectedType !== 'all' ||
+      selectedSmartView !== 'all' ||
+      (selectedFolderId !== ROOT_FOLDER_ID && selectedFolderId !== 'all')
+  );
+
+  const emptyTitle =
+    selectedSmartView === 'needs_organization'
+      ? 'Everything looks organized'
+      : selectedFolderId === 'all' || selectedFolderId === ROOT_FOLDER_ID
+        ? 'No materials found'
+        : 'No materials in this folder';
+
+  const emptyDescription =
+    selectedSmartView === 'needs_organization'
+      ? 'All visible items already have a folder and tags.'
+      : hasAnyFilter
+        ? 'Try adjusting search, tags, smart views, or type filters.'
+        : 'Add your first learning material to build your library.';
 
   // Empty state component
   const EmptyState = () => (
@@ -332,21 +424,26 @@ const LearningMaterialsPage: React.FC = () => {
         }}
       />
       <Typography variant="h6" gutterBottom>
-        {selectedFolderId === 'all' ? 'No materials found' : 'No materials in this folder'}
+        {emptyTitle}
       </Typography>
-      <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
-        {selectedFolderId === 'all' 
-          ? 'Click to add your first material.'
-          : 'Drag & drop or click to add material to this folder.'}
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+        {emptyDescription}
       </Typography>
-      <Button
-        variant="contained"
-        color="primary"
-        startIcon={<AddIcon />}
-        onClick={handleAddMaterial}
-      >
-        Add Material
-      </Button>
+      <Stack direction="row" spacing={1.5}>
+        <Button
+          variant="contained"
+          color="primary"
+          startIcon={<AddIcon />}
+          onClick={handleAddMaterial}
+        >
+          Add Material
+        </Button>
+        {hasAnyFilter && (
+          <Button variant="outlined" onClick={clearFilters}>
+            Clear Filters
+          </Button>
+        )}
+      </Stack>
     </Paper>
   );
 
@@ -368,6 +465,9 @@ const LearningMaterialsPage: React.FC = () => {
           onAddFolder={handleAddFolder}
           onEditFolder={handleEditFolder}
           onDeleteFolder={handleDeleteFolder}
+          smartViews={smartViews}
+          selectedSmartViewId={selectedSmartView}
+          onSelectSmartView={handleSmartViewSelect}
       />
       {/* Main content */}
       <Box
@@ -405,11 +505,26 @@ const LearningMaterialsPage: React.FC = () => {
               onTypeChange={handleTypeChange}
               selectedTags={selectedTags}
               onTagsChange={handleTagsChange}
+              selectedSort={selectedSort}
+              onSortChange={handleSortChange}
+              onClearFilters={clearFilters}
               onAddMaterial={handleAddMaterial}
             />
           }
           mb={0}
         />
+
+        {selectedSmartView === 'needs_organization' && (
+          <Alert severity="warning" sx={{ mt: 2, mb: 2 }}>
+            Materials shown here need quick cleanup: missing folder, missing tags, or both. Use the `Fix` action on any card.
+          </Alert>
+        )}
+
+        {materialsError && (
+          <Alert severity="error" sx={{ mt: 2, mb: 2 }}>
+            Failed to load learning materials. Please refresh and try again.
+          </Alert>
+        )}
 
         {/* Materials content */}
         <Box sx={{ flex: 1, overflow: 'auto' }}>
@@ -434,8 +549,11 @@ const LearningMaterialsPage: React.FC = () => {
                   <MaterialCard
                     material={material}
                     viewMode={viewMode}
+                    folderName={material.folderId ? folderNameById.get(material.folderId) : undefined}
+                    highlightNeedsOrganization={selectedSmartView === 'needs_organization'}
                     onPlay={handlePlay}
                     onEdit={handleEditMaterial}
+                    onFixMetadata={handleEditMaterial}
                     onMove={handleMoveMaterial}
                     onDelete={handleDeleteMaterial}
                     onManageTasks={handleManageTasks}
@@ -481,7 +599,7 @@ const LearningMaterialsPage: React.FC = () => {
         open={isAddMaterialModalOpen}
         onClose={() => setIsAddMaterialModalOpen(false)}
         onMaterialCreated={handleMaterialCreated}
-        currentFolderId={selectedFolderId === 'all' ? '' : selectedFolderId}
+        currentFolderId={selectedFolderId === 'all' || selectedFolderId === ROOT_FOLDER_ID ? '' : selectedFolderId}
         onOpenTaskManager={handleManageTasks}
         materialToEdit={materialToEdit}
       />

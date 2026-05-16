@@ -11,8 +11,10 @@ import {
   Chip,
   useMediaQuery,
   useTheme,
-  IconButton,
-  Tooltip,
+  Select,
+  MenuItem,
+  FormControl,
+  Typography,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -21,9 +23,10 @@ import {
   Add as AddIcon,
   FilterList as FilterIcon,
 } from '@mui/icons-material';
-import {getMaterialTags} from "../../services/api";
+import { getMaterialTags } from '../../services/api';
+import type { MaterialSortOption, MaterialToolbarType } from './materialsViewConfig';
 
-export type MaterialType = 'all' | 'listening' | 'reading' | 'grammar';
+export type MaterialType = MaterialToolbarType;
 export type ViewMode = 'list' | 'grid';
 
 interface MaterialsToolbarProps {
@@ -35,7 +38,10 @@ interface MaterialsToolbarProps {
   onTypeChange: (type: MaterialType) => void;
   selectedTags: string[];
   onTagsChange: (tags: string[]) => void;
+  selectedSort: MaterialSortOption;
+  onSortChange: (sort: MaterialSortOption) => void;
   onAddMaterial: () => void;
+  onClearFilters?: () => void;
 }
 
 const MaterialsToolbar: React.FC<MaterialsToolbarProps> = ({
@@ -47,7 +53,10 @@ const MaterialsToolbar: React.FC<MaterialsToolbarProps> = ({
   onTypeChange,
   selectedTags,
   onTagsChange,
+  selectedSort,
+  onSortChange,
   onAddMaterial,
+  onClearFilters,
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -56,31 +65,26 @@ const MaterialsToolbar: React.FC<MaterialsToolbarProps> = ({
     onSearchChange(event.target.value);
   };
 
-  const handleViewModeChange = (
-    event: React.MouseEvent<HTMLElement>,
-    newViewMode: ViewMode | null
-  ) => {
+  const handleViewModeChange = (_event: React.MouseEvent<HTMLElement>, newViewMode: ViewMode | null) => {
     if (newViewMode !== null) {
       onViewModeChange(newViewMode);
     }
   };
 
-  const handleTypeChange = (event: React.SyntheticEvent, newValue: MaterialType) => {
+  const handleTypeChange = (_event: React.SyntheticEvent, newValue: MaterialType) => {
     onTypeChange(newValue);
   };
 
   const handleTagClick = (tag: string) => {
     if (selectedTags.includes(tag)) {
-      onTagsChange(selectedTags.filter(t => t !== tag));
+      onTagsChange(selectedTags.filter((t) => t !== tag));
     } else {
       onTagsChange([...selectedTags, tag]);
     }
   };
 
-  // State for tags
   const [availableTags, setAvailableTags] = useState<string[]>([]);
 
-  // Fetch tags from API
   useEffect(() => {
     const fetchTags = async () => {
       try {
@@ -95,52 +99,41 @@ const MaterialsToolbar: React.FC<MaterialsToolbarProps> = ({
   }, []);
 
   return (
-    <Box sx={{ mb: 3 }}>
-      {/* Material type tabs */}
-      <Box 
-        sx={{ 
+    <Box sx={{ mb: 2 }}>
+      <Box
+        sx={{
           borderBottom: '1px solid',
-          borderColor: 'divider', 
+          borderColor: 'divider',
           mb: 2,
-          position: 'relative',
-          '&::after': {
-            content: '""',
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: '1px',
-            backgroundColor: (theme) => theme.palette.divider,
-            boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-          }
         }}
       >
-        <Tabs 
-          value={selectedType} 
+        <Tabs
+          value={selectedType}
           onChange={handleTypeChange}
           aria-label="material types"
-          variant={isMobile ? "scrollable" : "standard"}
-          scrollButtons={isMobile ? "auto" : undefined}
-          TabIndicatorProps={{
-            sx: { backgroundColor: 'primary.main' }
-          }}
+          variant="scrollable"
+          scrollButtons="auto"
+          TabIndicatorProps={{ sx: { backgroundColor: 'primary.main' } }}
         >
-          <Tab label="All Materials" value="all" />
-          <Tab label="Listening" value="listening" />
+          <Tab label="All" value="all" />
+          <Tab label="Video" value="video" />
+          <Tab label="Audio" value="audio" />
+          <Tab label="Documents" value="document" />
           <Tab label="Grammar" value="grammar" />
+          <Tab label="Listening" value="listening" />
         </Tabs>
       </Box>
 
-      {/* Search and filters row */}
-      <Box sx={{
-        display: 'flex',
-        flexDirection: { xs: 'column', sm: 'row' },
-        justifyContent: 'space-between',
-        alignItems: { xs: 'stretch', sm: 'center' },
-        mb: 2,
-        gap: 2
-      }}>
-        {/* Search field */}
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: { xs: 'column', md: 'row' },
+          justifyContent: 'space-between',
+          alignItems: { xs: 'stretch', md: 'center' },
+          mb: 2,
+          gap: 1.5,
+        }}
+      >
         <TextField
           placeholder="Search by title"
           variant="outlined"
@@ -148,7 +141,7 @@ const MaterialsToolbar: React.FC<MaterialsToolbarProps> = ({
           size="small"
           value={searchTerm}
           onChange={handleSearchChange}
-          sx={{ flexGrow: 1, maxWidth: { sm: '300px' } }}
+          sx={{ flexGrow: 1, maxWidth: { md: 360 } }}
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
@@ -156,10 +149,22 @@ const MaterialsToolbar: React.FC<MaterialsToolbarProps> = ({
               </InputAdornment>
             ),
           }}
+          inputProps={{ 'aria-label': 'Search learning materials' }}
         />
 
-        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-          {/* View toggle */}
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+          <FormControl size="small" sx={{ minWidth: 170 }}>
+            <Select
+              value={selectedSort}
+              onChange={(e) => onSortChange(e.target.value as MaterialSortOption)}
+              inputProps={{ 'aria-label': 'Sort materials' }}
+            >
+              <MenuItem value="title_asc">Title A-Z</MenuItem>
+              <MenuItem value="title_desc">Title Z-A</MenuItem>
+              <MenuItem value="type_asc">Type</MenuItem>
+            </Select>
+          </FormControl>
+
           <ToggleButtonGroup
             value={viewMode}
             exclusive
@@ -175,35 +180,40 @@ const MaterialsToolbar: React.FC<MaterialsToolbarProps> = ({
             </ToggleButton>
           </ToggleButtonGroup>
 
-          {/* Add material button */}
+          {onClearFilters && (
+            <Button variant="text" onClick={onClearFilters}>
+              Reset
+            </Button>
+          )}
+
           <Button
             variant="contained"
             color="primary"
             startIcon={<AddIcon />}
             onClick={onAddMaterial}
-            size={isMobile ? "small" : "medium"}
+            size={isMobile ? 'small' : 'medium'}
           >
-            {isMobile ? "Add" : "Add Material"}
+            {isMobile ? 'Add' : 'Add Material'}
           </Button>
         </Box>
       </Box>
 
-      {/* Tags filter */}
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2, alignItems: 'center' }}>
-        <Tooltip title="Filter by tags">
-          <IconButton size="small" sx={{ mr: 1 }}>
-            <FilterIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mr: 0.5 }}>
+          <FilterIcon fontSize="small" color="action" />
+          <Typography variant="caption" color="text.secondary">
+            Tags
+          </Typography>
+        </Box>
 
-        {availableTags.map(tag => (
+        {availableTags.map((tag) => (
           <Chip
             key={tag}
             label={tag}
             size="small"
             onClick={() => handleTagClick(tag)}
-            color={selectedTags.includes(tag) ? "primary" : "default"}
-            variant={selectedTags.includes(tag) ? "filled" : "outlined"}
+            color={selectedTags.includes(tag) ? 'primary' : 'default'}
+            variant={selectedTags.includes(tag) ? 'filled' : 'outlined'}
           />
         ))}
       </Box>

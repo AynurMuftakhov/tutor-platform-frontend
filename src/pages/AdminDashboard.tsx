@@ -1,83 +1,116 @@
-import React, {useEffect, useState} from 'react';
-import { Link } from 'react-router-dom';
-import { Card, CardContent, Typography, Grid, AppBar, Toolbar, Button } from '@mui/material';
-import api from "../services/api";
+import React, { useEffect, useState } from 'react';
+import {
+    Card, CardContent, Typography, Grid, Box, CircularProgress, Alert,
+    alpha, useTheme
+} from '@mui/material';
+import PeopleIcon from '@mui/icons-material/People';
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
+import SchoolIcon from '@mui/icons-material/School';
+import PersonIcon from '@mui/icons-material/Person';
+import api from '../services/api';
+
+interface SummaryData {
+    totalUsers: number;
+    adminCount: number;
+    teacherCount: number;
+    studentCount: number;
+}
 
 const AdminDashboard: React.FC = () => {
-    const [totalUsers, setTotalUsers] = useState(0);
-    const [usersByRole, setUsersByRole] = useState({ admin: 0, teacher: 0, student: 0 });
-
-    const fetchSummaryData = async () => {
-        try {
-            const response = await api.get('/users/summary'); // Endpoint that returns the necessary data
-            setTotalUsers(response.data.totalUsers);
-            setUsersByRole({
-                admin: response.data.adminCount,
-                teacher: response.data.teacherCount,
-                student: response.data.studentCount,
-            });
-        } catch (error) {
-            console.error('Error fetching summary data:', error);
-        }
-    };
+    const [summary, setSummary] = useState<SummaryData | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const theme = useTheme();
 
     useEffect(() => {
-        fetchSummaryData();
+        const fetchSummary = async () => {
+            try {
+                setLoading(true);
+                setError(null);
+                const response = await api.get('/users-service/api/users/summary');
+                setSummary(response.data);
+            } catch (err) {
+                console.error('Error fetching summary data:', err);
+                setError('Failed to load dashboard data. Please try again.');
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchSummary();
     }, []);
 
+    if (loading) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 300 }}>
+                <CircularProgress />
+            </Box>
+        );
+    }
+
+    if (error) {
+        return (
+            <Box sx={{ p: 4 }}>
+                <Alert severity="error">{error}</Alert>
+            </Box>
+        );
+    }
+
+    const cards = [
+        { label: 'Total Users', value: summary?.totalUsers ?? 0, icon: <PeopleIcon />, color: theme.palette.primary.main },
+        { label: 'Admins', value: summary?.adminCount ?? 0, icon: <AdminPanelSettingsIcon />, color: theme.palette.warning.main },
+        { label: 'Teachers', value: summary?.teacherCount ?? 0, icon: <SchoolIcon />, color: theme.palette.success.main },
+        { label: 'Students', value: summary?.studentCount ?? 0, icon: <PersonIcon />, color: theme.palette.info.main },
+    ];
+
     return (
-        <div>
-            <Typography variant="h4" gutterBottom>
-                Dashboard
+        <Box sx={{ p: 4 }}>
+            <Typography variant="h4" fontWeight={700} gutterBottom>
+                Admin Dashboard
+            </Typography>
+            <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
+                Platform overview and user statistics.
             </Typography>
             <Grid container spacing={3}>
-                <Grid size={{xs:12, md:4, sm:6}}>
-                    <Card>
-                        <CardContent>
-                            <Typography variant="h5">Total Users</Typography>
-                            <Typography variant="h6">{totalUsers}</Typography>
-                        </CardContent>
-                    </Card>
-                </Grid>
-                <Grid size={{xs:12, md:4, sm:6}}>
-                    <Card>
-                        <CardContent>
-                            <Typography variant="h5">Admins</Typography>
-                            <Typography variant="h6">{usersByRole.admin}</Typography>
-                        </CardContent>
-                    </Card>
-                </Grid>
-                <Grid size={{xs:12, md:4, sm:6}}>
-                    <Card>
-                        <CardContent>
-                            <Typography variant="h5">Teachers</Typography>
-                            <Typography variant="h6">{usersByRole.teacher}</Typography>
-                        </CardContent>
-                    </Card>
-                </Grid>
-                <Grid size={{xs:12, md:4, sm:6}}>
-                    <Card>
-                        <CardContent>
-                            <Typography variant="h5">Students</Typography>
-                            <Typography variant="h6">{usersByRole.student}</Typography>
-                        </CardContent>
-                    </Card>
-                </Grid>
-                <AppBar position="static">
-                    <Toolbar>
-                        <Button color="inherit" component={Link} to="/users">
-                            Users
-                        </Button>
-                        <Button color="inherit" component={Link} to="/analytics">
-                            Analytics
-                        </Button>
-                        <Button color="inherit" component={Link} to="/settings">
-                            Settings
-                        </Button>
-                    </Toolbar>
-                </AppBar>
+                {cards.map(({ label, value, icon, color }) => (
+                    <Grid size={{ xs: 12, sm: 6, md: 3 }} key={label}>
+                        <Card
+                            elevation={0}
+                            sx={{
+                                border: `1px solid ${alpha(color, 0.2)}`,
+                                borderRadius: 3,
+                                transition: 'all 0.2s ease',
+                                '&:hover': { boxShadow: `0 4px 20px ${alpha(color, 0.15)}` },
+                            }}
+                        >
+                            <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 3 }}>
+                                <Box
+                                    sx={{
+                                        width: 48,
+                                        height: 48,
+                                        borderRadius: 2,
+                                        bgcolor: alpha(color, 0.1),
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        color,
+                                    }}
+                                >
+                                    {icon}
+                                </Box>
+                                <Box>
+                                    <Typography variant="h4" fontWeight={700}>
+                                        {value}
+                                    </Typography>
+                                    <Typography variant="body2" color="text.secondary">
+                                        {label}
+                                    </Typography>
+                                </Box>
+                            </CardContent>
+                        </Card>
+                    </Grid>
+                ))}
             </Grid>
-        </div>
+        </Box>
     );
 };
 

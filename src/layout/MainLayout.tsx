@@ -238,7 +238,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 </Box>
 
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                   {/* <Tooltip title="Notifications">
+                    <Tooltip title="Notifications">
                         <IconButton
                             size="small"
                             onClick={handleNotificationMenuOpen}
@@ -263,7 +263,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                                 <NotificationsNoneIcon fontSize="small" />
                             </Badge>
                         </IconButton>
-                    </Tooltip>*/}
+                    </Tooltip>
 
                     {currentLessonId && (
                         <Tooltip title="Join current lesson">

@@ -12,8 +12,7 @@ import { createLessonContent, getLessonContents, deleteLessonContent } from '../
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { LessonContent, PageModel, BlockContentPayload, LessonContentListResponse } from '../../types/lessonContent';
 import EditIcon from "@mui/icons-material/Edit";
-import {ContentContainer} from "@fullcalendar/core/internal";
-import {Image} from "@mui/icons-material";
+import AutoStoriesIcon from '@mui/icons-material/AutoStories';
 
 const LessonContentsLibraryPage: React.FC = () => {
   const navigate = useNavigate();
@@ -77,7 +76,7 @@ const LessonContentsLibraryPage: React.FC = () => {
   const createMutation = useMutation({
     mutationFn: () => {
       const { layout, content } = buildInitialComposition();
-      return createLessonContent({ ownerId: user!.id, title: 'Untitled Lesson Material', tags: [], layout: layout, content });
+      return createLessonContent({ ownerId: user!.id, title: 'Untitled Lesson Content', tags: [], layout: layout, content });
     },
     onSuccess: (created) => {
       qc.invalidateQueries({ queryKey: ['lesson-contents'] });
@@ -93,7 +92,7 @@ const LessonContentsLibraryPage: React.FC = () => {
   });
 
   const handleDelete = (id: string) => {
-    if (window.confirm('Delete this Lesson Material? This action cannot be undone.')) {
+    if (window.confirm('Delete this Lesson Content? This action cannot be undone.')) {
       deleteMutation.mutate(id);
     }
   };
@@ -115,7 +114,7 @@ const LessonContentsLibraryPage: React.FC = () => {
     }}>
       <PageHeader
         title="Lesson Contents"
-        icon={<Image />}
+        icon={<AutoStoriesIcon />}
         titleColor="primary"
         actions={
           <Button variant="contained" startIcon={<AddIcon />} onClick={() => createMutation.mutate()}>
@@ -160,7 +159,7 @@ const LessonContentsLibraryPage: React.FC = () => {
           <Typography variant="body2" color="text.secondary">Loading…</Typography>
         ) : items.length === 0 ? (
           <Box textAlign="center" py={6}>
-            <Typography variant="body1" color="text.secondary">No Lesson Material yet.</Typography>
+            <Typography variant="body1" color="text.secondary">No Lesson Content yet.</Typography>
             <Button sx={{ mt: 2 }} variant="outlined" onClick={() => createMutation.mutate()}>Create your first</Button>
           </Box>
         ) : view === 'grid' ? (

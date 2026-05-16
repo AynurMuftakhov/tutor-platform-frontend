@@ -33,10 +33,10 @@ import {
   Code as GrammarIcon,
   Assignment as TasksIcon,
   Headphones as ListeningIcon,
-  OpenInFull,
-  Start,
-  StartOutlined,
   School,
+  Folder as FolderIcon,
+  LabelOutlined as LabelOutlinedIcon,
+  WarningAmberRounded as WarningIcon,
 } from '@mui/icons-material';
 import { useListeningTasks } from '../../hooks/useListeningTasks';
 import { useAuth } from '../../context/AuthContext';
@@ -46,6 +46,7 @@ import { Autocomplete, TextField } from '@mui/material';
 import { fetchStudents } from '../../services/api';
 import { useNavigate } from 'react-router-dom';
 import { toOffsetDateTime } from '../../utils/datetime';
+import { isMaterialNeedsOrganization } from './materialsViewConfig';
 
 export type MaterialType = 'AUDIO' | 'VIDEO' | 'DOCUMENT' | 'GRAMMAR' | 'LISTENING';
 
@@ -54,10 +55,11 @@ export interface Material {
   title: string;
   type: MaterialType;
   thumbnailUrl?: string;
-  duration?: number; // in seconds
+  duration?: number;
+  durationSec?: number;
   tags?: string[];
   sourceUrl?: string;
-  folderId:string;
+  folderId?: string;
 }
 
 interface MaterialCardProps {
@@ -69,6 +71,9 @@ interface MaterialCardProps {
   onUnlink?: (material: Material) => void;
   onManageTasks?: (material: Material) => void;
   viewMode?: 'list' | 'grid';
+  folderName?: string;
+  onFixMetadata?: (material: Material) => void;
+  highlightNeedsOrganization?: boolean;
   // Optional external student search props to avoid per-card fetching
   studentOptionsExternal?: { id: string; name: string; email?: string }[];
   studentLoadingExternal?: boolean;
@@ -84,6 +89,9 @@ const MaterialCard: React.FC<MaterialCardProps> = ({
   onUnlink,
   onManageTasks,
   viewMode = 'grid',
+  folderName,
+  onFixMetadata,
+  highlightNeedsOrganization = false,
   studentOptionsExternal,
   studentLoadingExternal,
   onStudentQueryChange,
@@ -126,9 +134,12 @@ const MaterialCard: React.FC<MaterialCardProps> = ({
   const shouldFetchTasks = !isListening && (material.type === 'AUDIO' || material.type === 'VIDEO');
   const { data: tasks = [] } = useListeningTasks(shouldFetchTasks ? material.id : '');
 
+  const durationSec = material.durationSec ?? material.duration;
+  const needsOrganization = isMaterialNeedsOrganization(material);
+
   // Format duration if available
-  const formattedDuration = material.duration
-    ? `${Math.floor(material.duration / 60)}:${(material.duration % 60).toString().padStart(2, '0')}`
+  const formattedDuration = durationSec
+    ? `${Math.floor(durationSec / 60)}:${(durationSec % 60).toString().padStart(2, '0')}`
     : undefined;
 
   // Handle menu open/close
@@ -158,6 +169,11 @@ const MaterialCard: React.FC<MaterialCardProps> = ({
 
   const handleManageTasks = () => {
     if (onManageTasks) onManageTasks(material);
+    handleMenuClose();
+  };
+
+  const handleFixMetadata = () => {
+    if (onFixMetadata) onFixMetadata(material);
     handleMenuClose();
   };
 
@@ -323,100 +339,118 @@ const MaterialCard: React.FC<MaterialCardProps> = ({
               {material.title}
             </Typography>
 
-            <Box
-              sx={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                alignItems: 'center',
-                gap: 1,
-                mt: viewMode === 'grid' ? 'auto' : 1,
-                justifyContent: 'space-between'
-              }}
-            >
-              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                <Chip
-                  icon={getTypeIcon()}
-                  label={formattedDuration || material.type}
-                  size="small"
-                  color="primary"
-                  variant="outlined"
-                  sx={{ 
-                    minWidth: viewMode === 'grid' ? '80px' : 'auto',
-                    justifyContent: 'flex-start'
-                  }}
-                />
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mt: 1.25 }}>
+              <Chip
+                icon={getTypeIcon()}
+                label={formattedDuration || material.type}
+                size="small"
+                color="primary"
+                variant="outlined"
+              />
 
-                {/* Task count badge - only show if new API is enabled */}
-                { tasks && tasks.length > 0 && (
+              <Chip
+                icon={<FolderIcon fontSize="small" />}
+                label={folderName || 'No folder'}
+                size="small"
+                color={folderName ? 'default' : 'warning'}
+                variant={folderName ? 'outlined' : 'filled'}
+              />
+
+              {tasks && tasks.length > 0 && (
+                <Chip
+                  icon={<TasksIcon fontSize="small" />}
+                  label={`${tasks.length} ${tasks.length === 1 ? 'task' : 'tasks'}`}
+                  size="small"
+                  color="secondary"
+                />
+              )}
+
+              {needsOrganization && (
+                <Chip
+                  icon={<WarningIcon fontSize="small" />}
+                  label="Needs organization"
+                  size="small"
+                  color={highlightNeedsOrganization ? 'warning' : 'default'}
+                  variant={highlightNeedsOrganization ? 'filled' : 'outlined'}
+                />
+              )}
+
+              {!!material.tags?.length && (
+                <Chip
+                  icon={<LabelOutlinedIcon fontSize="small" />}
+                  label={material.tags.length === 1 ? material.tags[0] : `${material.tags.length} tags`}
+                  size="small"
+                  variant="outlined"
+                />
+              )}
+            </Box>
+
+            {!!material.tags?.length && (
+              <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 1 }}>
+                {material.tags.slice(0, viewMode === 'grid' ? 3 : 5).map((tag) => (
                   <Chip
-                    icon={<TasksIcon fontSize="small" />}
-                    label={`${tasks.length} ${tasks.length === 1 ? 'task' : 'tasks'}`}
+                    key={tag}
+                    label={tag}
                     size="small"
-                    color="secondary"
-                    sx={{ 
-                      minWidth: 'auto',
-                      justifyContent: 'flex-start'
-                    }}
+                    variant="outlined"
+                    sx={{ height: 22, fontSize: '0.72rem' }}
+                  />
+                ))}
+                {material.tags.length > (viewMode === 'grid' ? 3 : 5) && (
+                  <Chip
+                    label={`+${material.tags.length - (viewMode === 'grid' ? 3 : 5)}`}
+                    size="small"
+                    sx={{ height: 22, fontSize: '0.72rem' }}
                   />
                 )}
-
-                {material.tags && material.tags.length > 0 && viewMode === 'list' && (
-                  <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                    {material.tags.slice(0, 2).map(tag => (
-                      <Chip
-                        key={tag}
-                        label={tag}
-                        size="small"
-                        sx={{ height: 20, fontSize: '0.7rem' }}
-                      />
-                    ))}
-                    {material.tags.length > 2 && (
-                      <Chip
-                        label={`+${material.tags.length - 2}`}
-                        size="small"
-                        sx={{ height: 20, fontSize: '0.7rem' }}
-                      />
-                    )}
-                  </Box>
-                )}
               </Box>
+            )}
 
-              {/* Action buttons */}
-              <Box sx={{ display: 'flex', gap: 1, ml: 'auto' }}>
-                {(material.type === 'AUDIO' || material.type === 'VIDEO' || material.type === 'GRAMMAR' || material.type === 'LISTENING') && onPlay && (
-                  <Tooltip
-                    title={
-                      isVideo
-                        ? 'Play'
-                        : material.type === 'GRAMMAR'
-                          ? 'Start exercise'
-                          : 'Play'
-                    }
+            {/* Action buttons */}
+            <Box sx={{ display: 'flex', gap: 1, ml: 'auto', mt: 1 }}>
+              {needsOrganization && onFixMetadata && (
+                <Button size="small" variant="outlined" color="warning" onClick={handleFixMetadata}>
+                  Fix
+                </Button>
+              )}
+
+              {(material.type === 'AUDIO' || material.type === 'VIDEO' || material.type === 'GRAMMAR' || material.type === 'LISTENING') && onPlay && (
+                <Tooltip
+                  title={
+                    isVideo
+                      ? 'Play'
+                      : material.type === 'GRAMMAR'
+                        ? 'Start exercise'
+                        : 'Play'
+                  }
+                >
+                  <IconButton
+                    size="small"
+                    onClick={() => onPlay(material)}
+                    aria-label={`Open ${material.title}`}
+                    sx={{
+                      color: theme.palette.primary.main,
+                      bgcolor: alpha(theme.palette.primary.main, 0.1),
+                      width: 32,
+                      height: 32,
+                      '&:hover': {
+                        bgcolor: alpha(theme.palette.primary.main, 0.2),
+                      },
+                    }}
                   >
-                    <IconButton
-                      size="small"
-                      onClick={() => onPlay(material)}
-                      sx={{
-                        color: theme.palette.primary.main,
-                        bgcolor: alpha(theme.palette.primary.main, 0.1),
-                        width: 32,
-                        height: 32,
-                        '&:hover': {
-                          bgcolor: alpha(theme.palette.primary.main, 0.2),
-                        }
-                      }}
-                    >
-                      {material.type === 'GRAMMAR'
-                        ? <School />
-                        : <PlayIcon fontSize="small" />}
-                    </IconButton>
-                  </Tooltip>
-                )}
+                    {material.type === 'GRAMMAR'
+                      ? <School />
+                      : <PlayIcon fontSize="small" />}
+                  </IconButton>
+                </Tooltip>
+              )}
 
-                {(onEdit || onUnlink || onManageTasks) && (<Tooltip title="More options">
+              {(onEdit || onUnlink || onManageTasks || onFixMetadata) && (
+                <Tooltip title="More options">
                   <IconButton
                     size="small"
                     onClick={handleMenuOpen}
+                    aria-label={`Open actions for ${material.title}`}
                     sx={{
                       width: 32,
                       height: 32,
@@ -425,8 +459,7 @@ const MaterialCard: React.FC<MaterialCardProps> = ({
                     <MoreIcon fontSize="small" />
                   </IconButton>
                 </Tooltip>
-                )}
-              </Box>
+              )}
             </Box>
           </CardContent>
         </Box>
@@ -452,6 +485,14 @@ const MaterialCard: React.FC<MaterialCardProps> = ({
           </ListItemIcon>
           <ListItemText>Assign</ListItemText>
         </MenuItem>
+        {needsOrganization && onFixMetadata && (
+          <MenuItem onClick={handleFixMetadata}>
+            <ListItemIcon>
+              <WarningIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>Fix details</ListItemText>
+          </MenuItem>
+        )}
         {onEdit && (
           <MenuItem onClick={handleEdit}>
             <ListItemIcon>

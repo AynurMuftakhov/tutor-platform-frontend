@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import {
+    Alert,
     Box,
+    CircularProgress,
     Typography,
     Button,
     MenuItem,
@@ -50,6 +52,8 @@ const CALENDAR_VIEW_KEY = 'lessons_calendar_view';
 
 const LessonsPage = () => {
     const [lessons, setLessons] = useState<any[]>([]);
+    const [initialLoading, setInitialLoading] = useState(true);
+    const [fetchError, setFetchError] = useState<string | null>(null);
     const { user } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
@@ -180,6 +184,7 @@ const LessonsPage = () => {
 
     const refreshLessons = async () => {
         try {
+            setFetchError(null);
             const calendarApi = calendarRef.current?.getApi();
             const view = calendarApi?.view;
             const startDate = view?.activeStart?.toISOString();
@@ -212,6 +217,9 @@ const LessonsPage = () => {
             }
         } catch (e) {
             console.error("Failed to fetch lessons", e);
+            setFetchError("Failed to load lessons. Please try again.");
+        } finally {
+            setInitialLoading(false);
         }
     };
 
@@ -464,6 +472,16 @@ const LessonsPage = () => {
         ),
         [theme]
     );
+
+    if (fetchError && lessons.length === 0) {
+        return (
+            <Box sx={{ p: 4 }}>
+                <Alert severity="error" action={
+                    <Button color="inherit" size="small" onClick={refreshLessons}>Retry</Button>
+                }>{fetchError}</Alert>
+            </Box>
+        );
+    }
 
     return (
         <Box

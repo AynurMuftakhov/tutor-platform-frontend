@@ -461,6 +461,9 @@ export const getMaterials = async (params: {
   search?: string;
   type?: string;
   tags?: string[];
+  needsOrganization?: boolean;
+  sortBy?: 'title' | 'type';
+  sortDir?: 'asc' | 'desc';
 }) => {
   const queryParams = new URLSearchParams();
 
@@ -472,6 +475,9 @@ export const getMaterials = async (params: {
   if (params.tags && params.tags.length > 0) {
     params.tags.forEach(tag => queryParams.append('tags', tag));
   }
+  if (params.needsOrganization) queryParams.append('needsOrganization', 'true');
+  if (params.sortBy) queryParams.append('sortBy', params.sortBy);
+  if (params.sortDir) queryParams.append('sortDir', params.sortDir);
 
   const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
   const response = await api.get(`/lessons-service/api/materials${query}`);

@@ -7,12 +7,14 @@ import {
   Collapse,
   Divider,
   IconButton,
+  InputAdornment,
   Paper,
   Radio,
   Slider,
   Stack,
   Switch,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -20,6 +22,7 @@ import StopIcon from '@mui/icons-material/Stop';
 import ReplayIcon from '@mui/icons-material/Replay';
 import VolumeUpIcon from '@mui/icons-material/VolumeUp';
 import GraphicEqIcon from '@mui/icons-material/GraphicEq';
+import SearchIcon from '@mui/icons-material/Search';
 import { useSnackbar } from 'notistack';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../context/AuthContext';
@@ -119,6 +122,7 @@ const ListeningAudioGenerationPanel: React.FC<ListeningAudioGenerationPanelProps
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [documentHidden, setDocumentHidden] = useState<boolean>(false);
+  const [previewingVoiceId, setPreviewingVoiceId] = useState<string | null>(null);
   const bannerRef = useRef<HTMLDivElement | null>(null);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const previewingVoiceRef = useRef<string | null>(null);
@@ -255,6 +259,7 @@ const ListeningAudioGenerationPanel: React.FC<ListeningAudioGenerationPanelProps
       previewAudioRef.current.currentTime = 0;
     }
     previewingVoiceRef.current = null;
+    setPreviewingVoiceId(null);
   }, []);
 
   useEffect(() => () => stopPreviewAudio(), [stopPreviewAudio]);
@@ -278,8 +283,10 @@ const ListeningAudioGenerationPanel: React.FC<ListeningAudioGenerationPanelProps
         enqueueSnackbar('Unable to play preview. Please check your audio output.', { variant: 'warning' });
       });
       previewingVoiceRef.current = voice.voiceId;
+      setPreviewingVoiceId(voice.voiceId);
       audio.onended = () => {
         previewingVoiceRef.current = null;
+        setPreviewingVoiceId(null);
       };
     },
     [enqueueSnackbar, stopPreviewAudio],
@@ -511,6 +518,13 @@ const ListeningAudioGenerationPanel: React.FC<ListeningAudioGenerationPanelProps
 
   const showAdvancedHint = advancedOpen ? 'Hide advanced voice controls' : 'Show advanced voice controls';
 
+  const handleVoiceSelect = useCallback((voice: ListeningVoice) => {
+    setSelectedVoiceId(voice.voiceId);
+    if (voice.settings) {
+      setVoiceSettings((prev) => ({ ...prev, ...voice.settings }));
+    }
+  }, []);
+
   return (
     <Stack spacing={2} sx={{ mt: 3 }}>
       <Divider flexItem sx={{ borderStyle: 'dashed', opacity: 0.6 }} />
@@ -529,11 +543,16 @@ const ListeningAudioGenerationPanel: React.FC<ListeningAudioGenerationPanelProps
 
       <Paper variant="outlined" sx={{ p: 2 }}>
         <Stack spacing={2}>
-          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ xs: 'stretch', md: 'flex-start' }}>
-            <Stack spacing={1.5} flex={1}>
-              <Stack direction="row" spacing={1} alignItems="center">
-                <VolumeUpIcon fontSize="small" color="action" />
-                <Typography variant="subtitle2">Voice</Typography>
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="stretch">
+            <Stack spacing={1.25} flex={{ xs: '1 1 auto', md: '0 1 420px' }} minWidth={0}>
+              <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <VolumeUpIcon fontSize="small" color="action" />
+                  <Typography variant="subtitle2">Voice</Typography>
+                </Stack>
+                <Typography variant="caption" color="text.secondary">
+                  {voicesQuery.isLoading ? 'Loading' : `${filteredVoices.length}/${voices.length}`}
+                </Typography>
               </Stack>
               <TextField
                 size="small"
@@ -541,74 +560,148 @@ const ListeningAudioGenerationPanel: React.FC<ListeningAudioGenerationPanelProps
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Type to filter"
+                fullWidth
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" color="action" />
+                    </InputAdornment>
+                  ),
+                }}
               />
-              <Stack spacing={1} sx={{ maxHeight: 240, overflowY: 'auto', pr: 1 }}>
-                {filteredVoices.map((voice) => {
-                  const isSelected = voice.voiceId === selectedVoiceId;
-                  const isPreviewing = previewingVoiceRef.current === voice.voiceId;
-                  return (
-                    <Paper
-                      key={voice.voiceId}
-                      variant={isSelected ? 'outlined' : 'elevation'}
-                      elevation={isSelected ? 0 : 1}
-                      sx={{
-                        borderColor: isSelected ? 'primary.main' : undefined,
-                        px: 1.5,
-                        py: 1,
-                        cursor: 'pointer',
-                        transition: 'border-color 0.2s ease',
-                        '&:hover': { borderColor: 'primary.main', boxShadow: '0 0 0 1px rgba(37,115,255,0.24)' },
-                      }}
-                      onClick={() => {
-                        setSelectedVoiceId(voice.voiceId);
-                        if (voice.settings) {
-                          setVoiceSettings((prev) => ({ ...prev, ...voice.settings }));
-                        }
-                      }}
-                    >
-                      <Stack direction="row" alignItems="center" spacing={1.5}>
-                        <Radio
-                          checked={isSelected}
-                          value={voice.voiceId}
-                          onChange={() => setSelectedVoiceId(voice.voiceId)}
-                          inputProps={{ 'aria-label': voice.name }}
-                        />
-                        <Box sx={{ flexGrow: 1 }}>
-                          <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                            {voice.name}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {voice.voiceId}
-                          </Typography>
-                        </Box>
-                        {voice.previewUrl && (
-                          <IconButton
-                            aria-label={`Preview ${voice.name}`}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              handlePreview(voice);
-                            }}
-                            size="small"
-                          >
-                            {isPreviewing ? <StopIcon fontSize="small" /> : <PlayArrowIcon fontSize="small" />}
-                          </IconButton>
-                        )}
-                      </Stack>
-                    </Paper>
-                  );
-                })}
-                {!voicesQuery.isLoading && filteredVoices.length === 0 && (
-                  <Typography variant="body2" color="text.secondary">
-                    No voices match your search.
-                  </Typography>
-                )}
-                {voicesQuery.isLoading && (
-                  <Stack direction="row" spacing={1} alignItems="center" justifyContent="center" py={2}>
-                    <CircularProgress size={18} />
-                    <Typography variant="body2">Loading voices…</Typography>
-                  </Stack>
-                )}
-              </Stack>
+              <Box
+                sx={{
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  borderRadius: 2,
+                  bgcolor: 'background.default',
+                  maxHeight: { xs: 280, sm: 320 },
+                  minHeight: 170,
+                  overflowY: 'auto',
+                  overscrollBehavior: 'contain',
+                  pr: 0.5,
+                  '&::-webkit-scrollbar': { width: 8 },
+                  '&::-webkit-scrollbar-track': { backgroundColor: 'transparent' },
+                  '&::-webkit-scrollbar-thumb': {
+                    backgroundColor: 'rgba(100, 116, 139, 0.36)',
+                    borderRadius: 8,
+                  },
+                  '&::-webkit-scrollbar-thumb:hover': {
+                    backgroundColor: 'rgba(100, 116, 139, 0.56)',
+                  },
+                }}
+              >
+                <Stack spacing={0.75} sx={{ p: 0.75 }}>
+                  {filteredVoices.map((voice) => {
+                    const isSelected = voice.voiceId === selectedVoiceId;
+                    const isPreviewing = previewingVoiceId === voice.voiceId;
+                    return (
+                      <Box
+                        key={voice.voiceId}
+                        role="button"
+                        tabIndex={0}
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          width: '100%',
+                          minHeight: 78,
+                          border: '1px solid',
+                          borderColor: isSelected ? 'primary.main' : 'transparent',
+                          borderRadius: 1.5,
+                          bgcolor: isSelected ? 'rgba(37,115,255,0.06)' : 'background.paper',
+                          boxShadow: isSelected ? '0 0 0 1px rgba(37,115,255,0.18)' : '0 1px 2px rgba(15,23,42,0.06)',
+                          px: 1,
+                          py: 0.75,
+                          cursor: 'pointer',
+                          transition: 'border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease',
+                          '&:hover': {
+                            borderColor: 'primary.main',
+                            boxShadow: '0 0 0 1px rgba(37,115,255,0.24)',
+                          },
+                          '&:focus-visible': {
+                            outline: '2px solid',
+                            outlineColor: 'primary.main',
+                            outlineOffset: 2,
+                          },
+                        }}
+                        onClick={() => handleVoiceSelect(voice)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            handleVoiceSelect(voice);
+                          }
+                        }}
+                      >
+                        <Stack direction="row" alignItems="center" spacing={1} sx={{ width: '100%', minWidth: 0 }}>
+                          <Radio
+                            checked={isSelected}
+                            value={voice.voiceId}
+                            onChange={() => handleVoiceSelect(voice)}
+                            inputProps={{ 'aria-label': voice.name }}
+                            sx={{ flexShrink: 0 }}
+                          />
+                          <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                            <Typography
+                              variant="subtitle2"
+                              sx={{
+                                fontWeight: 600,
+                                lineHeight: 1.25,
+                                display: '-webkit-box',
+                                WebkitLineClamp: 2,
+                                WebkitBoxOrient: 'vertical',
+                                overflow: 'hidden',
+                              }}
+                            >
+                              {voice.name}
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{
+                                display: 'block',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                              }}
+                            >
+                              {voice.voiceId}
+                            </Typography>
+                          </Box>
+                          {voice.previewUrl && (
+                            <Tooltip title={isPreviewing ? 'Stop preview' : 'Preview voice'}>
+                              <IconButton
+                                aria-label={`${isPreviewing ? 'Stop preview' : 'Preview'} ${voice.name}`}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handlePreview(voice);
+                                }}
+                                size="small"
+                                sx={{ flexShrink: 0 }}
+                              >
+                                {isPreviewing ? <StopIcon fontSize="small" /> : <PlayArrowIcon fontSize="small" />}
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                        </Stack>
+                      </Box>
+                    );
+                  })}
+                  {!voicesQuery.isLoading && filteredVoices.length === 0 && (
+                    <Box sx={{ px: 1.5, py: 3, textAlign: 'center' }}>
+                      <Typography variant="body2" color="text.secondary">
+                        No voices match your search.
+                      </Typography>
+                    </Box>
+                  )}
+                  {voicesQuery.isLoading && (
+                    <Stack direction="row" spacing={1} alignItems="center" justifyContent="center" py={3}>
+                      <CircularProgress size={18} />
+                      <Typography variant="body2">Loading voices…</Typography>
+                    </Stack>
+                  )}
+                </Stack>
+              </Box>
             </Stack>
             <Divider flexItem orientation="vertical" sx={{ display: { xs: 'none', md: 'block' } }} />
             <Stack spacing={2} flex={1}>

@@ -34,6 +34,9 @@ export const useMaterials = (params: {
   search?: string;
   type?: string;
   tags?: string[];
+  needsOrganization?: boolean;
+  sortBy?: 'title' | 'type';
+  sortDir?: 'asc' | 'desc';
 }) => useQuery({
   queryKey: ['materials', params],
   queryFn: () => getMaterials(params),

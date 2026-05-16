@@ -6,5 +6,7 @@ export interface MaterialFolder {
 export interface MaterialFolderTree {
   id: string;
   name: string;
+  materialCount?: number;
+  totalMaterialCount?: number;
   children?: MaterialFolderTree[];
 }

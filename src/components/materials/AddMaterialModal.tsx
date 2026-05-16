@@ -38,6 +38,45 @@ interface AddMaterialModalProps {
   defaultType?: MaterialType;
 }
 
+const detectMaterialTypeFromSourceUrl = (url: string): MaterialType | null => {
+  const value = url.trim().toLowerCase();
+  if (!value) return null;
+
+  if (value.includes('youtube.com') || value.includes('youtu.be') || value.endsWith('.mp4')) {
+    return 'VIDEO';
+  }
+  if (value.endsWith('.mp3') || value.endsWith('.wav') || value.endsWith('.ogg') || value.endsWith('.m4a')) {
+    return 'AUDIO';
+  }
+  if (
+    value.endsWith('.pdf') ||
+    value.endsWith('.doc') ||
+    value.endsWith('.docx') ||
+    value.endsWith('.ppt') ||
+    value.endsWith('.pptx') ||
+    value.endsWith('.txt')
+  ) {
+    return 'DOCUMENT';
+  }
+  return null;
+};
+
+const deriveTitleFromSourceUrl = (url: string): string => {
+  try {
+    const parsed = new URL(url.trim());
+    const pathPart = parsed.pathname.split('/').filter(Boolean).pop();
+    if (pathPart) {
+      return decodeURIComponent(pathPart)
+        .replace(/\.[a-z0-9]+$/i, '')
+        .replace(/[-_]+/g, ' ')
+        .trim();
+    }
+    return parsed.hostname.replace(/^www\./, '');
+  } catch {
+    return '';
+  }
+};
+
 const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
   open,
   onClose,
@@ -56,6 +95,8 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
   // Keeps whatever the user is still typing in the autocomplete field
   const [tagInputValue, setTagInputValue] = useState('');
   const [createTask, setCreateTask] = useState(false);
+  const [isTypeTouched, setIsTypeTouched] = useState(false);
+  const [isTitleTouched, setIsTitleTouched] = useState(false);
 
   // Grammar-specific state
   const [grammarContent, setGrammarContent] = useState('');
@@ -124,6 +165,8 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
       setUrlError('');
       setTitleError('');
       setCreateTask(false);
+      setIsTypeTouched(false);
+      setIsTitleTouched(false);
     }
   }, [open, currentFolderId, materialToEdit, defaultType]);
 
@@ -140,11 +183,18 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
       return false;
     }
 
-    if (materialType === 'VIDEO' || materialType === 'AUDIO') {
-      // Simple regex for YouTube URLs
+    if (materialType === 'VIDEO') {
       const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.?be)\/.+$/;
-      if (!youtubeRegex.test(url)) {
-        setUrlError('Please enter a valid YouTube URL');
+      const directVideoRegex = /^https?:\/\/.+\.(mp4|mov|mkv)(\?.*)?$/i;
+      if (!youtubeRegex.test(url) && !directVideoRegex.test(url)) {
+        setUrlError('Please enter a valid YouTube or video URL');
+        return false;
+      }
+    } else if (materialType === 'AUDIO') {
+      const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.?be)\/.+$/;
+      const directAudioRegex = /^https?:\/\/.+\.(mp3|wav|ogg|m4a)(\?.*)?$/i;
+      if (!youtubeRegex.test(url) && !directAudioRegex.test(url)) {
+        setUrlError('Please enter a valid YouTube or audio URL');
         return false;
       }
     } else if (materialType === 'DOCUMENT') {
@@ -173,6 +223,31 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
   const handleTagChange = (event: React.SyntheticEvent, newValue: string[]) => {
     // Ensure all values, including custom ones, are included in selectedTags
     setSelectedTags(newValue);
+  };
+
+  const handleSourceUrlChange = (value: string) => {
+    setSourceUrl(value);
+    if (value) {
+      validateUrl(value);
+    }
+
+    if (materialToEdit) {
+      return;
+    }
+
+    if (!isTypeTouched) {
+      const detectedType = detectMaterialTypeFromSourceUrl(value);
+      if (detectedType) {
+        setMaterialType(detectedType);
+      }
+    }
+
+    if (!isTitleTouched && !title.trim()) {
+      const suggestedTitle = deriveTitleFromSourceUrl(value);
+      if (suggestedTitle) {
+        setTitle(suggestedTitle);
+      }
+    }
   };
 
   // Recursive function to build folder options
@@ -291,7 +366,10 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
         labelId="material-type-label"
         value={materialType}
         label="Material Type"
-        onChange={(e) => setMaterialType(e.target.value as MaterialType)}
+        onChange={(e) => {
+          setMaterialType(e.target.value as MaterialType);
+          setIsTypeTouched(true);
+        }}
       >
         <MenuItem value="VIDEO">VIDEO</MenuItem>
         <MenuItem value="AUDIO">AUDIO</MenuItem>
@@ -336,6 +414,7 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
             value={title}
             onChange={(e) => {
               setTitle(e.target.value);
+              setIsTitleTouched(true);
               if (e.target.value) validateTitle(e.target.value);
             }}
             error={!!titleError}
@@ -347,12 +426,9 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
           {materialType !== 'GRAMMAR' && (
             <TextField
               fullWidth
-              label={materialType === 'VIDEO' || materialType === 'AUDIO' ? 'YouTube URL' : 'Source URL'}
+              label={materialType === 'VIDEO' || materialType === 'AUDIO' ? 'Media URL' : 'Source URL'}
               value={sourceUrl}
-              onChange={(e) => {
-                setSourceUrl(e.target.value);
-                if (e.target.value) validateUrl(e.target.value);
-              }}
+              onChange={(e) => handleSourceUrlChange(e.target.value)}
               error={!!urlError}
               helperText={urlError || (materialType === 'DOCUMENT' ? 'Enter URL to document or PDF' : '')}
               sx={{ mb: 3 }}
@@ -383,7 +459,7 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({
               <MenuItem value="">Uncategorized</MenuItem>
               {buildFolderOptions(folderTree)}
             </Select>
-            <FormHelperText>Select a folder to organize this material</FormHelperText>
+            <FormHelperText>Optional. Leave empty to keep it in Needs organizing.</FormHelperText>
           </FormControl>
 
           <Autocomplete

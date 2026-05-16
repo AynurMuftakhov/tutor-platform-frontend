@@ -33,6 +33,7 @@ import TeacherStudentActivityPage from './pages/TeacherStudentActivityPage';
 import StudentsActivityOverviewPage from './pages/StudentsActivityOverviewPage';
 import RoleGuard from './components/RoleGuard';
 import PaymentsPage from './pages/PaymentsPage';
+import ErrorBoundary from './components/ErrorBoundary';
 
 const App: React.FC = () => {
     const { isLoading } = useAuth();
@@ -44,6 +45,7 @@ const App: React.FC = () => {
     }
 
     return (
+        <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
             <ApiErrorProvider>
                 <RtcProvider>
@@ -121,7 +123,9 @@ const App: React.FC = () => {
                             element={
                                 <PrivateRoute>
                                     <AppWrapper>
-                                        <AdminDashboard />
+                                        <RoleGuard allow="ADMIN">
+                                            <AdminDashboard />
+                                        </RoleGuard>
                                     </AppWrapper>
                                 </PrivateRoute>
                             }
@@ -306,6 +310,7 @@ const App: React.FC = () => {
                 </RtcProvider>
             </ApiErrorProvider>
         </QueryClientProvider>
+        </ErrorBoundary>
     );
 };
 
